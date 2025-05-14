@@ -1,0 +1,155 @@
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.subject-title-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 10vh;
+    font-weight: bold;
+    border: 1px solid;
+}
+
+.under-title-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 4vh;
+    border: 1px solid;
+}
+
+.middle-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: 50vh; 
+    border: 1px solid;
+    gap: 1vh;
+    margin-bottom: 5vh;
+    background-color: aqua;
+
+}
+
+.quiz-container {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid;
+    overflow: hidden; 
+}
+
+.quiz-container-title {
+    font-size: 5vh;
+    border: 1px solid;
+    padding: 0.5rem;
+}
+
+.quiz-container-container {
+    overflow-y: auto;
+    border: 1px solid;
+    display: grid;
+    grid-column: 1fr 1fr;
+}
+
+.quiz {
+    border: 1px solid;
+    padding: 1rem;
+    min-height: 5vh; 
+    height: 20vh;
+}
+
+
+.quiz {
+    display:flex;
+    flex-direction: column;
+}
+
+.quiz-title {
+    border:1px solid;
+    font-size: 5vh;
+    border:1px solid
+}
+
+.quiz-description {
+    border:1px solid;
+    height: 10vh;
+}
+
+.quiz-words {
+    border:1px solid;
+    height: 5vh;
+}
+
+.quiz-words-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border:1px solid;
+
+}
+
+
+
+.information-container {
+    border: 1px solid;
+}
+
+
+
+.information-title {
+    font-size: 5vh;
+    padding: 0.5rem;
+    border:1px solid;
+}
+
+
+.information-container-container {
+    border:1px solid;
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+    height: 40vh;
+}
+
+.text-recap {
+    display:flex;
+    border:1px solid;
+    height: 20vh;
+    justify-content: space-between;
+    padding: 2vw;
+}
+
+.under-container {
+    border: 1px solid;
+    display:flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 5vh;
+}
+
+.study-plan-container {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap:0.5vh;
+    height: 40vh;
+    width: 100%;
+    
+}
+
+.cell {
+    border:1px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    
+}
+
+
+
+
+
+
