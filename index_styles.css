@@ -20,7 +20,7 @@
 
 .header-container {
     border: 1px black;
-    background-color: aquamarine;
+   
     height: 80px;
     display: flex;
     justify-content: space-between;
@@ -35,7 +35,7 @@
     width: 7vw;
     height: 7vh;
     stroke: black;
-    background-color: aqua;
+   
     margin-left:10px;
     margin-top:10px;
     border: 1px solid;
@@ -45,7 +45,7 @@
     width: 7vw;
     height: 7vh;
     stroke: black;
-    background-color: aqua;
+ 
     margin-right: 10px;
     margin-top: 10px;
     border: 1px solid
@@ -59,3 +59,110 @@
     height: 60px;
     border-radius: 35px;
 }
+
+.center-container {
+    display:grid;
+    grid-template-columns: 1fr 2fr;
+    grid-template-rows: 10fr 1fr;
+    height: 80vh;
+    
+}
+
+.left-container {
+    border:1px solid;
+}
+
+.left-btn-container {
+    height: 50px;
+    border:1px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+}
+
+#left-subject-btn {
+    background-color:darkgray;
+    height: 30px;
+    border-radius: 50px;
+    font-weight: bold;
+}
+
+#subject-header {
+    font-weight: bold;
+    margin-left: 5px;
+}
+
+.subject-list {
+    border: 1px solid;
+    height: 80vh;
+    display: flex;
+    overflow-y: auto;
+    flex-direction: column;
+
+}
+.subject {
+    border: 1px solid;
+    padding: 3rem;
+}
+
+
+.right-container {
+    border:1px solid;
+}
+
+.right-quiz-btn-container {
+    border:1px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 75px;
+}
+
+#right-quiz-btn {
+    height: 50px;
+    border-radius: 50px;
+    width: 400px;
+    font-weight: bold;
+    font-size: 30px
+}
+
+.products-header {
+    display:flex;
+    justify-content: center;
+    padding-top: 30px;
+    font-weight: bold;
+    border: 1px solid;
+}
+
+.products-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    height: 75vh;
+
+}
+
+#product1 {
+    grid-column: 1/1;
+    grid-row: 1/1;
+    border: 1px solid;
+}
+
+.product {
+    border:1px solid
+
+}
+
+.product-content {
+    border: 1px solid;
+    margin: 2vh;
+    height: 32.5vh;
+}
+
+.bottom {
+    grid-column: 1/3;
+    background-color:blanchedalmond;
+    border: 1px solid;
+}
+
