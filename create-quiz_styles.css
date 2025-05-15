@@ -1,0 +1,158 @@
+.header-container {
+    border:1px solid;
+    height: 80px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.header-title {
+    font-weight: bold;
+    font-size: 3.5vh;
+}
+
+.middle-container {
+    height: 70vh;
+    border: 1px solid;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+.left-container {
+    border: 1px solid;
+    display: grid;
+    grid-template-rows: 1fr 1fr 3fr 2fr;
+    
+}
+
+.left-content {
+    display: flex;
+    justify-content: center;
+    align-items: center; 
+    height: 100%; 
+    border: 1px solid;
+    
+}
+
+
+.left-choose-subject {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
+
+
+
+
+.right-container {
+    border:1px solid;
+    display: grid;
+    grid-template-rows: 1fr 1fr 3fr 2fr;
+}
+
+.right-content {
+    border:1px solid
+}
+
+#right-subject {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+
+
+#quiz-options,
+#subject-options {
+    height: 7vh;
+    border-radius: 25px;
+    width: 30vw;
+    
+}
+
+
+
+.data-label {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: darkseagreen;
+  color: white;
+  border-radius: 25px;
+  cursor: pointer;
+  font-family: sans-serif;
+  border:1px solid;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center; 
+  align-self: center;   
+}
+
+.first, .second, .third {
+    border:1px bisque dashed;
+    margin:10px;
+
+}
+
+.first {
+    grid-row: 2;
+    grid-column: 1;
+}
+
+.second {
+    grid-row: 2;
+    grid-column: 2;
+}
+
+.third {
+    grid-row: 2;
+    grid-column: 3;
+}
+
+.data-input {
+    display: none;
+}
+
+#right-data {
+    border:1px solid;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 3fr;
+    
+
+}
+
+
+.write-box {
+    margin-top: 1vh;
+    margin-bottom: 1vh;
+    margin-left: 1vw;
+    margin-right: 1vw;
+    
+    resize: vertical;
+    box-sizing: border-box;
+    vertical-align: top;
+    
+}
+
+.input-description {
+    height: 16vh;
+    width: 50vw;
+
+}
+
+.bottom-container {
+    border: 1px solid;
+    height: 20vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+}
+
+.create-btn {
+    height: 10vh;
+    width: 40vw;
+    border-radius: 35px;
+    font-size: 3.5vh;
+}
