@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en"></html>
+<head>
+  <meta charset="UTF-8">
+  <title></title>
+  <link rel="stylesheet" href="css/create-quiz_styles.css" />
+</head>
+<body>
+    <div class="header-container">
+        <p class="header-title">QUIZ CREATOR</p>
+    </div>
+
+    <div class="middle-container">
+        <div class="left-container">
+            <div id="left-subject" class="left-content">
+                <div class="left-choose-subject">CHOOSE SUBJECT</div>
+            </div>
+            <div id="left-type" class="left-content">QUIZ TYPE</div>
+            <div id="left-data" class="left-content">DATA</div>
+            <div id="left-description" class="left-content">DESCRIBE QUIZ</div>
+            
+            
+        </div>
+        <div class="right-container">
+
+                <div class="right-content" id="right-subject">
+                    <select id="subject-options" name="subject-dropdown">
+                        <option value="option1">Option 1</option>
+                        <option value="option2">Option 2</option>
+                        <option value="option3">Option 3</option>
+                    </select>
+                </div>
+
+                <div class="right-content" id="right-subject">
+                    <select id="quiz-options" name="quiz-drop">
+                        <option value="ten">Quiz - 10 Questions</option>
+                        <option value="twenty-five">Quiz - 25 Questions</option>
+                        <option value="fifty">Quiz - 50 Questions</option>
+                        <option value="extended-response">Extended Response Questions</option>
+                        <option value="exam">Test Exam</option>
+                    </select>
+                </div>
+                
+
+
+
+            
+                
+                <div class="right-content" id="right-data">
+                    <label for="data-upload" class="data-label">Add Data</label>
+                    <input type="file" id="data-upload" name="data1" class="data-input">
+
+                    <div class="first"></div>
+                    <div class="second"></div>
+                    <div class="third"></div>
+                </div>
+
+                <div class="right-description-container">
+                    <div class="write-box">
+                        <textarea name="quiz-description" class="input-description"></textarea>
+                    </div>
+
+                </div>
+
+            
+
+            </div>
+        </div>
+    </div>
+    <div class="bottom-container">
+        <form action="" method="POST">
+            <button class="create-btn">CREATE QUIZ</button>
+        </form>
+    </div>
+
+
+
+</body>
+
+
+
+
+</html> 
