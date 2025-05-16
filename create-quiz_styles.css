@@ -1,76 +1,73 @@
+
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+}
+
 .header-container {
-    border:1px solid;
-    height: 80px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  border: 1px solid;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .header-title {
-    font-weight: bold;
-    font-size: 3.5vh;
+  font-weight: bold;
+  font-size: 3.5vh;
 }
 
 .middle-container {
-    height: 70vh;
-    border: 1px solid;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+  height: calc(100vh - 160px);
+  overflow-y: auto;
+  border: 1px solid;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
 }
 
 .left-container {
-    border: 1px solid;
-    display: grid;
-    grid-template-rows: 1fr 1fr 3fr 2fr;
-    
+  border: 1px solid;
+  display: grid;
+  grid-template-rows: 1fr 1fr 3fr 2fr;
 }
 
 .left-content {
-    display: flex;
-    justify-content: center;
-    align-items: center; 
-    height: 100%; 
-    border: 1px solid;
-    
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  border: 1px solid;
 }
-
 
 .left-choose-subject {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
 }
 
-
-
-
 .right-container {
-    border:1px solid;
-    display: grid;
-    grid-template-rows: 1fr 1fr 3fr 2fr;
+  border: 1px solid;
+  display: grid;
+  grid-template-rows: 1fr 1fr 3fr 2fr;
 }
 
 .right-content {
-    border:1px solid
+  border: 1px solid;
 }
 
 #right-subject {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
-
-
 
 #quiz-options,
 #subject-options {
-    height: 7vh;
-    border-radius: 25px;
-    width: 30vw;
-    
+  height: 7vh;
+  border-radius: 25px;
+  width: 30vw;
 }
-
-
 
 .data-label {
   display: inline-block;
@@ -80,79 +77,174 @@
   border-radius: 25px;
   cursor: pointer;
   font-family: sans-serif;
-  border:1px solid;
-  grid-column: 2;
-  grid-row: 1;
-  justify-self: center; 
-  align-self: center;   
+  border: 1px solid;
+  align-self: center;
+  margin-bottom: 10px;
 }
 
 .first, .second, .third {
-    border:1px bisque dashed;
-    margin:10px;
-
+  border: 2px dashed bisque;
+  margin: 10px;
+  padding: 10px;
+  height: 200px;
+  overflow: auto; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
 }
 
-.first {
-    grid-row: 2;
-    grid-column: 1;
+.first iframe, .second iframe, .third iframe {
+  flex-grow: 1;
+  width: 100%;
+  min-height: 160px;
+  border: none;
 }
 
-.second {
-    grid-row: 2;
-    grid-column: 2;
-}
-
-.third {
-    grid-row: 2;
-    grid-column: 3;
-}
+.first { grid-row: 2; grid-column: 1; }
+.second { grid-row: 2; grid-column: 2; }
+.third { grid-row: 2; grid-column: 3; }
 
 .data-input {
-    display: none;
+  display: none;
 }
 
 #right-data {
-    border:1px solid;
-    height: 100%;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-template-rows: 1fr 3fr;
-    
+  border: 1px solid;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
 
+
+.file-box {
+  position: relative;
+  height: 200px;
+  border: 2px dashed bisque;
+  padding: 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.file-box iframe {
+  width: 100%;
+  height: 140px;
+  border: none;
+  margin-bottom: 5px;
+  flex-shrink: 0;
+}
+
+.remove-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;  
+  border: none;
+  background-color: red;
+  color: white;
+  font-weight: bold;
+  font-size: 18px;
+  line-height: 24px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.remove-btn:hover {
+  background-color: red;
+}
+
+
+.pdf-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  height: 230px; 
+  overflow-y: auto;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.pdf-box {
+  border: 2px dashed bisque;
+  padding: 10px;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.pdf-box iframe {
+  width: 100%;
+  height: 200px;
+  border: none;
+  margin-top: 5px;
+}
+
+
+.data-input {
+  display: none;
 }
 
 
 .write-box {
-    margin-top: 1vh;
-    margin-bottom: 1vh;
-    margin-left: 1vw;
-    margin-right: 1vw;
-    
-    resize: vertical;
-    box-sizing: border-box;
-    vertical-align: top;
-    
+  margin: 1vh 1vw;
+  resize: vertical;
+  box-sizing: border-box;
 }
 
 .input-description {
-    height: 16vh;
-    width: 50vw;
-
+  height: 16vh;
+  width: 50vw;
 }
 
 .bottom-container {
-    border: 1px solid;
-    height: 20vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    
+  border: 1px solid;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: sticky;
+  bottom: 0;
+  background: white;
+  z-index: 10;
 }
 
 .create-btn {
-    height: 10vh;
-    width: 40vw;
-    border-radius: 35px;
-    font-size: 3.5vh;
+  height: 10vh;
+  width: 40vw;
+  border-radius: 35px;
+  font-size: 3.5vh;
 }
+
+
+
+.return-button {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  text-decoration: none;
+  background-color: lightgray;
+  color: black;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-family: sans-serif;
+  border: 1px solid gray;
+
+}
+
+
