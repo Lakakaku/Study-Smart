@@ -3,10 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <title></title>
-  <link rel="stylesheet" href="css/index_stylez.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/index_styles.css') }}">
+
 </head>
 
 <body>
+
+
+
   <div id="top">
     <p id="first-words">study smarter, </p>
     <p id="second-words">STUDY SMART<p>
@@ -54,6 +58,24 @@
         <button id="left-subject-btn">
           CREATE SUBJECT
         </button>
+        <div id="subject-modal" class="modal">
+          <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Create Subject</h2>
+            <form id="create-subject-form">
+              <label for="subject-name">Subject Name:</label>
+              <input type="text" id="subject-name" name="subject-name" required>
+              <br>
+              <button type="submit">Submit</button>
+            </form>
+          </div>
+        </div>
+
+
+
+
+
+
       </div>
       <div>
         <p id="subject-header">
@@ -61,15 +83,7 @@
         </p>
       </div>
       <div class="subject-list">
-        <div class="subject">Subject</div>
-        <div class="subject">Subject</div>
-        <div class="subject">Subject</div>
-        <div class="subject">Subject</div>
-        <div class="subject">Subject</div>
-        <div class="subject">Subject</div>
-        <div class="subject">Subject</div>
-        <div class="subject">Subject</div>
-        <div class="subject">Subject</div>
+        
 
       </div>
       
@@ -77,10 +91,12 @@
     </div>
     <div class="right-container">
       <div class="right-quiz-btn-container">
-        <button id="right-quiz-btn">Create Quiz</button>
+        <a href="{{ url_for('create_quiz') }}">
+          <button id="right-quiz-btn">Create Quiz</button>
+        </a>
       </div>
       <div class="products-header">
-        Last Products
+        TODAY
       </div>
       <div class="products-container">
         <div class="product" id="product1">
@@ -113,3 +129,8 @@
 
 </body>
 </html>
+
+
+<script src="{{ url_for('static', filename='js/index_script.js') }}"></script>
+
+
