@@ -9,8 +9,6 @@
   <title>Quiz Creator</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/create-quiz_styles.css') }}">
   <script src="{{ url_for('static', filename='js/create-quiz.js') }}"></script>
-
-
 </head>
 <body>
 
@@ -29,49 +27,50 @@
     </div>
 
     <div class="right-container">
-      <div class="right-content" id="right-subject">
-        <select id="subject-options" name="subject-dropdown">
-          <option value="option1">Option 1</option>
-          <option value="option2">Option 2</option>
-          <option value="option3">Option 3</option>
-        </select>
-      </div>
-
-      <div class="right-content" id="right-subject">
-        <select id="quiz-options" name="quiz-drop">
-          <option value="ten">Quiz - 10 Questions</option>
-          <option value="twenty-five">Quiz - 25 Questions</option>
-          <option value="fifty">Quiz - 50 Questions</option>
-          <option value="extended-response">Extended Response Questions</option>
-          <option value="exam">Test Exam</option>
-        </select>
-      </div>
-
-      <div id="right-data">
-        <label for="data-upload" class="data-label">Add Data</label>
-        <input type="file" id="data-upload" name="data1" class="data-input" multiple accept=".pdf,.doc,.docx,.txt">
-        
-        <div class="pdf-container"></div>
-      </div>
-
-      <div class="right-description-container">
-        <div class="write-box">
-          <textarea name="quiz-description" class="input-description"></textarea>
+      <form method="POST" id="quiz-form" enctype="multipart/form-data">
+        <div class="right-content" id="right-subject">
+          <label for="subject">Select a subject:</label>
+          <select name="subject" id="subject" required>
+            <option value="" disabled selected hidden>Select a subject</option>
+            {% for subject in subjects %}
+            <option value="{{ subject }}">{{ subject }}</option>
+            {% endfor %}
+          </select>
         </div>
-      </div>
+
+        <div class="right-content">
+          <select id="quiz-options" name="quiz-drop" required>
+            <option value="ten">Quiz - 10 Questions</option>
+            <option value="twenty-five">Quiz - 25 Questions</option>
+            <option value="fifty">Quiz - 50 Questions</option>
+            <option value="extended-response">Extended Response Questions</option>
+            <option value="exam">Test Exam</option>
+          </select>
+        </div>
+
+        <div id="right-data">
+          <label for="data-upload" class="data-label">Add Data</label>
+          <input type="file" id="data-upload" name="data1" class="data-input" multiple accept=".pdf,.doc,.docx,.txt">
+
+          <div class="pdf-container"></div>
+        </div>
+
+        <div class="right-description-container">
+          <div class="write-box">
+            <textarea name="quiz-description" class="input-description" placeholder="Describe the quiz here..." required></textarea>
+          </div>
+        </div>
+
+        <label for="quiz-title">Quiz Title:</label>
+        <input type="text" id="quiz-title" name="quiz_title" placeholder="Enter a title for your quiz" required>
+
+
+        <div class="bottom-container">
+          <button class="create-btn" type="submit" name="submit">CREATE QUIZ</button>
+        </div>
+      </form>
     </div>
   </div>
 
-  <div class="bottom-container">
-    <form action="" method="POST">
-      <button class="create-btn">CREATE QUIZ</button>
-    </form>
-  </div>
-
-  
 </body>
 </html>
-
-
-
-
