@@ -1,1 +1,27 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flashcards - {{ subject_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/flashcards.css') }}" />
+</head>
+<body>
+  <a href="{{ url_for('subject', subject_name=subject_name) }}" class="return-button">← Return</a>
+
+  <div class="flashcard-container">
+    <div id="flashcard">
+      <div id="question"></div>
+      <button id="show-answer-btn">Show Answer</button>
+      <div id="answer" style="display:none;"></div>
+    </div>
+    <button id="next-card-btn" style="display:none;">Next Card</button>
+  </div>
+
+  <script>
+    const questions = {{ questions|tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='js/flashcards.js') }}"></script>
+</body>
+</html>
+
