@@ -7,6 +7,10 @@
   <meta charset="UTF-8" />
   <title>Study Smart</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/index_styles.css') }}" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+
+
 </head>
 
 <body>
@@ -22,7 +26,7 @@
         1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
     </svg>
 
-    <button id="btn-1" class="head-btn">NEW DATA</button>
+    <button id="new-data-btn" class="head-btn">NEW DATA</button>
     <button id="btn-2" class="head-btn">CALENDAR</button>
 
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="user_icon">
@@ -42,7 +46,7 @@
             <form method="POST" id="create-subject-form">
               <label for="subject-name">Subject Name:</label>
               <input type="text" id="subject-name" name="subject" required />
-              <br />
+              <br/>
               <button type="submit">Submit</button>
             </form>
           </div>
@@ -55,11 +59,18 @@
 
       <div class="subject-list">
         {% for subject in subjects %}
-          <a href="{{ url_for('subject', subject_name=subject) }}">
-            <button class="subject-button">{{ subject }}</button>
-          </a>
+          <div class="subject">
+            <form method="POST" action="{{ url_for('delete_subject') }}" class="delete-form" onsubmit="return confirmDelete('{{ subject }}')">
+              <input type="hidden" name="subject" value="{{ subject }}">
+              <button type="submit" class="delete-subject-btn" title="Remove subject">×</button>
+            </form>
+            <a href="{{ url_for('subject', subject_name=subject) }}">
+              <button class="subject-button">{{ subject }}</button>
+            </a>
+          </div>
         {% endfor %}
       </div>
+
     </div>
 
     <div class="right-container">
@@ -68,13 +79,9 @@
           <button id="right-quiz-btn">Create Quiz</button>
         </a>
       </div>
-      <div class="products-header">TODAY</div>
+      <div class="products-header">Quizes for TODAY</div>
       <div class="products-container">
-        {% for i in range(1, 7) %}
-        <div class="product" id="product{{ i }}">
-          <div class="product-content"></div>
-        </div>
-        {% endfor %}
+        
       </div>
     </div>
 
@@ -82,5 +89,80 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/index_script.js') }}"></script>
+
+  <div id="new-data-modal" class="modal">
+    <div class="modal-content">
+      <button id="close-new-data" class="close">&times;</button>
+      <h2>New Data</h2>
+
+      <label for="pdf-upload">Upload a PDF:</label>
+      <input type="file" id="pdf-upload" accept="application/pdf" />
+
+      <div id="pdf-viewer-container" class="pdf-viewer-container">
+        <iframe id="pdf-viewer" class="pdf-viewer" frameborder="0"></iframe>
+      </div>
+
+      <div id="description-examples" class="description-examples">
+        <strong>Examples of descriptions (click to use):</strong>
+        <ul class="description-list">
+          <li class="desc-example">Make a short recap.</li>
+          <li class="desc-example">Make a long recap.</li>
+          <li class="desc-example">Pick out key terms.</li>
+          <li class="desc-example">Key concepts.</li>
+          <li class="desc-example">Revision notes.</li>
+          <li class="desc-example">Overview.</li>
+        </ul>
+
+        <form method="POST" enctype="multipart/form-data">
+          <label for="subject">Select a subject:</label>
+          <select name="subject" id="subject" required>
+            <option value="" disabled selected hidden>Select a subject</option>
+            {% for subject in subjects %}
+             <option value="{{ subject }}">{{ subject }}</option>
+            {% endfor %}
+          </select>
+        </form>
+
+
+
+        
+      </div>
+
+      <label for="pdf-notes" class="notes-label">Add notes about the PDF:</label>
+      <textarea id="pdf-notes" class="notes-textarea" rows="5"></textarea>
+
+      <div id="generated-pdf-container" class="pdf-viewer-container">
+        <h3>Generated PDF:</h3>
+        <iframe id="generated-pdf" class="pdf-viewer" frameborder="0"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div id="calendar-modal" class="modal">
+    <div class="calendar-content">
+      <span class="calendar-close">&times;</span>
+      <h2>Calendar</h2>
+
+      <div class="calendar-header">
+        <button id="prev-month-btn">&lt;</button>
+        <span id="month-year"></span>
+        <button id="next-month-btn">&gt;</button>
+      </div>
+
+      <table id="calendar-table">
+        <thead>
+          <tr>
+            <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+          </tr>
+        </thead>
+        <tbody id="calendar-body">
+         
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </body>
 </html>
+
+
