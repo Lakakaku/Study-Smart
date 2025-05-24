@@ -4,24 +4,34 @@
 <head>
   <meta charset="UTF-8" />
   <title>Flashcards - {{ subject_name }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/flashcards.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/flashcards_styles.css') }}" />
 </head>
 <body>
   <a href="{{ url_for('subject', subject_name=subject_name) }}" class="return-button">← Return</a>
 
   <div class="flashcard-container">
-    <div id="flashcard">
+    <div id="flashcard" class="card">
       <div id="question"></div>
-      <button id="show-answer-btn">Show Answer</button>
+      <button id="show-answer-btn" class="button">Show Answer</button>
       <div id="answer" style="display:none;"></div>
+
+      <div id="rating-section" style="display:none;">
+        <p>Rate your confidence (1 = forgot, 4 = knew it):</p>
+        <div class="rating-buttons">
+          <button onclick="submitRating(1)">1</button>
+          <button onclick="submitRating(2)">2</button>
+          <button onclick="submitRating(3)">3</button>
+          <button onclick="submitRating(4)">4</button>
+        </div>
+      </div>
     </div>
-    <button id="next-card-btn" style="display:none;">Next Card</button>
   </div>
 
   <script>
+    const subjectName = {{ subject_name|tojson }};
+    const quizTitle = {{ quiz_title|tojson }};
     const questions = {{ questions|tojson }};
   </script>
   <script src="{{ url_for('static', filename='js/flashcards.js') }}"></script>
 </body>
 </html>
-
