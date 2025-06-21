@@ -1,6 +1,3 @@
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -23,7 +20,7 @@
       <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
     </svg>
 
-    <button id="new-data-btn" class="head-btn">NEW DATA</button>
+    
     <button id="btn-2" class="head-btn">CALENDAR</button>
 
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="user_icon" role="img" aria-label="User Icon">
@@ -72,8 +69,13 @@
           <button id="right-quiz-btn">Create Quiz</button>
         </a>
       </div>
-      <div class="products-header">Quizzes for TODAY</div>
-      <div class="products-container">
+      <div class="products-header" id="date-header">
+        <button id="prev-day-btn" aria-label="Previous day">&lt;</button>
+        <span id="current-date"></span>
+        <button id="next-day-btn" aria-label="Next day">&gt;</button>
+      </div>
+      <div class="products-container" id="quizzes-container">
+        <!-- Quizzes kommer att laddas här via JavaScript -->
       </div>
     </div>
 
@@ -82,7 +84,6 @@
     </div>
   </div>
 
- 
   <div id="new-data-modal" class="modal">
     <div class="modal-content">
       <button id="close-new-data" class="close">&times;</button>
@@ -118,7 +119,392 @@
       </div>
 
       <label for="pdf-notes" class="notes-label">Add notes about the PDF:</label>
-      <textarea id="pdf-notes" class="notes-textarea" rows="5"></textarea>
+      <textarea id="#events-list {
+  max-height: 300px;  /* Adjust height as needed */
+  overflow-y: auto;
+  padding-right: 10px; /* Space for scrollbar */
+  margin-top: 10px;
+}
+
+/* Optional: make scrollbars look nicer (for WebKit browsers) */
+#events-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+#events-list::-webkit-scrollbar-thumb {
+  background-color: #cccccc;
+  border-radius: 4px;
+}
+
+#events-list::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+
+
+
+.products-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-auto-rows: min-content;
+  max-height: 75vh;
+  overflow-y: auto;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.quiz-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.quiz-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+}
+
+.quiz-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+}
+
+.quiz-card-header {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+
+.quiz-card-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  transform: rotate(45deg);
+}
+
+.quiz-subject {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  z-index: 1;
+}
+
+.quiz-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.3;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.quiz-card-body {
+  padding: 1.5rem;
+}
+
+.quiz-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8f0ff 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.quiz-stat {
+  text-align: center;
+  flex: 1;
+}
+
+.quiz-stat-number {
+  display: block;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #667eea;
+  margin-bottom: 0.25rem;
+}
+
+.quiz-stat-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.quiz-difficulty {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 1.5rem;
+}
+
+.difficulty-easy {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.difficulty-medium {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.difficulty-hard {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.difficulty-basic {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+}
+
+.difficulty-very-hard {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  color: white;
+}
+
+.quiz-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.quiz-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quiz-meta-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.quiz-progress {
+  margin-bottom: 1.5rem;
+}
+
+.quiz-progress-label {
+  display: flex;
+  justify-content: between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.quiz-progress-bar {
+  width: 100%;
+  height: 6px;
+  background-color: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.quiz-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.quiz-card-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.quiz-action-btn {
+  flex: 1;
+  padding: 0.875rem 1rem;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.quiz-start-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.quiz-start-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+.quiz-start-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+
+.quiz-start-btn:hover::before {
+  left: 100%;
+}
+
+.quiz-review-btn {
+  background: transparent;
+  color: #667eea;
+  border: 2px solid #667eea;
+}
+
+.quiz-review-btn:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .products-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  
+  .quiz-card-header {
+    padding: 1.25rem;
+  }
+  
+  .quiz-card-body {
+    padding: 1.25rem;
+  }
+  
+  .quiz-stats {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .quiz-card-actions {
+    flex-direction: column;
+  }
+}
+
+/* Animation for newly added cards */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.quiz-card.new {
+  animation: slideInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Loading state */
+.quiz-card.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.quiz-card.loading .quiz-start-btn {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Empty state */
+.quiz-empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #6b7280;
+}
+
+.quiz-empty-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1rem;
+  opacity: 0.5;
+}
+
+.quiz-empty-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #374151;
+}
+
+.quiz-empty-text {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+  .products-container {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  }
+  
+  .quiz-card {
+    background: #1f2937;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .quiz-stats {
+    background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .quiz-stat-label {
+    color: #9ca3af;
+  }
+  
+  .quiz-meta {
+    color: #9ca3af;
+  }
+  
+  .quiz-progress-bar {
+    background-color: #374151;
+  }
+}pdf-notes" class="notes-textarea" rows="5"></textarea>
 
       <div id="generated-pdf-container" class="pdf-viewer-container">
         <h3>Generated PDF:</h3>
@@ -138,16 +524,74 @@
         <button id="next-month-btn">&gt;</button>
       </div>
 
-      <table id="calendar-table">
-        <thead>
-          <tr>
-            <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
-          </tr>
-        </thead>
-        <tbody id="calendar-body">
-        </tbody>
-      </table>
+      <div class="calendar-main-container">
+        <table id="calendar-table">
+          <thead>
+            <tr>
+              <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+            </tr>
+          </thead>
+          <tbody id="calendar-body">
+          </tbody>
+        </table>
+
+        <div id="events-display" class="events-display" style="display: none;">
+          <div class="events-header">
+            <h3 id="selected-date-title">Events for [Date]</h3>
+            <button id="close-events-display" class="close-events-btn">&times;</button>
+          </div>
+          <div id="events-list" class="events-list">
+            <!-- Events will be populated here -->
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+
+
+  <div id="add-event-modal" class="modal-a">
+    <button id="add-event-modal-close">&times;</button>
+    <h2 id="add-event-title">Add event</h2>
+
+    <!-- Subject Dropdown with Flask templating -->
+    <div class="form-group">
+      <label for="subject-select">Choose a subject:</label>
+      <select id="subject-select" required class="subject-select">
+        <option value="" disabled selected hidden>Select a subject</option>
+        {% for subject in subjects %}
+          <option value="{{ subject }}">{{ subject }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Test Type Dropdown -->
+    <div class="form-group">
+      <label for="test-type-select">Choose test type:</label>
+      <select id="test-type-select" required class="test-type-select">
+        <option value="" disabled selected hidden>Select test type</option>
+        <option value="test">Test</option>
+        <option value="assessment">Assessment</option>
+      </select>
+    </div>
+    
+    <!-- Event Title Input -->
+    <div class="form-group">
+      <label for="event-title">Event Title:</label>
+      <input type="text" id="event-title" placeholder="Enter event title" required>
+    </div>
+    
+    <!-- Event Description Textarea -->
+    <div class="form-group">
+      <label for="event-description">Description (optional):</label>
+      <textarea id="event-description" placeholder="Enter event description" rows="3"></textarea>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="form-actions">
+      <button type="button" id="save-event-btn" class="save-btn">Save Event</button>
+      <button type="button" id="cancel-event-btn" class="cancel-btn">Cancel</button>
+    </div>
+  </div>
+
 </body>
 </html>
