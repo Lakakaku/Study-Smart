@@ -1,325 +1,257 @@
-import os
 import json
-import datetime
-from datetime import timedelta, date
+import os
+from datetime import datetime, timedelta
+from flask_login import current_user
 
-DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'data')
-RATINGS_FILE = os.path.join(DATA_FOLDER, 'ratings.json')
+def get_user_ratings_file():
+    """Returnerar sökvägen till användarens ratings-fil"""
+    if not current_user.is_authenticated:
+        return None
+    
+    data_folder = os.path.join(os.path.dirname(__file__), 'data')
+    os.makedirs(data_folder, exist_ok=True)
+    return os.path.join(data_folder, f'ratings_{current_user.id}.json')
 
 def load_ratings():
-    """Läs in ratings.json om den finns, annars tom dict"""
+    """Laddar användarens ratings-data"""
+    ratings_file = get_user_ratings_file()
+    if not ratings_file or not os.path.exists(ratings_file):
+        return {}
+    
     try:
-        if os.path.exists(RATINGS_FILE):
-            with open(RATINGS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                print(f"[DEBUG] Loaded ratings from {RATINGS_FILE}")
-                return data
-        else:
-            print(f"[DEBUG] No ratings file found at {RATINGS_FILE}, returning empty dict")
-            return {}
-    except Exception as e:
-        print(f"[ERROR] Failed to load ratings: {e}")
+        with open(ratings_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError):
         return {}
 
 def save_ratings(ratings_data):
-    """Spara ratings till fil"""
+    """Sparar användarens ratings-data"""
+    ratings_file = get_user_ratings_file()
+    if not ratings_file:
+        return False
+    
     try:
-        os.makedirs(DATA_FOLDER, exist_ok=True)
-        
-        # Backup old file
-        if os.path.exists(RATINGS_FILE):
-            backup_file = f"{RATINGS_FILE}.backup"
-            os.rename(RATINGS_FILE, backup_file)
-        
-        with open(RATINGS_FILE, 'w', encoding='utf-8') as f:
+        with open(ratings_file, 'w', encoding='utf-8') as f:
             json.dump(ratings_data, f, ensure_ascii=False, indent=2)
-        
-        print(f"[DEBUG] Saved ratings to {RATINGS_FILE}")
-        
+        return True
     except Exception as e:
-        print(f"[ERROR] Failed to save ratings: {e}")
-        raise
+        print(f"[ERROR] Could not save ratings: {e}")
+        return False
 
-
-
-def update_rating(subject: str, quiz_title: str, question: str, rating: int, time_taken: float = None) -> None:
+def update_rating(subject, topic, question, rating, time_taken=None):
     """
-    Uppdaterar spaced repetition-data i ratings.json med extra debug-loggning
+    Uppdaterar en frågas rating och beräknar nästa review-datum
+    
+    Args:
+        subject (str): Ämne
+        topic (str): Topic/Quiz titel
+        question (str): Frågan
+        rating (int): Betyg 1-4 (1=svårt, 2=lätt med ansträngning, 3=lätt, 4=mycket lätt)
+        time_taken (float): Tid i sekunder (optional)
     """
     try:
-        print(f"[DEBUG] update_rating called:")
-        print(f"  - subject: '{subject}'")
-        print(f"  - quiz_title: '{quiz_title}'") 
-        print(f"  - question: '{question[:50]}...'")
-        print(f"  - rating: {rating}")
-        print(f"  - time_taken: {time_taken}")
-        
-        today = date.today()
+        # Ladda aktuell data
         ratings_data = load_ratings()
         
-        print(f"[DEBUG] Loaded ratings_data structure:")
-        for subj in ratings_data.keys():
-            print(f"  Subject: '{subj}'")
-            for quiz in ratings_data[subj].keys():
-                print(f"    Quiz: '{quiz}' ({len(ratings_data[subj][quiz])} questions)")
-        
-        # Hämta befintligt, eller initiera med standardvärden
-        qdata = ratings_data \
-            .setdefault(subject, {}) \
-            .setdefault(quiz_title, {}) \
-            .setdefault(question, {
+        # Skapa nödvändiga nästlade strukturer
+        if subject not in ratings_data:
+            ratings_data[subject] = {}
+        if topic not in ratings_data[subject]:
+            ratings_data[subject][topic] = {}
+        if question not in ratings_data[subject][topic]:
+            ratings_data[subject][topic][question] = {
                 "ease_factor": 2.5,
                 "repetitions": 0,
                 "interval": 0,
-                "next_review": today.isoformat(),
-                "first_seen": today.isoformat(),
-                "total_reviews": 0
-            })
-
-        print(f"[DEBUG] Current question data before update: {qdata}")
-
-        # Hämta nuvarande värden
-        ef = qdata.get("ease_factor", 2.5)
-        reps = qdata.get("repetitions", 0)
-        prev_interval = qdata.get("interval", 0)
-        total_reviews = qdata.get("total_reviews", 0)
+                "next_review": datetime.now().strftime("%Y-%m-%d")
+            }
+        
+        # Hämta nuvarande flashcard-data
+        flashcard = ratings_data[subject][topic][question]
+        
+        # Extrahera nuvarande värden
+        ease_factor = flashcard.get("ease_factor", 2.5)
+        repetitions = flashcard.get("repetitions", 0)
+        prev_interval = flashcard.get("interval", 0)
+        
+        # Konvertera rating till int
         q = int(rating)
-
-        print(f"[DEBUG] Before calculation: ef={ef}, reps={reps}, prev_interval={prev_interval}, total_reviews={total_reviews}")
-
-        # 1) Uppdatera ease-factor baserat på SuperMemo 2 algoritm
-        ef_new = max(1.3, ef + (0.1 - (4 - q) * (0.08 + (4 - q) * 0.02)))
-
-        # 2) Uppdatera repetitioner och interval
-        if q < 3:  # Dåligt svar - börja om
-            reps_new = 0
-            interval_new = 1
-            print(f"[DEBUG] Poor answer (rating {q}) - resetting interval")
-        else:  # Bra svar - öka intervallet
-            reps_new = reps + 1
-            if reps_new == 1:
-                interval_new = int(round(ef_new)) if q == 4 else 1
-                print(f"[DEBUG] First repetition - interval set to {interval_new}")
-            elif reps_new == 2:
-                interval_new = 6
-                print(f"[DEBUG] Second repetition - interval set to 6")
+        
+        # SuperMemo-2 algoritm
+        # 1. Uppdatera ease factor
+        ease_factor = max(1.3, ease_factor + (0.1 - (4 - q) * (0.08 + (4 - q) * 0.02)))
+        
+        # 2. Beräkna nytt intervall och repetitioner
+        if q < 3:  # Svårt svar - börja om
+            repetitions = 0
+            interval = 1
+        else:  # Bra svar
+            repetitions += 1
+            if repetitions == 1:
+                interval = int(round(ease_factor)) if q == 4 else 1
+            elif repetitions == 2:
+                interval = 6
             else:
-                interval_new = max(1, int(round(prev_interval * ef_new)))
-                print(f"[DEBUG] Subsequent repetition - interval: {prev_interval} * {ef_new} = {interval_new}")
-
-        # 3) Bonus för super-snabbt perfekt svar
+                interval = int(round(prev_interval * ease_factor))
+        
+        # 3. Bonus för supersnabbt perfekt svar
         if q == 4 and time_taken is not None and time_taken < 5:
-            bonus_interval = int(round((prev_interval or 1) * ef_new * 1.2))
-            old_interval = interval_new
-            interval_new = max(interval_new, bonus_interval)
-            print(f"[DEBUG] Speed bonus applied: {old_interval} -> {interval_new}")
-
-        # 4) Beräkna nästa review datum
-        next_rev = (today + timedelta(days=interval_new)).isoformat()
-
-        print(f"[DEBUG] Final calculation results:")
-        print(f"  - ease_factor: {ef} -> {ef_new}")
-        print(f"  - repetitions: {reps} -> {reps_new}")
-        print(f"  - interval: {prev_interval} -> {interval_new}")
-        print(f"  - next_review: {next_rev}")
-
-        # 5) Uppdatera alla värden
-        qdata.update({
-            "ease_factor": round(ef_new, 2),
-            "repetitions": reps_new,
-            "interval": interval_new,
-            "next_review": next_rev,
+            interval = max(interval, int(round((prev_interval or 1) * ease_factor * 1.2)))
+        
+        # 4. Beräkna nästa review-datum
+        next_review_date = datetime.now() + timedelta(days=interval)
+        next_review = next_review_date.strftime("%Y-%m-%d")
+        
+        # 5. Uppdatera flashcard-data
+        flashcard.update({
             "rating": q,
             "time": time_taken,
-            "timestamp": datetime.datetime.now().isoformat(),
-            "total_reviews": total_reviews + 1,
-            "last_reviewed": today.isoformat()
+            "ease_factor": round(ease_factor, 2),
+            "repetitions": repetitions,
+            "interval": interval,
+            "next_review": next_review,
+            "timestamp": datetime.now().isoformat(),
+            "last_reviewed": datetime.now().strftime("%Y-%m-%d")
         })
-
-        print(f"[DEBUG] Updated question data: {qdata}")
-
-        # 6) Spara uppdaterad data
-        print(f"[DEBUG] Saving to file: {RATINGS_FILE}")
-        save_ratings(ratings_data)
         
-        # 7) Verifiera att det sparades
-        verification_data = load_ratings()
-        saved_qdata = verification_data.get(subject, {}).get(quiz_title, {}).get(question, {})
-        saved_next_review = saved_qdata.get('next_review', 'NOT_FOUND')
-        print(f"[DEBUG] Verification - saved next_review: {saved_next_review}")
+        # 6. Spara uppdaterad data
+        success = save_ratings(ratings_data)
         
-        print(f"[DEBUG] SUCCESS: Updated '{question[:50]}...' - Rating: {q}, New interval: {interval_new} days, Next review: {next_rev}")
+        if success:
+            print(f"[SUCCESS] Updated question: {question[:50]}... -> Rating: {q}, Next review: {next_review}, Interval: {interval} days")
+        else:
+            print(f"[ERROR] Failed to save ratings for question: {question[:50]}...")
+            
+        return success
         
     except Exception as e:
         print(f"[ERROR] Failed to update rating for question '{question[:50]}...': {e}")
         import traceback
         traceback.print_exc()
-        raise
+        return False
 
-
-
-def get_due_questions(subject=None, quiz_title=None, include_new=True):
+def get_due_questions(target_date=None):
     """
-    Hämta alla frågor som är redo för repetition idag eller tidigare.
+    Hämtar alla frågor som är klara för repetition på ett specifikt datum
+    
+    Args:
+        target_date (str): Datum i format 'YYYY-MM-DD', default är idag
+    
+    Returns:
+        list: Lista med frågor som är klara för repetition
     """
-    try:
-        ratings_data = load_ratings()
-        today = date.today().isoformat()
-        due_questions = []
-        
-        for subj, quizzes in ratings_data.items():
-            if subject and subj != subject:
-                continue
+    if target_date is None:
+        target_date = datetime.now().strftime("%Y-%m-%d")
+    
+    ratings_data = load_ratings()
+    due_questions = []
+    
+    for subject, topics in ratings_data.items():
+        for topic, questions in topics.items():
+            for question, data in questions.items():
+                next_review = data.get('next_review')
+                if next_review and next_review <= target_date:
+                    due_questions.append({
+                        'subject': subject,
+                        'topic': topic,
+                        'question': question,
+                        'next_review': next_review,
+                        'interval': data.get('interval', 0),
+                        'repetitions': data.get('repetitions', 0),
+                        'ease_factor': data.get('ease_factor', 2.5)
+                    })
+    
+    return due_questions
+
+def get_statistics():
+    """
+    Returnerar statistik om användarens flashcards
+    
+    Returns:
+        dict: Statistik om flashcards
+    """
+    ratings_data = load_ratings()
+    
+    total_cards = 0
+    cards_due_today = 0
+    cards_overdue = 0
+    new_cards = 0
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    # Räkna från ratings-data
+    for subject, topics in ratings_data.items():
+        for topic, questions in topics.items():
+            for question, data in questions.items():
+                total_cards += 1
+                next_review = data.get('next_review')
                 
-            for quiz, questions in quizzes.items():
-                if quiz_title and quiz != quiz_title:
-                    continue
-                    
-                for question, data in questions.items():
-                    next_review = data.get('next_review', today)
-                    
-                    # Inkludera frågan om den är förfallen eller försenad
-                    if next_review <= today:
-                        due_questions.append({
-                            'subject': subj,
-                            'quiz_title': quiz,
-                            'question': question,
-                            'data': data
-                        })
-        
-        return due_questions
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to get due questions: {e}")
-        return []
+                if not next_review:
+                    new_cards += 1
+                elif next_review == today:
+                    cards_due_today += 1
+                elif next_review < today:
+                    cards_overdue += 1
+    
+    return {
+        'total_cards': total_cards,
+        'cards_due_today': cards_due_today,
+        'cards_overdue': cards_overdue,
+        'new_cards': new_cards,
+        'cards_upcoming': total_cards - cards_due_today - cards_overdue - new_cards
+    }
 
-def get_questions_for_date(target_date):
+def reset_question(subject, topic, question):
     """
-    Hämta alla frågor schemalagda för ett specifikt datum.
-    """
-    try:
-        if isinstance(target_date, date):
-            target_date = target_date.isoformat()
-        
-        ratings_data = load_ratings()
-        result = {}
-        
-        for subject, quizzes in ratings_data.items():
-            for quiz_title, questions in quizzes.items():
-                questions_for_date = []
-                
-                for question, data in questions.items():
-                    next_review = data.get('next_review')
-                    if next_review == target_date:
-                        questions_for_date.append({
-                            'question': question,
-                            'data': data
-                        })
-                
-                if questions_for_date:
-                    if subject not in result:
-                        result[subject] = {}
-                    result[subject][quiz_title] = questions_for_date
-        
-        return result
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to get questions for date {target_date}: {e}")
-        return {}
-
-def get_schedule_summary(days_ahead=30):
-    """
-    Få en översikt över repetitionsschema för kommande dagar.
-    """
-    try:
-        ratings_data = load_ratings()
-        today = date.today()
-        summary = {}
-        
-        # Initiera alla datum med 0
-        for i in range(days_ahead + 1):
-            date_key = (today + timedelta(days=i)).isoformat()
-            summary[date_key] = 0
-        
-        # Räkna frågor per datum
-        for subject, quizzes in ratings_data.items():
-            for quiz_title, questions in quizzes.items():
-                for question, data in questions.items():
-                    next_review = data.get('next_review')
-                    if next_review in summary:
-                        summary[next_review] += 1
-        
-        return summary
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to get schedule summary: {e}")
-        return {}
-
-def reset_question(subject: str, quiz_title: str, question: str):
-    """
-    Återställ en fråga till ursprungsläge (för debugging/testing).
+    Återställer en fråga till standardvärden (för debugging)
+    
+    Args:
+        subject (str): Ämne
+        topic (str): Topic/Quiz titel  
+        question (str): Frågan
     """
     try:
         ratings_data = load_ratings()
         
         if (subject in ratings_data and 
-            quiz_title in ratings_data[subject] and 
-            question in ratings_data[subject][quiz_title]):
+            topic in ratings_data[subject] and 
+            question in ratings_data[subject][topic]):
             
-            today = date.today()
-            ratings_data[subject][quiz_title][question] = {
+            # Återställ till standardvärden
+            ratings_data[subject][topic][question] = {
                 "ease_factor": 2.5,
                 "repetitions": 0,
                 "interval": 0,
-                "next_review": today.isoformat(),
-                "first_seen": today.isoformat(),
-                "total_reviews": 0
+                "next_review": datetime.now().strftime("%Y-%m-%d")
             }
             
-            save_ratings(ratings_data)
-            print(f"[DEBUG] Reset question: {question[:50]}...")
+            success = save_ratings(ratings_data)
+            if success:
+                print(f"[SUCCESS] Reset question: {question[:50]}...")
+            return success
+        else:
+            print(f"[WARNING] Question not found: {question[:50]}...")
+            return False
             
     except Exception as e:
         print(f"[ERROR] Failed to reset question: {e}")
+        return False
 
-def get_statistics():
+def cleanup_old_data():
     """
-    Få statistik över hela systemet.
+    Rensar bort gamla ratings som inte längre har motsvarande quiz
+    (kan användas för underhåll)
     """
     try:
-        ratings_data = load_ratings()
-        today = date.today().isoformat()
-        
-        stats = {
-            'total_questions': 0,
-            'due_today': 0,
-            'overdue': 0,
-            'subjects': len(ratings_data),
-            'avg_ease_factor': 0,
-            'total_reviews': 0
-        }
-        
-        ease_factors = []
-        
-        for subject, quizzes in ratings_data.items():
-            for quiz_title, questions in quizzes.items():
-                for question, data in questions.items():
-                    stats['total_questions'] += 1
-                    stats['total_reviews'] += data.get('total_reviews', 0)
-                    
-                    next_review = data.get('next_review', today)
-                    if next_review == today:
-                        stats['due_today'] += 1
-                    elif next_review < today:
-                        stats['overdue'] += 1
-                    
-                    ease_factors.append(data.get('ease_factor', 2.5))
-        
-        if ease_factors:
-            stats['avg_ease_factor'] = round(sum(ease_factors) / len(ease_factors), 2)
-        
-        return stats
-        
+        from flask import current_app
+        with current_app.app_context():
+            ratings_data = load_ratings()
+            
+            # Här skulle man kunna implementera logik för att 
+            # ta bort ratings som inte längre har motsvarande quiz
+            # Detta är optional och kan implementeras senare
+            
+            pass
+            
     except Exception as e:
-        print(f"[ERROR] Failed to get statistics: {e}")
-        return {}
+        print(f"[ERROR] Cleanup failed: {e}")
