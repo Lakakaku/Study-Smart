@@ -16,11 +16,28 @@ html, body {
 
 .under-title-container {
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
     align-items: center;
-    font-size: 4vh;
-    border: 1px solid;
     height: 10vh;
+    border: 1px solid;
+    padding: 0 5vw;
+    position: relative;
+}
+
+.spacer {
+    width: 33%;
+}
+
+.study-button-wrapper {
+    position: absolute;
+    left: 25%;
+    transform: translateX(-50%);
+}
+
+.add-button-wrapper {
+    position: absolute;
+    right: 25%;
+    transform: translateX(50%);
 }
 
 .study-now {
@@ -29,17 +46,46 @@ html, body {
     height: 7vh;
     width: 15vw;
     font-size: 3vh;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.add-button {
+    background-color: white;
+    border: 3px solid black;
+    border-radius: 50%;
+    height: 8vh;
+    width: 8vh;
+    font-size: 4vh;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.main-layout {
+    display: flex;
+    flex-direction: row;
+    height: 100%;
 }
 
 .quiz-container {
+    flex: 2;
     padding: 20px;
+}
+
+.placeholder-panel {
+    flex: 1;
+    border-left: 2px dashed #ccc;
+    padding: 20px;
+    background-color: #f5f5f5;
+    overflow-y: auto;
 }
 
 .quiz-grid {
     display: flex;
     flex-wrap: wrap;
     gap: 20px;
-    justify-content: center;
+    justify-content: flex-start;
 }
 
 .quiz-card {
@@ -60,17 +106,12 @@ html, body {
     box-shadow: 0 6px 12px rgba(0,0,0,0.15);
 }
 
-.quiz-link {
-    text-decoration: none;
-    color: #333;
-    flex-grow: 1;
-}
-
 .quiz-title {
     font-size: 1.5rem;
     font-weight: bold;
     text-align: center;
     margin-bottom: 10px;
+    cursor: pointer;
 }
 
 .delete-form {
@@ -90,29 +131,161 @@ html, body {
 
 .delete-button:hover {
     background-color: #c0392b;
-}
-
-
-
+} 
 
 .return-button {
-  position: absolute;
-  top: 15px;
-  left: 15px;
-  text-decoration: none;
-  background-color: lightgray;
-  color: black;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-weight: bold;
-  font-family: sans-serif;
-  border: 1px solid gray;
-
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    text-decoration: none;
+    background-color: lightgray;
+    color: black;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-family: sans-serif;
+    border: 1px solid gray;
 }
 
+/* Document upload styles */
+.documents-section {
+    margin-top: 20px;
+}
 
-.subect {
-    border:1px solid;
-    background-color: black;
-    color: purple;
+.documents-section h3 {
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 1.4rem;
+}
+
+.upload-area {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+#pdf-upload {
+    display: none;
+}
+
+.upload-label {
+    display: inline-block;
+    padding: 12px 24px;
+    background-color: #4CAF50;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+.upload-label:hover {
+    background-color: #45a049;
+}
+
+.upload-info {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.document-type-selector {
+    margin-bottom: 20px;
+}
+
+.document-type-selector label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #333;
+}
+
+#document-type {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    font-size: 1rem;
+    background-color: white;
+}
+
+#documents-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.document-item {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: white;
+    position: relative;
+}
+
+.document-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.document-title {
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.document-type {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.document-preview {
+    width: 100%;
+    height: 300px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: #fafafa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.document-preview canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.preview-loading {
+    color: #666;
+    font-style: italic;
+}
+
+.remove-document {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+}
+
+.remove-document:hover {
+    background-color: #c0392b;
 }
