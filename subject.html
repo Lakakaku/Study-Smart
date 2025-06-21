@@ -17,32 +17,101 @@
   </div>
 
   <div class="under-title-container">
-    <div id="under-title-text">
-      Next Test: 24/12-25
+    <div class="spacer"></div>
+
+    <div class="study-button-wrapper">
+      <button class="study-now">Study</button>
     </div>
 
-    <button class="study-now">Study Now!</button>
+    <div class="add-button-wrapper">
+      <button class="add-button">+</button>
+    </div>
   </div>
 
-  <div class="quiz-container">
-    {% if quizzes %}
-      <div class="quiz-grid">
-        {% for quiz in quizzes %}
-          <div class="quiz-card">
-            <div class="quiz-title flashcard-trigger" data-subject="{{ subject_name }}" data-quiz-index="{{ loop.index0 }}">
+  <div class="main-layout">
+    <div class="quiz-container">
+      {% if quizzes %}
+        <div class="quiz-grid">
+          {% for quiz in quizzes %}
+            <div class="quiz-card">
+              <div class="quiz-title flashcard-trigger"
+                   data-subject="{{ subject_name }}"
+                   data-quiz-index="{{ loop.index0 }}">
                 {{ quiz.title }}
+              </div>
+              <form method="POST"
+                    action="{{ url_for('delete_quiz', subject_name=subject_name, quiz_index=loop.index0) }}"
+                    class="delete-form"
+                    onsubmit="return confirm('Are you sure you want to delete this quiz?');">
+                <button type="submit" class="delete-button">Delete</button>
+              </form>
             </div>
-            <form method="POST" action="{{ url_for('delete_quiz', subject_name=subject_name, quiz_index=loop.index0) }}" class="delete-form" onsubmit="return confirm('Are you sure you want to delete this quiz?');">
-              <button type="submit" class="delete-button">Delete</button>
-            </form>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p>No quizzes available for this subject yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="placeholder-panel">
+      <div class="documents-section">
+        <h3>Dokument</h3>
+
+        <div class="upload-area">
+          <input type="file" id="pdf-upload" accept=".pdf" multiple>
+          <label for="pdf-upload" class="upload-label">
+            Ladda upp PDF-dokument
+          </label>
+          <div class="upload-info">
+            Accepterar: Begreppslistor, Kunskapskrav, Kunskapsmål
           </div>
-        {% endfor %}
+        </div>
+
+        <div class="document-type-selector">
+          <label for="document-type">Dokumenttyp:</label>
+          <select id="document-type">
+            <option value="begrippslista">Begrippslista</option>
+            <option value="kunskapskrav">Kunskapskrav</option>
+            <option value="kunskapsmal">Kunskapsmål</option>
+          </select>
+        </div>
+
+        <div id="documents-container">
+          {% if documents %}
+            {% for doc_type in documents.keys() %}
+              <div class="document-item" data-doc-type="{{ doc_type }}">
+                <button class="remove-document"
+                        data-doc-type="{{ doc_type }}">×</button>
+                <div class="document-header">
+                  <span class="document-title">
+                    {{ doc_type|capitalize }}
+                  </span>
+                </div>
+                <div class="document-preview">
+                  <!-- Iframe mot server-sparad PDF -->
+                  <iframe
+                    src="{{ url_for('static',
+                                    filename='uploads/krav/' ~ subject_name ~ '/' ~ doc_type ~ '.pdf') }}"
+                    width="100%"
+                    height="300px"
+                    style="border:1px solid #ccc;"
+                  ></iframe>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p>Inga dokument uppladdade än.</p>
+          {% endif %}
+        </div>
       </div>
-    {% else %}
-      <p>No quizzes available for this subject yet.</p>
-    {% endif %}
+    </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="{{ url_for('static', filename='js/subject.js') }}"></script>
+  <script>
+    const currentSubject = "{{ subject_name }}";
+  </script>
+
 </body>
 </html>
