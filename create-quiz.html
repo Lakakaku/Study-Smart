@@ -1,11 +1,9 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Quiz Creator</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/create-quiz_styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/create-quiz_styles.css') }}" />
   <script src="{{ url_for('static', filename='js/create-quiz.js') }}"></script>
 </head>
 <body>
@@ -16,58 +14,91 @@
     <p class="header-title">QUIZ CREATOR</p>
   </div>
 
-  <div class="middle-container">
-    <div class="left-container">
-      <div id="left-subject" class="left-content"><div class="left-choose-subject">CHOOSE SUBJECT</div></div>
-      <div id="left-type" class="left-content">QUIZ TYPE</div>
-      <div id="left-data" class="left-content">DATA</div>
-      <div id="left-description" class="left-content">DESCRIBE QUIZ</div>
-    </div>
+  <div class="form-container">
+    <form method="POST" id="quiz-form" enctype="multipart/form-data">
+      
+      <section class="form-section">
+        <h2>Choose Subject</h2>
+        <label for="subject" class="section-label">Select a subject:</label>
+        <select name="subject" id="subject" required>
+          <option value="" disabled selected hidden>Select a subject</option>
+          {% for subject in subjects %}
+          <option value="{{ subject }}">{{ subject }}</option>
+          {% endfor %}
+        </select>
+      </section>
+      <section class="form-section" id="test-selector-section" style="display: none;">
+        <h2>Select Related Test</h2>
+        <label for="test-dropdown" class="section-label">Choose test for this quiz:</label>
+        <select id="test-dropdown" name="related_test">
+          <option value="" disabled selected hidden>Select a test</option>
+        </select>
+      </section>
+      <script>
+        const allEvents = {{ events | tojson }};
+      </script>
 
-    <div class="right-container">
-      <form method="POST" id="quiz-form" enctype="multipart/form-data">
-        <div class="right-content" id="right-subject">
-          <label for="subject">Select a subject:</label>
-          <select name="subject" id="subject" required>
-            <option value="" disabled selected hidden>Select a subject</option>
-            {% for subject in subjects %}
-            <option value="{{ subject }}">{{ subject }}</option>
-            {% endfor %}
-          </select>
-        </div>
+      <section class="form-section">
+        <h2>Quiz Type</h2>
+        <label for="quiz-options" class="section-label">Select quiz type:</label>
+        <select id="quiz-options" name="quiz-drop" required>
+          <option value="ten">Quiz - 10 Questions</option>
+          <option value="twenty-five">Quiz - 25 Questions</option>
+          <option value="fifty">Quiz - 50 Questions</option>
+          <option value="extended-response">Extended Response Questions</option>
+          <option value="exam">Test Exam</option>
+        </select>
+      </section>
 
-        <div class="right-content">
-          <select id="quiz-options" name="quiz-drop" required>
-            <option value="ten">Quiz - 10 Questions</option>
-            <option value="twenty-five">Quiz - 25 Questions</option>
-            <option value="fifty">Quiz - 50 Questions</option>
-            <option value="extended-response">Extended Response Questions</option>
-            <option value="exam">Test Exam</option>
-          </select>
-        </div>
+      <section class="form-section">
+        <h2>Data</h2>
+        <label for="data-upload" class="data-label">Add Data</label>
+        <input
+          type="file"
+          id="data-upload"
+          name="data1"
+          class="data-input"
+          multiple
+          accept=".pdf,.doc,.docx,.txt"
+        />
+        <div class="pdf-container"></div>
+      </section>
 
-        <div id="right-data">
-          <label for="data-upload" class="data-label">Add Data</label>
-          <input type="file" id="data-upload" name="data1" class="data-input" multiple accept=".pdf,.doc,.docx,.txt">
+      <!-- Ny sektion: inkludera kravdokument -->
+      <section class="form-section">
+        <h2>Include Documents</h2>
+        <label class="section-label" for="use-documents">
+          <input type="checkbox" id="use-documents" name="use_documents" />
+          Inkludera begreppslistor, kunskapskrav och kunskapsmål
+        </label>
+      </section>
 
-          <div class="pdf-container"></div>
-        </div>
+      <section class="form-section">
+        <h2>Describe Quiz</h2>
+        <textarea
+          name="quiz-description"
+          class="input-description"
+          placeholder="Describe the quiz here..."
+          required
+        ></textarea>
+      </section>
 
-        <div class="right-description-container">
-          <div class="write-box">
-            <textarea name="quiz-description" class="input-description" placeholder="Describe the quiz here..." required></textarea>
-          </div>
-        </div>
+      <section class="form-section">
+        <h2>Quiz Title</h2>
+        <input
+          type="text"
+          id="quiz-title"
+          name="quiz_title"
+          placeholder="Enter a title for your quiz"
+          required
+        />
+      </section>
 
-        <label for="quiz-title">Quiz Title:</label>
-        <input type="text" id="quiz-title" name="quiz_title" placeholder="Enter a title for your quiz" required>
+      <div class="bottom-container">
+        <button class="create-btn" type="submit" name="submit">CREATE QUIZ</button>
+      </div>
 
-
-        <div class="bottom-container">
-          <button class="create-btn" type="submit" name="submit">CREATE QUIZ</button>
-        </div>
-      </form>
-    </div>
+    </form>
   </div>
 
 </body>
