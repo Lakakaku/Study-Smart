@@ -1,5 +1,5 @@
 import json
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, render_template_string, jsonify
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import requests
@@ -10,11 +10,15 @@ from pdf2image import convert_from_path
 import os
 import json.decoder
 from spaced_repetition import update_rating
-
-
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
+app.config['SECRET_KEY'] = 'din-hemliga-nyckel'  # byt till något säkert
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 SUBJECTS_FILE = 'subjects.json'
 QUIZZES_FILE = 'quizzes.json'
@@ -22,6 +26,47 @@ DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'data')
 RATINGS_FILE = os.path.join(DATA_FOLDER, 'ratings.json')
 FLASHCARDS_DATA_FILE = 'flashcards_data.json'
 
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Du måste vara inloggad för att komma åt den här sidan.'
+login_manager.login_message_category = 'info'
+
+# Användare loader för flask-login
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+class User(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), unique=True, nullable=False)
+    password_hash = db.Column(db.String(60), nullable=False)
+    flashcards = db.relationship('Flashcard', backref='owner', lazy=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"User('{self.username}')"
+
+class Flashcard(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    question = db.Column(db.Text, nullable=False)
+    answer = db.Column(db.Text, nullable=False)
+    ease_factor = db.Column(db.Float, default=2.5)
+    interval = db.Column(db.Integer, default=1)  # dagar till nästa repetition
+    repetitions = db.Column(db.Integer, default=0)
+    next_review = db.Column(db.Date, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    subject = db.Column(db.String(100), nullable=False)
+    topic = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"Flashcard('{self.question[:50]}...')"
+
+# Skapa tabeller om de inte finns
+with app.app_context():
+    db.create_all()
 
 # -------------------- Utility Functions --------------------
 def load_json(path, default):
@@ -34,41 +79,51 @@ def save_json(data, path):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+# Användarspecifika funktioner
+def get_user_subjects_file():
+    """Returnerar användarspecifik subjects-fil"""
+    return f'subjects_{current_user.id}.json'
 
-# -------------------- Subjects --------------------
+def get_user_quizzes_file():
+    """Returnerar användarspecifik quizzes-fil"""
+    return f'quizzes_{current_user.id}.json'
+
+def get_user_ratings_file():
+    """Returnerar användarspecifik ratings-fil"""
+    return os.path.join(DATA_FOLDER, f'ratings_{current_user.id}.json')
+
+# -------------------- Subjects (användarspecifika) --------------------
 def load_subjects():
-    return load_json(SUBJECTS_FILE, [])
-
+    if current_user.is_authenticated:
+        return load_json(get_user_subjects_file(), [])
+    return []
 
 def save_subjects(subjects):
-    save_json(subjects, SUBJECTS_FILE)
+    if current_user.is_authenticated:
+        save_json(subjects, get_user_subjects_file())
 
-
-# -------------------- Quizzes --------------------
+# -------------------- Quizzes (användarspecifika) --------------------
 def load_quizzes():
-    return load_json(QUIZZES_FILE, {})
-
+    if current_user.is_authenticated:
+        return load_json(get_user_quizzes_file(), {})
+    return {}
 
 def save_quizzes(quizzes):
-    save_json(quizzes, QUIZZES_FILE)
+    if current_user.is_authenticated:
+        save_json(quizzes, get_user_quizzes_file())
 
-
-# -------------------- Ratings --------------------
+# -------------------- Ratings (användarspecifika) --------------------
 def load_ratings():
-    return load_json(RATINGS_FILE, {})
-
+    if current_user.is_authenticated:
+        return load_json(get_user_ratings_file(), {})
+    return {}
 
 def save_ratings(ratings):
-    save_json(ratings, RATINGS_FILE)
-
+    if current_user.is_authenticated:
+        save_json(ratings, get_user_ratings_file())
 
 def save_flashcard_data(data):
     save_ratings(data)
-
-
-from datetime import datetime, timedelta
-
-from datetime import datetime, timedelta
 
 def update_flashcard_schedule(data, subject, topic, question, rating, time_taken):
     flashcard = data.setdefault(subject, {}).setdefault(topic, {}).setdefault(question, {
@@ -113,27 +168,228 @@ def update_flashcard_schedule(data, subject, topic, question, rating, time_taken
     })
     return data
 
+# -------------------- Auth Routes --------------------
 
-# -------------------- Routes --------------------
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    # Omdirigera inloggade användare
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        username = request.form['username'].strip()
+        password = request.form['password']
+        
+        # Validering
+        if len(username) < 3:
+            flash('Användarnamn måste vara minst 3 tecken långt.', 'danger')
+            return redirect(url_for('register'))
+        
+        if len(password) < 6:
+            flash('Lösenord måste vara minst 6 tecken långt.', 'danger')
+            return redirect(url_for('register'))
+
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Användarnamn finns redan.', 'danger')
+            return redirect(url_for('register'))
+
+        hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
+        user = User(username=username, password_hash=hashed_pw)
+        db.session.add(user)
+        db.session.commit()
+        flash('Kontot skapades! Nu kan du logga in.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template_string('''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Registrera - Flashcards</title>
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+                input { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
+                button { background: #007bff; color: white; padding: 10px; border: none; width: 100%; cursor: pointer; }
+                button:hover { background: #0056b3; }
+                .flash-messages { margin: 10px 0; }
+                .alert { padding: 10px; margin: 5px 0; border-radius: 4px; }
+                .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+                .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+            </style>
+        </head>
+        <body>
+            <h2>Registrera nytt konto</h2>
+            
+            <div class="flash-messages">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+            
+            <form method="POST">
+                <label>Användarnamn:</label>
+                <input name="username" required minlength="3">
+                <label>Lösenord:</label>
+                <input type="password" name="password" required minlength="6">
+                <button type="submit">Registrera</button>
+            </form>
+            <p><a href="{{ url_for('login') }}">Redan registrerad? Logga in här.</a></p>
+        </body>
+        </html>
+    ''')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # Omdirigera inloggade användare
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        username = request.form['username'].strip()
+        password = request.form['password']
+        user = User.query.filter_by(username=username).first()
+        
+        if user and bcrypt.check_password_hash(user.password_hash, password):
+            login_user(user)
+            flash(f'Välkommen {user.username}!', 'success')
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+        else:
+            flash('Fel användarnamn eller lösenord.', 'danger')
+
+    return render_template_string('''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Logga in - Flashcards</title>
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+                input { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
+                button { background: #28a745; color: white; padding: 10px; border: none; width: 100%; cursor: pointer; }
+                button:hover { background: #1e7e34; }
+                .flash-messages { margin: 10px 0; }
+                .alert { padding: 10px; margin: 5px 0; border-radius: 4px; }
+                .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+                .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+                .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+            </style>
+        </head>
+        <body>
+            <h2>Logga in</h2>
+            
+            <div class="flash-messages">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+            
+            <form method="POST">
+                <label>Användarnamn:</label>
+                <input name="username" required>
+                <label>Lösenord:</label>
+                <input type="password" name="password" required>
+                <button type="submit">Logga in</button>
+            </form>
+            <p><a href="{{ url_for('register') }}">Skapa nytt konto</a></p>
+        </body>
+        </html>
+    ''')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    subjects = load_subjects()
+    user_stats = {
+        'total_subjects': len(subjects),
+        'total_quizzes': sum(len(quizzes) for quizzes in load_quizzes().values()),
+        'member_since': current_user.created_at.strftime('%Y-%m-%d')
+    }
+    
+    return render_template_string('''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Dashboard - Flashcards</title>
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                .header { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+                .stats { display: flex; gap: 20px; margin: 20px 0; }
+                .stat-card { background: #e9ecef; padding: 15px; border-radius: 8px; text-align: center; flex: 1; }
+                .nav-links { margin: 20px 0; }
+                .nav-links a { display: inline-block; background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin: 5px; }
+                .nav-links a:hover { background: #0056b3; }
+                .logout { background: #dc3545; }
+                .logout:hover { background: #c82333; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Dashboard</h1>
+                <p>Välkommen, <strong>{{ current_user.username }}</strong>!</p>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <h3>{{ user_stats.total_subjects }}</h3>
+                    <p>Ämnen</p>
+                </div>
+                <div class="stat-card">
+                    <h3>{{ user_stats.total_quizzes }}</h3>
+                    <p>Quiz</p>
+                </div>
+                <div class="stat-card">
+                    <h3>{{ user_stats.member_since }}</h3>
+                    <p>Medlem sedan</p>
+                </div>
+            </div>
+            
+            <div class="nav-links">
+                <a href="{{ url_for('home') }}">Mina Ämnen</a>
+                <a href="{{ url_for('create_quiz') }}">Skapa Quiz</a>
+                <a href="{{ url_for('flashcards_by_date') }}">Repetitioner</a>
+                <a href="{{ url_for('logout') }}" class="logout">Logga ut</a>
+            </div>
+        </body>
+        </html>
+    ''', current_user=current_user, user_stats=user_stats)
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Du är utloggad.', 'info')
+    return redirect(url_for('login'))
+
+# -------------------- Main Routes (nu med @login_required) --------------------
 
 @app.route('/', methods=['GET', 'POST'])
+@login_required
 def home():
-    subjects = load_json(SUBJECTS_FILE, [])
+    subjects = load_subjects()
     if request.method == 'POST':
         sub = request.form['subject'].strip()
         if sub and sub not in subjects:
             subjects.append(sub)
-            save_json(subjects, SUBJECTS_FILE)
+            save_subjects(subjects)
         return redirect(url_for('home'))
     return render_template('index.html', subjects=subjects)
 
 @app.route('/delete_krav_document', methods=['POST'])
+@login_required
 def delete_krav_document():
     data = request.get_json()
     subject = data.get('subject')
     doc_type = data.get('doc_type')
 
-    krav_path = 'data/krav.json'
+    krav_path = f'data/krav_{current_user.id}.json'
 
     if os.path.exists(krav_path):
         with open(krav_path, 'r', encoding='utf-8') as f:
@@ -143,7 +399,6 @@ def delete_krav_document():
 
     if subject in krav_data and doc_type in krav_data[subject]:
         del krav_data[subject][doc_type]
-        # Ta bort subject om tomt
         if not krav_data[subject]:
             del krav_data[subject]
         
@@ -153,25 +408,24 @@ def delete_krav_document():
     else:
         return {'status': 'error', 'message': 'Dokument hittades inte'}, 404
 
-
 @app.route('/subject/<subject_name>')
+@login_required
 def subject(subject_name):
     quizzes = load_quizzes().get(subject_name, [])
     
-    # Läs krav.json
-    krav_path = 'data/krav.json'
+    # Läs användarspecifik krav.json
+    krav_path = f'data/krav_{current_user.id}.json'
     if os.path.exists(krav_path):
         with open(krav_path, 'r', encoding='utf-8') as f:
             krav_data = json.load(f)
     else:
         krav_data = {}
 
-    # Hämta dokument för subject (eller tomt dict)
     documents = krav_data.get(subject_name, {})
-
     return render_template('subject.html', subject_name=subject_name, quizzes=quizzes, documents=documents)
 
 @app.route('/delete_subject', methods=['POST'])
+@login_required
 def delete_subject():
     subject_to_delete = request.form.get('subject')
     subjects = load_subjects()
@@ -180,8 +434,8 @@ def delete_subject():
         save_subjects(subjects)
     return redirect(url_for('home'))
 
-
 @app.route('/subject/<subject_name>/quiz/<int:quiz_index>')
+@login_required
 def start_quiz(subject_name, quiz_index):
     quizzes = load_quizzes().get(subject_name, [])
     if 0 <= quiz_index < len(quizzes):
@@ -189,8 +443,8 @@ def start_quiz(subject_name, quiz_index):
         return render_template('start_quiz.html', subject_name=subject_name, quiz=quiz)
     return "Quiz not found", 404
 
-
 @app.route('/upload_krav_pdf', methods=['POST'])
+@login_required
 def upload_krav_pdf():
     subject = request.form['subject']
     doc_type = request.form['type']
@@ -198,13 +452,13 @@ def upload_krav_pdf():
     if not file:
         return jsonify(status='error', message='Ingen fil'), 400
 
-    # Spara filen på disk
-    folder = os.path.join('static', 'uploads', 'krav', subject)
+    # Användarspecifik mapp för krav-dokument
+    folder = os.path.join('static', 'uploads', 'krav', str(current_user.id), subject)
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, f"{doc_type}.pdf")
     file.save(path)
 
-    # Läs in texten som tidigare för JSON-innehåll
+    # Extrahera text från PDF
     pdf_path = path
     text = ''
     with fitz.open(pdf_path) as doc:
@@ -216,17 +470,16 @@ def upload_krav_pdf():
         for img in images:
             text += pytesseract.image_to_string(img)
 
-    # Uppdatera krav.json
-    krav_path = os.path.join('data', 'krav.json')
+    # Uppdatera användarspecifik krav.json
+    krav_path = f'data/krav_{current_user.id}.json'
     krav_data = load_json(krav_path, {})
     krav_data.setdefault(subject, {})[doc_type] = {'innehåll': text}
     save_json(krav_data, krav_path)
 
     return jsonify(status='success')
 
-
-
 @app.route('/create-quiz', methods=['GET', 'POST'])
+@login_required
 def create_quiz():
     subjects = load_subjects()
 
@@ -235,7 +488,7 @@ def create_quiz():
         uploaded_files = request.files.getlist('data1')
         user_title = request.form.get('quiz_title', '').strip()
         subject = request.form.get('subject')
-        quiz_type = request.form.get('quiz-drop')  # 'ten', 'twenty-five', etc.
+        quiz_type = request.form.get('quiz-drop')
         description = request.form.get('quiz-description', '').strip()
         use_docs = bool(request.form.get('use_documents'))
 
@@ -256,7 +509,8 @@ def create_quiz():
         # Handle file uploads and extract content
         saved_files = []
         file_contents = []
-        upload_folder = os.path.join('uploads', subject)
+        # Användarspecifik upload-mapp
+        upload_folder = os.path.join('uploads', str(current_user.id), subject)
         os.makedirs(upload_folder, exist_ok=True)
 
         for file in uploaded_files:
@@ -287,9 +541,9 @@ def create_quiz():
 
         combined_text = "\n\n".join(file_contents) if file_contents else ''
 
-        # Append krav documents
+        # Append krav documents (användarspecifika)
         if use_docs:
-            krav_path = os.path.join('data', 'krav.json')
+            krav_path = f'data/krav_{current_user.id}.json'
             if os.path.exists(krav_path):
                 with open(krav_path, 'r', encoding='utf-8') as f:
                     krav_data = json.load(f)
@@ -303,10 +557,7 @@ def create_quiz():
                     combined_text += "\n\n" + "\n\n".join(krav_texts)
 
         # Build AI prompt
-        prompt = (
-            f"You're an AI quiz generator – create"
-        )
-        # Specify number if applicable
+        prompt = f"You're an AI quiz generator – create"
         if desired_count:
             prompt += f" a {desired_count}-question"
         else:
@@ -347,7 +598,7 @@ def create_quiz():
         if desired_count and len(questions) > desired_count:
             questions = questions[:desired_count]
 
-        # Save quiz
+        # Save quiz (användarspecifikt)
         quizzes = load_quizzes()
         quizzes.setdefault(subject, []).append({
             'title': quiz_title,
@@ -361,16 +612,13 @@ def create_quiz():
 
         return redirect(url_for('subject', subject_name=subject))
 
-    # GET
-    events = []
-    if os.path.exists('events.json'):
-        with open('events.json', 'r', encoding='utf-8') as f:
-            events = json.load(f)
+    # GET - läs användarspecifika events
+    events_file = f'events_{current_user.id}.json'
+    events = load_json(events_file, [])
     return render_template('create-quiz.html', subjects=subjects, events=events)
 
-
-
 @app.route('/subject/<subject_name>/delete_quiz/<int:quiz_index>', methods=['POST'])
+@login_required
 def delete_quiz(subject_name, quiz_index):
     quizzes = load_quizzes()
     if subject_name in quizzes and 0 <= quiz_index < len(quizzes[subject_name]):
@@ -381,26 +629,8 @@ def delete_quiz(subject_name, quiz_index):
         flash("Quiz or subject not found.", "error")
     return redirect(url_for('subject', subject_name=subject_name))
 
-def load_data():
-    with open(DATA_FILE, 'r') as f:
-        return json.load(f)
-
-def save_data(data):
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
-
-def get_today_flashcards(data, subject, category):
-    today = datetime.today().strftime("%Y-%m-%d")
-    cards = []
-
-    for question, info in data.get(subject, {}).get(category, {}).items():
-        if info.get("next_review") == today:
-            cards.append((question, info))
-
-    return cards
-
-
 @app.route('/subject/<subject_name>/flashcards/<int:quiz_index>')
+@login_required
 def flashcards(subject_name, quiz_index):
     quizzes = load_quizzes().get(subject_name, [])
     if 0 <= quiz_index < len(quizzes):
@@ -418,30 +648,33 @@ def flashcards(subject_name, quiz_index):
 
 
 @app.route('/submit_ratings', methods=['POST'])
+@login_required
 def submit_rating():
-    """Förbättrad version som korrekt hanterar både originala quiz och daily quiz repetitioner"""
+    """
+    Förbättrad version som korrekt hanterar både originala quiz och daily quiz repetitioner
+    med korrekt användarspecifik ratings-hantering
+    """
     try:
         payload = request.get_json()
-       
         
         subject = payload.get('subject')
         quiz_title = payload.get('quiz_title') 
         responses = payload.get('responses', [])
 
         if not (subject and quiz_title and responses):
-            return jsonify({'error': 'Missing data'}), 400
+            return jsonify({'error': 'Missing required data (subject, quiz_title, responses)'}), 400
 
         # Extrahera rätt subject och topic från quiz_title om det är en daily quiz
         actual_subject = subject
         actual_topic = quiz_title
         
-        # Kolla om det är en daily quiz (format: "subject — topic" eller "Repetition YYYY-MM-DD — subject / topic")
+        # Hantera olika format av daily quiz titlar
         if " — " in subject:
             # Format: "subject — topic"
             parts = subject.split(" — ")
             if len(parts) == 2:
-                actual_subject = parts[0]
-                actual_topic = parts[1]
+                actual_subject = parts[0].strip()
+                actual_topic = parts[1].strip()
         elif quiz_title.startswith("Repetition") and " — " in quiz_title:
             # Format: "Repetition YYYY-MM-DD — subject / topic"
             parts = quiz_title.split(" — ")
@@ -450,63 +683,92 @@ def submit_rating():
                 if " / " in subject_topic:
                     subj_parts = subject_topic.split(" / ")
                     if len(subj_parts) == 2:
-                        actual_subject = subj_parts[0]
-                        actual_topic = subj_parts[1]
+                        actual_subject = subj_parts[0].strip()
+                        actual_topic = subj_parts[1].strip()
 
-        
-
-        # Import här för att undvika circular imports
+        # Import från spaced_repetition.py
         from spaced_repetition import update_rating
         
         updated_count = 0
+        failed_count = 0
+        
+        print(f"[DEBUG] Processing {len(responses)} responses for {actual_subject}/{actual_topic}")
         
         # Uppdatera varje fråga med den nya funktionen
         for resp in responses:
-            question = resp.get('question')
+            question = resp.get('question', '').strip()
             rating = resp.get('rating')
             time_taken = resp.get('time')
             
+            if not question:
+                print(f"[WARNING] Skipping empty question")
+                failed_count += 1
+                continue
+                
+            if rating is None:
+                print(f"[WARNING] Skipping question without rating: {question[:30]}...")
+                failed_count += 1
+                continue
             
-            
-            if question and rating is not None:
-                try:
-                    rating = int(rating)
-                    if 1 <= rating <= 4:
-                        # Anropa update_rating funktionen med rätt subject/topic
-                        update_rating(actual_subject, actual_topic, question, rating, time_taken)
-                        updated_count += 1
+            try:
+                rating_int = int(rating)
+                if not (1 <= rating_int <= 4):
+                    print(f"[WARNING] Invalid rating {rating_int} for question: {question[:30]}...")
+                    failed_count += 1
+                    continue
+                
+                # Konvertera time_taken om det finns
+                time_float = None
+                if time_taken is not None:
+                    try:
+                        time_float = float(time_taken)
+                    except (ValueError, TypeError):
+                        print(f"[WARNING] Invalid time_taken '{time_taken}' for question: {question[:30]}...")
+                        time_float = None
+                
+                # Anropa update_rating funktionen med rätt subject/topic
+                success = update_rating(actual_subject, actual_topic, question, rating_int, time_float)
+                
+                if success:
+                    updated_count += 1
+                    print(f"[SUCCESS] Updated question: {question[:30]}... (Rating: {rating_int})")
+                else:
+                    failed_count += 1
+                    print(f"[ERROR] Failed to update question: {question[:30]}...")
                         
-                    else:
-                        print("yo")
-                except ValueError:
-                    print(f"[ERROR] Could not convert rating to int: {rating}")
-                except Exception as e:
-                    print(f"[ERROR] Failed to update question '{question[:50]}...': {e}")
-                    import traceback
-                    traceback.print_exc()
-            else:
-                print(f"[WARNING] Skipping question due to missing data: question={bool(question)}, rating={rating}")
-        
-        
-        
+            except ValueError as e:
+                print(f"[ERROR] Could not process rating '{rating}' for question '{question[:30]}...': {e}")
+                failed_count += 1
+            except Exception as e:
+                print(f"[ERROR] Failed to update question '{question[:30]}...': {e}")
+                import traceback
+                traceback.print_exc()
+                failed_count += 1
+
+        # Returnera detaljerat svar
         return jsonify({
-            'status': 'success', 
-            'message': f'Updated {updated_count} questions',
+            'status': 'success' if updated_count > 0 else 'partial_success' if failed_count < len(responses) else 'error',
+            'message': f'Updated {updated_count}/{len(responses)} questions successfully',
             'updated_count': updated_count,
+            'failed_count': failed_count,
             'total_responses': len(responses),
             'resolved_subject': actual_subject,
             'resolved_topic': actual_topic
         })
         
     except Exception as e:
+        print(f"[ERROR] Submit ratings failed: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': f'Failed to update ratings: {str(e)}'}), 500
-
+        return jsonify({
+            'error': f'Failed to update ratings: {str(e)}',
+            'status': 'error'
+        }), 500
 
 @app.route('/api/statistics')
+@login_required
 def get_statistics_api():
-    """API endpoint för att få stat istik"""
+    """API endpoint för att få statistik"""
     try:
         from spaced_repetition import get_statistics
         stats = get_statistics()
@@ -515,9 +777,11 @@ def get_statistics_api():
         return jsonify({'error': 'Failed to get statistics'}), 500
 
 @app.route('/api/due_questions')
+@login_required
 def get_due_questions_api():
     """API endpoint för att få alla förfallna frågor"""
     try:
+        from spaced_repetition import get_due_questions
         due_questions = get_due_questions()
         return jsonify({
             'count': len(due_questions),
@@ -528,8 +792,8 @@ def get_due_questions_api():
 
 
 @app.route('/reset_question', methods=['POST'])
+@login_required
 def reset_question_route():
-    
     if not app.debug:
         return jsonify({'error': 'Only available in debug mode'}), 403
     
@@ -551,10 +815,12 @@ def reset_question_route():
         return jsonify({'error': 'Failed to reset question'}), 500
 
 @app.route('/api/events', methods=['GET'])
+@login_required
 def get_events():
     try:
-        if os.path.exists('events.json'):
-            with open('events.json', 'r') as f:
+        events_file = f'events_{current_user.id}.json'
+        if os.path.exists(events_file):
+            with open(events_file, 'r', encoding='utf-8') as f:
                 events = json.load(f)
         else:
             events = []
@@ -564,6 +830,7 @@ def get_events():
 
 
 @app.route('/api/events', methods=['POST'])
+@login_required
 def save_event():
     try:
         event_data = request.get_json()
@@ -572,9 +839,10 @@ def save_event():
             if field not in event_data or not event_data[field]:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
 
+        events_file = f'events_{current_user.id}.json'
         events = []
-        if os.path.exists('events.json'):
-            with open('events.json', 'r') as f:
+        if os.path.exists(events_file):
+            with open(events_file, 'r', encoding='utf-8') as f:
                 events = json.load(f)
 
         if 'created' not in event_data:
@@ -582,8 +850,8 @@ def save_event():
 
         events.append(event_data)
 
-        with open('events.json', 'w') as f:
-            json.dump(events, f, indent=2)
+        with open(events_file, 'w', encoding='utf-8') as f:
+            json.dump(events, f, indent=2, ensure_ascii=False)
 
         return jsonify({'success': True, 'message': 'Event saved successfully'})
 
@@ -592,17 +860,19 @@ def save_event():
 
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
+@login_required
 def delete_event(event_id):
     try:
+        events_file = f'events_{current_user.id}.json'
         events = []
-        if os.path.exists('events.json'):
-            with open('events.json', 'r') as f:
+        if os.path.exists(events_file):
+            with open(events_file, 'r', encoding='utf-8') as f:
                 events = json.load(f)
 
         events = [event for event in events if event.get('id') != event_id]
 
-        with open('events.json', 'w') as f:
-            json.dump(events, f, indent=2)
+        with open(events_file, 'w', encoding='utf-8') as f:
+            json.dump(events, f, indent=2, ensure_ascii=False)
 
         return jsonify({'success': True, 'message': 'Event deleted successfully'})
 
@@ -611,14 +881,16 @@ def delete_event(event_id):
 
 
 @app.route("/get_events_for_date")
+@login_required
 def get_events_for_date():
     date = request.args.get("date")
     if not date:
         return jsonify([])
 
     try:
-        if os.path.exists("events.json"):
-            with open("events.json", "r") as f:
+        events_file = f'events_{current_user.id}.json'
+        if os.path.exists(events_file):
+            with open(events_file, 'r', encoding='utf-8') as f:
                 events = json.load(f)
         else:
             events = []
@@ -650,16 +922,20 @@ def group_flashcards_by_review_date(data):
 
 
 @app.route('/flashcards_by_date')
+@login_required
 def flashcards_by_date():
     """
     Returnerar både nya frågor och due-frågor grupperade per next_review-datum.
     Nya frågor (utan metadata) får next_review = idag.
+    
+    Förbättrad version som korrekt hanterar användarspecifika ratings.
     """
     try:
-        # 1) Läs in metadata och alla sparade quizzar
-        ratings     = load_ratings()       # läser från DATA_FOLDER/ratings.json
-        all_quizzes = load_quizzes()       # läser från quizzes.json
-        today       = datetime.now().date()
+        # 1) Läs in metadata och alla sparade quizzar (användarspecifikt)
+        ratings = load_ratings()       # från spaced_repetition.py
+        all_quizzes = load_quizzes()   # från main app (användarspecifik)
+        today = datetime.now().date()
+        today_str = today.isoformat()
 
         schedule = {}
 
@@ -671,55 +947,96 @@ def flashcards_by_date():
                 
                 # Filtrera bort frågor som börjar med [Error]
                 valid_questions = [q for q in questions 
-                                 if q.get('question') and not q['question'].startswith("[Error]")]
+                                 if q.get('question') and 
+                                    not q['question'].startswith("[Error]") and
+                                    q.get('answer')]
                 
                 for item in valid_questions:
-                    question = item.get('question')
+                    question = item.get('question', '').strip()
                     if not question:
                         continue
 
-                    # 3) Hämta next_review från metadata om den finns
-                    meta = ratings \
-                        .get(subject, {}) \
-                        .get(topic, {}) \
-                        .get(question)
+                    # 3) Kontrollera om frågan finns i ratings-data
+                    question_meta = (ratings
+                                   .get(subject, {})
+                                   .get(topic, {})
+                                   .get(question))
 
-                    if meta and 'next_review' in meta:
+                    if question_meta and 'next_review' in question_meta:
+                        # Existerande fråga med metadata
                         try:
-                            nr_date = datetime.strptime(
-                                meta['next_review'], '%Y-%m-%d'
-                            ).date()
-                        except ValueError:
-                            nr_date = today
+                            next_review_str = question_meta['next_review']
+                            next_review_date = datetime.strptime(next_review_str, '%Y-%m-%d').date()
+                            
+                            # Lägg till i schemat
+                            key = next_review_date.isoformat()
+                            if key not in schedule:
+                                schedule[key] = []
+                            
+                            schedule[key].append({
+                                'subject': subject,
+                                'topic': topic,
+                                'question': question,
+                                'is_new': False,
+                                'interval': question_meta.get('interval', 0),
+                                'repetitions': question_meta.get('repetitions', 0),
+                                'ease_factor': question_meta.get('ease_factor', 2.5)
+                            })
+                            
+                        except (ValueError, TypeError) as e:
+                            print(f"[WARNING] Invalid date format for question '{question[:30]}...': {e}")
+                            # Fallback till idag om datumet är korrupt
+                            if today_str not in schedule:
+                                schedule[today_str] = []
+                            schedule[today_str].append({
+                                'subject': subject,
+                                'topic': topic,
+                                'question': question,
+                                'is_new': True,
+                                'interval': 0,
+                                'repetitions': 0,
+                                'ease_factor': 2.5
+                            })
                     else:
-                        # Ny fråga → review idag
-                        nr_date = today
+                        # Ny fråga utan metadata → schemalägg för idag
+                        if today_str not in schedule:
+                            schedule[today_str] = []
+                        
+                        schedule[today_str].append({
+                            'subject': subject,
+                            'topic': topic,
+                            'question': question,
+                            'is_new': True,
+                            'interval': 0,
+                            'repetitions': 0,
+                            'ease_factor': 2.5
+                        })
 
-                    # 4) Lägg in i schemat under rätt nyckel
-                    key = nr_date.isoformat()
-                    schedule.setdefault(key, []).append({
-                        'subject': subject,
-                        'topic':   topic,
-                        'question': question
-                    })
+        # 4) Sortera schema-nycklarna kronologiskt
+        sorted_schedule = {}
+        for date_key in sorted(schedule.keys()):
+            sorted_schedule[date_key] = schedule[date_key]
 
-        return jsonify(schedule)
+        print(f"[DEBUG] Flashcards schedule generated for user {current_user.id}: {len(sorted_schedule)} dates")
+        
+        return jsonify(sorted_schedule)
 
     except Exception as e:
+        print(f"[ERROR] Failed to generate flashcards schedule: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({}), 500
-
-    except Exception as e:
-        return jsonify({}), 500
-
 
 
 @app.route('/daily_quiz/<date>/<subject>/<path:topic>')
+@login_required
 def daily_quiz(date, subject, topic):
-    """Förbättrad version som korrekt skickar subject/topic till frontend"""
+    """
+    Förbättrad version som korrekt hanterar både nya och befintliga frågor
+    baserat på användarspecifik ratings-data
+    """
     subject = urllib.parse.unquote(subject)
     topic = urllib.parse.unquote(topic)
-    
-   
     
     try:
         # Hämta alla frågor från den ursprungliga quizen
@@ -729,46 +1046,60 @@ def daily_quiz(date, subject, topic):
         if not quiz:
             return f"Quiz '{topic}' not found for subject '{subject}'", 404
 
-        
-
-        # Hämta spaced repetition data
-        ratings_data = load_ratings()
+        # Hämta spaced repetition data (användarspecifik)
+        ratings_data = load_ratings()  # från spaced_repetition.py
         questions_meta = ratings_data.get(subject, {}).get(topic, {})
         
-        
         cards = []
-        today_date = datetime.strptime(date, '%Y-%m-%d').date()
-        today_str = today_date.isoformat()
-        
-        
+        target_date = datetime.strptime(date, '%Y-%m-%d').date()
+        target_date_str = target_date.isoformat()
         
         # Gå igenom alla frågor i quizet
         for item in quiz['questions']:
-            question = item.get('question', '')
-            answer = item.get('answer', '')
+            question = item.get('question', '').strip()
+            answer = item.get('answer', '').strip()
             
-            # Skippa error-frågor
-            if question.startswith("[Error]") or not question or not answer:
+            # Skippa error-frågor och tomma frågor
+            if (question.startswith("[Error]") or 
+                not question or 
+                not answer):
                 continue
             
+            should_include = False
+            
             if question in questions_meta:
-                # Frågan har redan metadata - kontrollera om den ska repeteras
+                # Frågan har metadata - kontrollera om den ska repeteras detta datum
                 next_review = questions_meta[question].get('next_review')
                 
-                # Inkludera om schemalagd för idag eller tidigare (försenade)
-                if next_review and next_review <= today_str:
-                    cards.append(f"{question}|{answer}")
+                if next_review:
+                    # Inkludera om schemalagd för target_date eller tidigare (försenade)
+                    if next_review <= target_date_str:
+                        should_include = True
+                else:
+                    # Metadata finns men inget next_review - behandla som ny
+                    if target_date_str == datetime.now().strftime("%Y-%m-%d"):
+                        should_include = True
             else:
-                # Ny fråga som aldrig testats - inkludera den
+                # Ny fråga som aldrig testats - inkludera bara för dagens datum
+                if target_date_str == datetime.now().strftime("%Y-%m-%d"):
+                    should_include = True
+            
+            if should_include:
                 cards.append(f"{question}|{answer}")
 
-
+        # Kontrollera om det finns kort att visa
         if not cards:
+            message = f"No cards scheduled for {subject} / {topic} on {date}"
+            if target_date > datetime.now().date():
+                message += " (future date - cards only show on or after their review date)"
+            
             return render_template('flashcards.html',
-                                 subject_name=subject,  # Skicka bara subject här
+                                 subject_name=subject,
                                  quiz_title=f"No repetitions for {date}",
                                  questions=[],
-                                 message=f"No cards scheduled for {subject} / {topic} on {date}")
+                                 message=message)
+
+        print(f"[DEBUG] Daily quiz for {date}: {len(cards)} cards for {subject}/{topic}")
 
         # Använd original topic som quiz_title för korrekt spårning
         return render_template('flashcards.html',
@@ -779,9 +1110,11 @@ def daily_quiz(date, subject, topic):
                              quiz_date=date)            # Skicka med datumet för display
                              
     except Exception as e:
+        print(f"[ERROR] Daily quiz error: {e}")
         import traceback
         traceback.print_exc()
         return f"Error loading quiz: {e}", 500
+
 
 
 
@@ -822,7 +1155,6 @@ def update_flashcard(old, rating, time_taken):
         'next_review': next_review,
         'timestamp': datetime.now().isoformat()
     }
-
 
 
 if __name__ == '__main__':
