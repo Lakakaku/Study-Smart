@@ -1,67 +1,104 @@
 
 
-
-
 document.addEventListener("DOMContentLoaded", function () {
   const fileInput = document.getElementById('data-upload');
-  const container = document.querySelector('#right-data .pdf-container');
-  const form = document.getElementById("quiz-form");
+  const container = document.querySelector('.pdf-container');
 
-  if (fileInput) {
-    fileInput.addEventListener('change', function (event) {
-      const files = Array.from(event.target.files);
+  let filesArray = [];
 
-      files.forEach(file => {
-        const fileBox = document.createElement('div');
-        fileBox.classList.add('file-box');
+  function renderFiles() {
+    container.innerHTML = ''; 
 
-        const fileName = document.createElement('div');
-        fileName.textContent = file.name;
-        fileName.style.padding = '5px 0';
-        fileName.style.fontWeight = 'bold';
-        fileBox.appendChild(fileName);
+    filesArray.forEach((file, index) => {
+      const fileBox = document.createElement('div');
+      fileBox.classList.add('file-box');
 
-        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-          const iframe = document.createElement('iframe');
-          iframe.src = URL.createObjectURL(file);
-          iframe.width = '100%';
-          iframe.height = '160px';
-          iframe.style.border = 'none';
-          iframe.style.marginTop = '5px';
-          fileBox.appendChild(iframe);
-        } else {
-          const msg = document.createElement('div');
-          msg.textContent = 'File is not a PDF';
-          msg.style.color = 'red';
-          fileBox.appendChild(msg);
-        }
+      const fileName = document.createElement('div');
+      fileName.textContent = file.name;
+      fileName.style.padding = '5px 0';
+      fileName.style.fontWeight = 'bold';
+      fileBox.appendChild(fileName);
 
-        const removeBtn = document.createElement('button');
-        removeBtn.textContent = 'x';
-        removeBtn.classList.add('remove-btn');
-        removeBtn.style.marginTop = '5px';
-        removeBtn.style.padding = '2px 8px';
-        removeBtn.style.fontSize = '0.8rem';
-        removeBtn.style.cursor = 'pointer';
-        removeBtn.style.borderRadius = '5px';
-        removeBtn.style.border = '1px solid #ccc';
-        removeBtn.addEventListener('click', () => {
-          fileBox.remove();
-        });
-        fileBox.appendChild(removeBtn);
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        const iframe = document.createElement('iframe');
+        iframe.src = URL.createObjectURL(file);
+        iframe.width = '100%';
+        iframe.height = '160px';
+        iframe.style.border = 'none';
+        iframe.style.marginTop = '5px';
+        fileBox.appendChild(iframe);
+      } else {
+        const msg = document.createElement('div');
+        msg.textContent = 'File preview not available';
+        msg.style.color = 'gray';
+        fileBox.appendChild(msg);
+      }
 
-        container.appendChild(fileBox);
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '×';
+      removeBtn.classList.add('remove-btn');
+      removeBtn.style.marginTop = '5px';
+      removeBtn.addEventListener('click', () => {
+        filesArray.splice(index, 1);
+        renderFiles();
+        updateFileInput();
       });
+      fileBox.appendChild(removeBtn);
+
+      container.appendChild(fileBox);
     });
   }
 
-  if (form && fileInput) {
-    form.addEventListener("submit", function (e) {
-      const files = fileInput.files;
-      console.log("Submitting form with", files.length, "file(s)");
-      for (let i = 0; i < files.length; i++) {
-        console.log(`File ${i + 1}: ${files[i].name}, size: ${files[i].size}, type: ${files[i].type}`);
+  function updateFileInput() {
+    const dataTransfer = new DataTransfer();
+    filesArray.forEach(file => dataTransfer.items.add(file));
+    fileInput.files = dataTransfer.files;
+  }
+
+  fileInput.addEventListener('change', (event) => {
+    const newFiles = Array.from(event.target.files);
+    newFiles.forEach(newFile => {
+      if (!filesArray.some(f => f.name === newFile.name && f.size === newFile.size && f.lastModified === newFile.lastModified)) {
+        filesArray.push(newFile);
       }
     });
+    renderFiles();
+    updateFileInput();
+ 
+  });
+
+  const form = document.getElementById('quiz-form');
+  if (form) {
+    form.addEventListener('submit', () => {
+      console.log(`Submitting ${filesArray.length} files`);
+    });
   }
+
+  const subjectDropdown = document.getElementById('subject');
+  const testSection = document.getElementById('test-selector-section');
+  const testDropdown = document.getElementById('test-dropdown');
+
+  subjectDropdown.addEventListener('change', function () {
+    const selectedSubject = this.value;
+
+    // Filter tests matching the selected subject
+    const matchingTests = allEvents.filter(event => event.subject === selectedSubject);
+
+    // Clear old options
+    testDropdown.innerHTML = '<option value="" disabled selected hidden>Select a test</option>';
+
+    if (matchingTests.length > 0) {
+      matchingTests.forEach(test => {
+        const option = document.createElement('option');
+        option.value = test.id; // you can choose any identifier
+        option.textContent = `${test.title} (${test.testType} on ${test.date})`;
+        testDropdown.appendChild(option);
+      });
+
+      testSection.style.display = 'block';
+    } else {
+      testSection.style.display = 'none';
+    }
+  });
+
 });
