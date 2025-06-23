@@ -9,10 +9,10 @@ import urllib.parse
 from pdf2image import convert_from_path
 import os
 import json.decoder
-from spaced_repetition import update_rating
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from sqlalchemy import JSON, Text
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -20,11 +20,7 @@ app.config['SECRET_KEY'] = 'din-hemliga-nyckel'  # byt till något säkert
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-SUBJECTS_FILE = 'subjects.json'
-QUIZZES_FILE = 'quizzes.json'
 DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'data')
-RATINGS_FILE = os.path.join(DATA_FOLDER, 'ratings.json')
-FLASHCARDS_DATA_FILE = 'flashcards_data.json'
 
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
@@ -33,107 +29,401 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Du måste vara inloggad för att komma åt den här sidan.'
 login_manager.login_message_category = 'info'
 
-# Användare loader för flask-login
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+# -------------------- Database Models --------------------
+
+# -------------------- Database Models --------------------
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), unique=True, nullable=False)
     password_hash = db.Column(db.String(60), nullable=False)
-    flashcards = db.relationship('Flashcard', backref='owner', lazy=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    subjects = db.relationship('Subject', backref='owner', lazy=True, cascade='all, delete-orphan')
+    quizzes = db.relationship('Quiz', backref='owner', lazy=True, cascade='all, delete-orphan')
+    flashcards = db.relationship('Flashcard', backref='owner', lazy=True, cascade='all, delete-orphan')
+    events = db.relationship('Event', backref='owner', lazy=True, cascade='all, delete-orphan')
+    krav_documents = db.relationship('KravDocument', backref='owner', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f"User('{self.username}')"
+
+class Subject(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships - Korrigerade foreign keys
+    quizzes = db.relationship('Quiz', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
+                             foreign_keys='Quiz.subject_id')
+    flashcards = db.relationship('Flashcard', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
+                                foreign_keys='Flashcard.subject_id')
+    krav_documents = db.relationship('KravDocument', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
+                                    foreign_keys='KravDocument.subject_id')
+
+    def __repr__(self):
+        return f"Subject('{self.name}')"
+
+class Quiz(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    quiz_type = db.Column(db.String(50), nullable=False)
+    description = db.Column(db.Text)
+    subject_name = db.Column(db.String(100), nullable=False)  # Behåll för bakåtkompatibilitet
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)  # Ny foreign key
+    use_documents = db.Column(db.Boolean, default=False)
+    files = db.Column(JSON)  # Lista av filsökvägar
+    questions = db.Column(JSON)  # Lista av frågor och svar
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"Quiz('{self.title}')"
 
 class Flashcard(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     question = db.Column(db.Text, nullable=False)
     answer = db.Column(db.Text, nullable=False)
+    subject = db.Column(db.String(100), nullable=False)  # Behåll för bakåtkompatibilitet
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)  # Ny foreign key
+    topic = db.Column(db.String(100), nullable=False)
+    
+    # Spaced repetition fields
     ease_factor = db.Column(db.Float, default=2.5)
-    interval = db.Column(db.Integer, default=1)  # dagar till nästa repetition
+    interval = db.Column(db.Integer, default=0)
     repetitions = db.Column(db.Integer, default=0)
     next_review = db.Column(db.Date, nullable=True)
+    rating = db.Column(db.Integer, nullable=True)
+    time_taken = db.Column(db.Float, nullable=True)
+    
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    subject = db.Column(db.String(100), nullable=False)
-    topic = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f"Flashcard('{self.question[:50]}...')"
 
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD format
+    subject = db.Column(db.String(100), nullable=False)
+    test_type = db.Column(db.String(50), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'date': self.date,
+            'subject': self.subject,
+            'testType': self.test_type,
+            'title': self.title,
+            'created': self.created_at.isoformat() if self.created_at else None
+        }
+
+    def __repr__(self):
+        return f"Event('{self.title}', '{self.date}')"
+
+class KravDocument(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    subject_name = db.Column(db.String(100), nullable=False)  # Behåll för bakåtkompatibilitet
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)  # Ny foreign key
+    doc_type = db.Column(db.String(100), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"KravDocument('{self.subject_name}', '{self.doc_type}')"
+
+
+
+# Lägg till denna funktion efter database models men före user_loader
+def init_database():
+    """Initiera databas och hantera migrationer"""
+    with app.app_context():
+        # Skapa tabeller om de inte finns
+        db.create_all()
+        
+        # Lista över alla kolumner som behövs för varje tabell
+        required_columns = {
+            'quiz': [
+                ('subject_name', 'VARCHAR(100)'),
+                ('subject_id', 'INTEGER'),
+                ('use_documents', 'BOOLEAN'),
+                ('files', 'JSON'),
+                ('questions', 'JSON')
+            ],
+            'flashcard': [
+                ('subject', 'VARCHAR(100)'),
+                ('subject_id', 'INTEGER'),
+                ('ease_factor', 'FLOAT'),
+                ('interval', 'INTEGER'),
+                ('repetitions', 'INTEGER'),
+                ('next_review', 'DATE'),
+                ('rating', 'INTEGER'),
+                ('time_taken', 'FLOAT'),
+                ('updated_at', 'DATETIME')
+            ],
+            'krav_document': [
+                ('subject_name', 'VARCHAR(100)'),
+                ('subject_id', 'INTEGER')
+            ]
+        }
+        
+        # Kontrollera och lägg till saknade kolumner
+        for table_name, columns in required_columns.items():
+            for column_name, column_type in columns:
+                try:
+                    # Testa om kolumnen finns genom att köra en SELECT
+                    db.session.execute(db.text(f"SELECT {column_name} FROM {table_name} LIMIT 1"))
+                except Exception:
+                    # Kolumnen finns inte, lägg till den
+                    try:
+                        # Hantera olika datatyper
+                        if column_type == 'BOOLEAN':
+                            default_value = ' DEFAULT 0'
+                        elif column_type == 'FLOAT':
+                            default_value = ' DEFAULT 2.5' if column_name == 'ease_factor' else ' DEFAULT 0.0'
+                        elif column_type == 'INTEGER':
+                            default_value = ' DEFAULT 0'
+                        elif column_type == 'DATETIME':
+                            default_value = " DEFAULT CURRENT_TIMESTAMP"
+                        else:
+                            default_value = ''
+                        
+                        alter_query = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}{default_value}"
+                        db.session.execute(db.text(alter_query))
+                        print(f"Added column {column_name} to {table_name}")
+                    except Exception as e:
+                        print(f"Error adding column {column_name} to {table_name}: {e}")
+        
+        try:
+            db.session.commit()
+            print("Database schema updated successfully")
+        except Exception as e:
+            print(f"Error committing database changes: {e}")
+            db.session.rollback()
+
+
+# Användare loader för flask-login
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 # Skapa tabeller om de inte finns
-with app.app_context():
-    db.create_all()
+init_database()
 
-# -------------------- Utility Functions --------------------
-def load_json(path, default):
-    if os.path.exists(path):
-        with open(path, encoding='utf-8') as f:
-            return json.load(f)
-    return default
 
-def save_json(data, path):
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+# -------------------- Helper Functions --------------------
 
-# Användarspecifika funktioner
-def get_user_subjects_file():
-    """Returnerar användarspecifik subjects-fil"""
-    return f'subjects_{current_user.id}.json'
+def get_user_subjects():
+    """Hämta alla ämnen för nuvarande användare"""
+    if not current_user.is_authenticated:
+        return []
+    subjects = Subject.query.filter_by(user_id=current_user.id).all()
+    return [subject.name for subject in subjects]
 
-def get_user_quizzes_file():
-    """Returnerar användarspecifik quizzes-fil"""
-    return f'quizzes_{current_user.id}.json'
+def add_user_subject(subject_name):
+    """Lägg till nytt ämne för nuvarande användare"""
+    if not current_user.is_authenticated:
+        return False
+    
+    # Kontrollera om ämnet redan finns
+    existing = Subject.query.filter_by(user_id=current_user.id, name=subject_name).first()
+    if existing:
+        return False
+    
+    subject = Subject(name=subject_name, user_id=current_user.id)
+    db.session.add(subject)
+    db.session.commit()
+    return True
 
-def get_user_ratings_file():
-    """Returnerar användarspecifik ratings-fil"""
-    return os.path.join(DATA_FOLDER, f'ratings_{current_user.id}.json')
+def get_user_quizzes(subject_name=None):
+    """Hämta quiz för nuvarande användare, eventuellt filtrerat på ämne"""
+    if not current_user.is_authenticated:
+        return {}
+    
+    query = Quiz.query.filter_by(user_id=current_user.id)
+    if subject_name:
+        query = query.filter_by(subject_name=subject_name)
+    
+    quizzes = query.all()
+    
+    if subject_name:
+        # Returnera lista för specifikt ämne
+        return [quiz_to_dict(quiz) for quiz in quizzes]
+    else:
+        # Returnera grupperat per ämne
+        result = {}
+        for quiz in quizzes:
+            if quiz.subject_name not in result:
+                result[quiz.subject_name] = []
+            result[quiz.subject_name].append(quiz_to_dict(quiz))
+        return result
 
-# -------------------- Subjects (användarspecifika) --------------------
-def load_subjects():
-    if current_user.is_authenticated:
-        return load_json(get_user_subjects_file(), [])
-    return []
+def quiz_to_dict(quiz):
+    """Konvertera Quiz-objekt till dictionary"""
+    return {
+        'title': quiz.title,
+        'type': quiz.quiz_type,
+        'description': quiz.description,
+        'files': quiz.files or [],
+        'use_documents': quiz.use_documents,
+        'questions': quiz.questions or []
+    }
 
-def save_subjects(subjects):
-    if current_user.is_authenticated:
-        save_json(subjects, get_user_subjects_file())
+def add_user_quiz(subject_name, quiz_data):
+    """Lägg till nytt quiz för nuvarande användare"""
+    if not current_user.is_authenticated:
+        return False
+    
+    # Hitta Subject-objektet
+    subject_obj = Subject.query.filter_by(user_id=current_user.id, name=subject_name).first()
+    
+    quiz = Quiz(
+        title=quiz_data['title'],
+        quiz_type=quiz_data['type'],
+        description=quiz_data.get('description', ''),
+        subject_name=subject_name,  # Behåll för bakåtkompatibilitet
+        subject_id=subject_obj.id if subject_obj else None,  # Ny foreign key
+        use_documents=quiz_data.get('use_documents', False),
+        files=quiz_data.get('files', []),
+        questions=quiz_data.get('questions', []),
+        user_id=current_user.id
+    )
+    db.session.add(quiz)
+    db.session.commit()
+    return True
 
-# -------------------- Quizzes (användarspecifika) --------------------
-def load_quizzes():
-    if current_user.is_authenticated:
-        return load_json(get_user_quizzes_file(), {})
-    return {}
 
-def save_quizzes(quizzes):
-    if current_user.is_authenticated:
-        save_json(quizzes, get_user_quizzes_file())
+def get_user_krav_documents(subject_name=None):
+    """Hämta krav-dokument för nuvarande användare"""
+    if not current_user.is_authenticated:
+        return {}
+    
+    query = KravDocument.query.filter_by(user_id=current_user.id)
+    if subject_name:
+        query = query.filter_by(subject_name=subject_name)
+    
+    documents = query.all()
+    
+    if subject_name:
+        # Returnera dictionary för specifikt ämne
+        result = {}
+        for doc in documents:
+            result[doc.doc_type] = {'innehåll': doc.content}
+        return result
+    else:
+        # Returnera grupperat per ämne
+        result = {}
+        for doc in documents:
+            if doc.subject_name not in result:
+                result[doc.subject_name] = {}
+            result[doc.subject_name][doc.doc_type] = {'innehåll': doc.content}
+        return result
 
-# -------------------- Ratings (användarspecifika) --------------------
-def load_ratings():
-    if current_user.is_authenticated:
-        return load_json(get_user_ratings_file(), {})
-    return {}
+def save_krav_document(subject_name, doc_type, content):
+    """Spara eller uppdatera krav-dokument"""
+    if not current_user.is_authenticated:
+        return False
+    
+    # Hitta Subject-objektet
+    subject_obj = Subject.query.filter_by(user_id=current_user.id, name=subject_name).first()
+    
+    # Leta efter befintligt dokument
+    existing = KravDocument.query.filter_by(
+        user_id=current_user.id,
+        subject_name=subject_name,
+        doc_type=doc_type
+    ).first()
+    
+    if existing:
+        existing.content = content
+        existing.subject_id = subject_obj.id if subject_obj else None  # Uppdatera foreign key
+    else:
+        doc = KravDocument(
+            subject_name=subject_name,
+            subject_id=subject_obj.id if subject_obj else None,  # Ny foreign key
+            doc_type=doc_type,
+            content=content,
+            user_id=current_user.id
+        )
+        db.session.add(doc)
+    
+    db.session.commit()
+    return True
 
-def save_ratings(ratings):
-    if current_user.is_authenticated:
-        save_json(ratings, get_user_ratings_file())
+def delete_krav_document(subject_name, doc_type):
+    """Ta bort krav-dokument"""
+    if not current_user.is_authenticated:
+        return False
+    
+    doc = KravDocument.query.filter_by(
+        user_id=current_user.id,
+        subject_name=subject_name,
+        doc_type=doc_type
+    ).first()
+    
+    if doc:
+        db.session.delete(doc)
+        db.session.commit()
+        return True
+    return False
 
-def save_flashcard_data(data):
-    save_ratings(data)
+# -------------------- Spaced Repetition Functions --------------------
 
-def update_flashcard_schedule(data, subject, topic, question, rating, time_taken):
-    flashcard = data.setdefault(subject, {}).setdefault(topic, {}).setdefault(question, {
-        "ease_factor": 2.5, "repetitions": 0, "interval": 0,
-        "next_review": datetime.now().strftime("%Y-%m-%d")
-    })
+def get_flashcard_data(subject, topic, question):
+    """Hämta flashcard-data för en specifik fråga"""
+    if not current_user.is_authenticated:
+        return None
+    
+    return Flashcard.query.filter_by(
+        user_id=current_user.id,
+        subject=subject,
+        topic=topic,
+        question=question
+    ).first()
 
-    ef = flashcard["ease_factor"]
-    reps = flashcard["repetitions"]
-    prev_interval = flashcard["interval"]
+def update_flashcard_rating(subject, topic, question, rating, time_taken):
+    """Uppdatera flashcard-rating med spaced repetition algoritm"""
+    if not current_user.is_authenticated:
+        return False
+    
+    # Hitta Subject-objektet
+    subject_obj = Subject.query.filter_by(user_id=current_user.id, name=subject).first()
+    
+    # Hitta eller skapa flashcard
+    flashcard = Flashcard.query.filter_by(
+        user_id=current_user.id,
+        subject=subject,
+        topic=topic,
+        question=question
+    ).first()
+    
+    if not flashcard:
+        # Skapa ny flashcard
+        flashcard = Flashcard(
+            question=question,
+            answer="",  # Vi har inte svaret här, men det behövs för modellen
+            subject=subject,
+            subject_id=subject_obj.id if subject_obj else None,  # Ny foreign key
+            topic=topic,
+            user_id=current_user.id
+        )
+        db.session.add(flashcard)
+    else:
+        # Uppdatera foreign key om den saknas
+        if not flashcard.subject_id and subject_obj:
+            flashcard.subject_id = subject_obj.id
+    
+    # Använd spaced repetition algoritm
+    ef = flashcard.ease_factor
+    reps = flashcard.repetitions
+    prev_interval = flashcard.interval
     q = int(rating)
 
     # 1) Ease-factor
@@ -155,18 +445,51 @@ def update_flashcard_schedule(data, subject, topic, question, rating, time_taken
     if q == 4 and time_taken is not None and time_taken < 5:
         interval = max(interval, int(round((prev_interval or 1) * ef * 1.2)))
 
-    next_rev = (datetime.now() + timedelta(days=interval)).strftime("%Y-%m-%d")
+    next_rev = datetime.now().date() + timedelta(days=interval)
 
-    flashcard.update({
-        "rating": q,
-        "time": time_taken,
-        "ease_factor": round(ef, 2),
-        "repetitions": reps,
-        "interval": interval,
-        "next_review": next_rev,
-        "timestamp": datetime.now().isoformat()
-    })
-    return data
+    # Uppdatera flashcard
+    flashcard.ease_factor = round(ef, 2)
+    flashcard.repetitions = reps
+    flashcard.interval = interval
+    flashcard.next_review = next_rev
+    flashcard.rating = q
+    flashcard.time_taken = time_taken
+    flashcard.updated_at = datetime.utcnow()
+    
+    db.session.commit()
+    return True
+
+def get_due_flashcards():
+    """Hämta alla förfallna flashcards för nuvarande användare"""
+    if not current_user.is_authenticated:
+        return []
+    
+    today = datetime.now().date()
+    flashcards = Flashcard.query.filter(
+        Flashcard.user_id == current_user.id,
+        Flashcard.next_review <= today
+    ).all()
+    
+    return flashcards
+
+def get_flashcard_statistics():
+    """Hämta statistik över flashcards för nuvarande användare"""
+    if not current_user.is_authenticated:
+        return {}
+    
+    today = datetime.now().date()
+    
+    total = Flashcard.query.filter_by(user_id=current_user.id).count()
+    due = Flashcard.query.filter(
+        Flashcard.user_id == current_user.id,
+        Flashcard.next_review <= today
+    ).count()
+    
+    return {
+        'total_flashcards': total,
+        'due_today': due,
+        'reviewed_today': 0  # Skulle behöva spåra detta separat
+    }
 
 # -------------------- Auth Routes --------------------
 
@@ -174,7 +497,7 @@ def update_flashcard_schedule(data, subject, topic, question, rating, time_taken
 def register():
     # Omdirigera inloggade användare
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('home'))
         
     if request.method == 'POST':
         username = request.form['username'].strip()
@@ -246,7 +569,7 @@ def register():
 def login():
     # Omdirigera inloggade användare
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('home'))
         
     if request.method == 'POST':
         username = request.form['username'].strip()
@@ -257,7 +580,7 @@ def login():
             login_user(user)
             flash(f'Välkommen {user.username}!', 'success')
             next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+            return redirect(next_page) if next_page else redirect(url_for('home'))
         else:
             flash('Fel användarnamn eller lösenord.', 'danger')
 
@@ -306,10 +629,13 @@ def login():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    subjects = load_subjects()
+    subjects = get_user_subjects()
+    all_quizzes = get_user_quizzes()
+    total_quizzes = sum(len(quizzes) for quizzes in all_quizzes.values())
+    
     user_stats = {
         'total_subjects': len(subjects),
-        'total_quizzes': sum(len(quizzes) for quizzes in load_quizzes().values()),
+        'total_quizzes': total_quizzes,
         'member_since': current_user.created_at.strftime('%Y-%m-%d')
     }
     
@@ -328,6 +654,8 @@ def dashboard():
                 .nav-links a:hover { background: #0056b3; }
                 .logout { background: #dc3545; }
                 .logout:hover { background: #c82333; }
+                .home-link { background: #28a745; }
+                .home-link:hover { background: #1e7e34; }
             </style>
         </head>
         <body>
@@ -352,7 +680,7 @@ def dashboard():
             </div>
             
             <div class="nav-links">
-                <a href="{{ url_for('home') }}">Mina Ämnen</a>
+                <a href="{{ url_for('home') }}" class="home-link">Tillbaka till Startsida</a>
                 <a href="{{ url_for('create_quiz') }}">Skapa Quiz</a>
                 <a href="{{ url_for('flashcards_by_date') }}">Repetitioner</a>
                 <a href="{{ url_for('logout') }}" class="logout">Logga ut</a>
@@ -364,46 +692,32 @@ def dashboard():
 @app.route('/logout')
 @login_required
 def logout():
+    """Logga ut användaren"""
     logout_user()
-    flash('Du är utloggad.', 'info')
+    flash('Du har loggats ut.', 'info')
     return redirect(url_for('login'))
 
-# -------------------- Main Routes (nu med @login_required) --------------------
+# -------------------- Main Routes --------------------
 
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def home():
-    subjects = load_subjects()
+    subjects = get_user_subjects()
     if request.method == 'POST':
         sub = request.form['subject'].strip()
         if sub and sub not in subjects:
-            subjects.append(sub)
-            save_subjects(subjects)
+            add_user_subject(sub)
         return redirect(url_for('home'))
     return render_template('index.html', subjects=subjects)
 
 @app.route('/delete_krav_document', methods=['POST'])
 @login_required
-def delete_krav_document():
+def delete_krav_document_route():
     data = request.get_json()
     subject = data.get('subject')
     doc_type = data.get('doc_type')
 
-    krav_path = f'data/krav_{current_user.id}.json'
-
-    if os.path.exists(krav_path):
-        with open(krav_path, 'r', encoding='utf-8') as f:
-            krav_data = json.load(f)
-    else:
-        return {'status': 'error', 'message': 'Krav-data finns inte'}, 400
-
-    if subject in krav_data and doc_type in krav_data[subject]:
-        del krav_data[subject][doc_type]
-        if not krav_data[subject]:
-            del krav_data[subject]
-        
-        with open(krav_path, 'w', encoding='utf-8') as f:
-            json.dump(krav_data, f, ensure_ascii=False, indent=2)
+    if delete_krav_document(subject, doc_type):
         return {'status': 'success'}
     else:
         return {'status': 'error', 'message': 'Dokument hittades inte'}, 404
@@ -411,33 +725,26 @@ def delete_krav_document():
 @app.route('/subject/<subject_name>')
 @login_required
 def subject(subject_name):
-    quizzes = load_quizzes().get(subject_name, [])
-    
-    # Läs användarspecifik krav.json
-    krav_path = f'data/krav_{current_user.id}.json'
-    if os.path.exists(krav_path):
-        with open(krav_path, 'r', encoding='utf-8') as f:
-            krav_data = json.load(f)
-    else:
-        krav_data = {}
-
-    documents = krav_data.get(subject_name, {})
+    quizzes = get_user_quizzes(subject_name)
+    documents = get_user_krav_documents(subject_name)
     return render_template('subject.html', subject_name=subject_name, quizzes=quizzes, documents=documents)
 
 @app.route('/delete_subject', methods=['POST'])
 @login_required
 def delete_subject():
     subject_to_delete = request.form.get('subject')
-    subjects = load_subjects()
-    if subject_to_delete in subjects:
-        subjects.remove(subject_to_delete)
-        save_subjects(subjects)
+    if subject_to_delete:
+        # Ta bort ämnet från databasen
+        subject_obj = Subject.query.filter_by(user_id=current_user.id, name=subject_to_delete).first()
+        if subject_obj:
+            db.session.delete(subject_obj)
+            db.session.commit()
     return redirect(url_for('home'))
 
 @app.route('/subject/<subject_name>/quiz/<int:quiz_index>')
 @login_required
 def start_quiz(subject_name, quiz_index):
-    quizzes = load_quizzes().get(subject_name, [])
+    quizzes = get_user_quizzes(subject_name)
     if 0 <= quiz_index < len(quizzes):
         quiz = quizzes[quiz_index]
         return render_template('start_quiz.html', subject_name=subject_name, quiz=quiz)
@@ -470,18 +777,15 @@ def upload_krav_pdf():
         for img in images:
             text += pytesseract.image_to_string(img)
 
-    # Uppdatera användarspecifik krav.json
-    krav_path = f'data/krav_{current_user.id}.json'
-    krav_data = load_json(krav_path, {})
-    krav_data.setdefault(subject, {})[doc_type] = {'innehåll': text}
-    save_json(krav_data, krav_path)
+    # Spara till databas
+    save_krav_document(subject, doc_type, text)
 
     return jsonify(status='success')
 
 @app.route('/create-quiz', methods=['GET', 'POST'])
 @login_required
 def create_quiz():
-    subjects = load_subjects()
+    subjects = get_user_subjects()
 
     if request.method == 'POST':
         # Form inputs
@@ -500,6 +804,15 @@ def create_quiz():
             'extended-response': None,
             'exam': None
         }
+        desired_count = type_map
+        # Map quiz_type to number of questions
+        type_map = {
+            'ten': 10,
+            'twenty-five': 25,
+            'fifty': 50,
+            'extended-response': None,
+            'exam': None
+        }
         desired_count = type_map.get(quiz_type)
 
         # Build title
@@ -510,7 +823,7 @@ def create_quiz():
         saved_files = []
         file_contents = []
         # Användarspecifik upload-mapp
-        upload_folder = os.path.join('uploads', str(current_user.id), subject)
+        upload_folder = os.path.join('static', 'uploads', str(current_user.id), subject)
         os.makedirs(upload_folder, exist_ok=True)
 
         for file in uploaded_files:
@@ -541,20 +854,16 @@ def create_quiz():
 
         combined_text = "\n\n".join(file_contents) if file_contents else ''
 
-        # Append krav documents (användarspecifika)
+        # Append krav documents
         if use_docs:
-            krav_path = f'data/krav_{current_user.id}.json'
-            if os.path.exists(krav_path):
-                with open(krav_path, 'r', encoding='utf-8') as f:
-                    krav_data = json.load(f)
-                subj_docs = krav_data.get(subject, {})
-                krav_texts = []
-                for d_type, d_info in subj_docs.items():
-                    text = d_info.get('innehåll', '').strip()
-                    if text:
-                        krav_texts.append(f"{d_type.capitalize()}: {text}")
-                if krav_texts:
-                    combined_text += "\n\n" + "\n\n".join(krav_texts)
+            krav_docs = get_user_krav_documents(subject)
+            krav_texts = []
+            for d_type, d_info in krav_docs.items():
+                text = d_info.get('innehåll', '').strip()
+                if text:
+                    krav_texts.append(f"{d_type.capitalize()}: {text}")
+            if krav_texts:
+                combined_text += "\n\n" + "\n\n".join(krav_texts)
 
         # Build AI prompt
         prompt = f"You're an AI quiz generator – create"
@@ -598,41 +907,49 @@ def create_quiz():
         if desired_count and len(questions) > desired_count:
             questions = questions[:desired_count]
 
-        # Save quiz (användarspecifikt)
-        quizzes = load_quizzes()
-        quizzes.setdefault(subject, []).append({
+        # Save quiz
+        quiz_data = {
             'title': quiz_title,
             'type': quiz_type,
             'description': description,
             'files': saved_files,
             'use_documents': use_docs,
             'questions': questions
-        })
-        save_quizzes(quizzes)
-
+        }
+        
+        add_user_quiz(subject, quiz_data)
         return redirect(url_for('subject', subject_name=subject))
 
-    # GET - läs användarspecifika events
-    events_file = f'events_{current_user.id}.json'
-    events = load_json(events_file, [])
-    return render_template('create-quiz.html', subjects=subjects, events=events)
+    # GET - läs events
+    events = Event.query.filter_by(user_id=current_user.id).all()
+    events_data = [event.to_dict() for event in events]
+    return render_template('create-quiz.html', subjects=subjects, events=events_data)
 
 @app.route('/subject/<subject_name>/delete_quiz/<int:quiz_index>', methods=['POST'])
 @login_required
 def delete_quiz(subject_name, quiz_index):
-    quizzes = load_quizzes()
-    if subject_name in quizzes and 0 <= quiz_index < len(quizzes[subject_name]):
-        deleted_quiz = quizzes[subject_name].pop(quiz_index)
-        save_quizzes(quizzes)
-        flash(f"Deleted quiz: {deleted_quiz.get('title', 'Unknown')}", "success")
+    quizzes = get_user_quizzes(subject_name)
+    if 0 <= quiz_index < len(quizzes):
+        # Hitta quiz i databasen
+        quiz_to_delete = Quiz.query.filter_by(
+            user_id=current_user.id,
+            subject_name=subject_name
+        ).offset(quiz_index).first()
+        
+        if quiz_to_delete:
+            db.session.delete(quiz_to_delete)
+            db.session.commit()
+            flash(f"Deleted quiz: {quiz_to_delete.title}", "success")
+        else:
+            flash("Quiz not found.", "error")
     else:
-        flash("Quiz or subject not found.", "error")
+        flash("Invalid quiz index.", "error")
     return redirect(url_for('subject', subject_name=subject_name))
 
 @app.route('/subject/<subject_name>/flashcards/<int:quiz_index>')
 @login_required
 def flashcards(subject_name, quiz_index):
-    quizzes = load_quizzes().get(subject_name, [])
+    quizzes = get_user_quizzes(subject_name)
     if 0 <= quiz_index < len(quizzes):
         quiz = quizzes[quiz_index]
         flashcards = [
@@ -643,9 +960,6 @@ def flashcards(subject_name, quiz_index):
         quiz_title = quiz.get('title', 'Untitled Quiz')
         return render_template('flashcards.html', subject_name=subject_name, questions=flashcards, quiz_title=quiz_title)
     return "Flashcards not found", 404
-
-
-
 
 @app.route('/submit_ratings', methods=['POST'])
 @login_required
@@ -685,16 +999,13 @@ def submit_rating():
                     if len(subj_parts) == 2:
                         actual_subject = subj_parts[0].strip()
                         actual_topic = subj_parts[1].strip()
-
-        # Import från spaced_repetition.py
-        from spaced_repetition import update_rating
         
         updated_count = 0
         failed_count = 0
         
         print(f"[DEBUG] Processing {len(responses)} responses for {actual_subject}/{actual_topic}")
         
-        # Uppdatera varje fråga med den nya funktionen
+        # Uppdatera varje fråga med spaced repetition
         for resp in responses:
             question = resp.get('question', '').strip()
             rating = resp.get('rating')
@@ -726,8 +1037,8 @@ def submit_rating():
                         print(f"[WARNING] Invalid time_taken '{time_taken}' for question: {question[:30]}...")
                         time_float = None
                 
-                # Anropa update_rating funktionen med rätt subject/topic
-                success = update_rating(actual_subject, actual_topic, question, rating_int, time_float)
+                # Anropa update_flashcard_rating funktionen
+                success = update_flashcard_rating(actual_subject, actual_topic, question, rating_int, time_float)
                 
                 if success:
                     updated_count += 1
@@ -770,8 +1081,7 @@ def submit_rating():
 def get_statistics_api():
     """API endpoint för att få statistik"""
     try:
-        from spaced_repetition import get_statistics
-        stats = get_statistics()
+        stats = get_flashcard_statistics()
         return jsonify(stats)
     except Exception as e:
         return jsonify({'error': 'Failed to get statistics'}), 500
@@ -781,15 +1091,21 @@ def get_statistics_api():
 def get_due_questions_api():
     """API endpoint för att få alla förfallna frågor"""
     try:
-        from spaced_repetition import get_due_questions
-        due_questions = get_due_questions()
+        due_questions = get_due_flashcards()
+        questions_data = []
+        for flashcard in due_questions:
+            questions_data.append({
+                'subject': flashcard.subject,
+                'topic': flashcard.topic,
+                'question': flashcard.question,
+                'next_review': flashcard.next_review.isoformat() if flashcard.next_review else None
+            })
         return jsonify({
-            'count': len(due_questions),
-            'questions': due_questions
+            'count': len(questions_data),
+            'questions': questions_data
         })
     except Exception as e:
         return jsonify({'error': 'Failed to get due questions'}), 500
-
 
 @app.route('/reset_question', methods=['POST'])
 @login_required
@@ -806,8 +1122,16 @@ def reset_question_route():
         if not all([subject, quiz_title, question]):
             return jsonify({'error': 'Missing required fields'}), 400
         
-        from spaced_repetition import reset_question
-        reset_question(subject, quiz_title, question)
+        # Hitta och återställ flashcard
+        flashcard = get_flashcard_data(subject, quiz_title, question)
+        if flashcard:
+            flashcard.ease_factor = 2.5
+            flashcard.interval = 0
+            flashcard.repetitions = 0
+            flashcard.next_review = datetime.now().date()
+            flashcard.rating = None
+            flashcard.time_taken = None
+            db.session.commit()
         
         return jsonify({'status': 'success', 'message': 'Question reset'})
         
@@ -818,16 +1142,11 @@ def reset_question_route():
 @login_required
 def get_events():
     try:
-        events_file = f'events_{current_user.id}.json'
-        if os.path.exists(events_file):
-            with open(events_file, 'r', encoding='utf-8') as f:
-                events = json.load(f)
-        else:
-            events = []
-        return jsonify(events)
+        events = Event.query.filter_by(user_id=current_user.id).all()
+        events_data = [event.to_dict() for event in events]
+        return jsonify(events_data)
     except Exception as e:
         return jsonify([]), 500
-
 
 @app.route('/api/events', methods=['POST'])
 @login_required
@@ -839,46 +1158,38 @@ def save_event():
             if field not in event_data or not event_data[field]:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
 
-        events_file = f'events_{current_user.id}.json'
-        events = []
-        if os.path.exists(events_file):
-            with open(events_file, 'r', encoding='utf-8') as f:
-                events = json.load(f)
-
-        if 'created' not in event_data:
-            event_data['created'] = datetime.now().isoformat()
-
-        events.append(event_data)
-
-        with open(events_file, 'w', encoding='utf-8') as f:
-            json.dump(events, f, indent=2, ensure_ascii=False)
+        event = Event(
+            date=event_data['date'],
+            subject=event_data['subject'],
+            test_type=event_data['testType'],
+            title=event_data['title'],
+            user_id=current_user.id
+        )
+        
+        db.session.add(event)
+        db.session.commit()
 
         return jsonify({'success': True, 'message': 'Event saved successfully'})
 
     except Exception as e:
+        print(f"[ERROR] Failed to save event: {e}")
         return jsonify({'error': 'Failed to save event'}), 500
-
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
 @login_required
 def delete_event(event_id):
     try:
-        events_file = f'events_{current_user.id}.json'
-        events = []
-        if os.path.exists(events_file):
-            with open(events_file, 'r', encoding='utf-8') as f:
-                events = json.load(f)
-
-        events = [event for event in events if event.get('id') != event_id]
-
-        with open(events_file, 'w', encoding='utf-8') as f:
-            json.dump(events, f, indent=2, ensure_ascii=False)
-
-        return jsonify({'success': True, 'message': 'Event deleted successfully'})
+        event = Event.query.filter_by(id=event_id, user_id=current_user.id).first()
+        if event:
+            db.session.delete(event)
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Event deleted successfully'})
+        else:
+            return jsonify({'error': 'Event not found'}), 404
 
     except Exception as e:
+        print(f"[ERROR] Failed to delete event: {e}")
         return jsonify({'error': 'Failed to delete event'}), 500
-
 
 @app.route("/get_events_for_date")
 @login_required
@@ -888,38 +1199,11 @@ def get_events_for_date():
         return jsonify([])
 
     try:
-        events_file = f'events_{current_user.id}.json'
-        if os.path.exists(events_file):
-            with open(events_file, 'r', encoding='utf-8') as f:
-                events = json.load(f)
-        else:
-            events = []
-
-        filtered_events = [event for event in events if event.get("date") == date]
-        return jsonify(filtered_events)
+        events = Event.query.filter_by(user_id=current_user.id, date=date).all()
+        events_data = [event.to_dict() for event in events]
+        return jsonify(events_data)
     except Exception as e:
         return jsonify([]), 500
-
-
-def group_flashcards_by_review_date(data):
-    result = {}
-    for subject, topics in data.items():
-        for topic, questions in topics.items():
-            for question_text, qdata in questions.items():
-                next_review = qdata.get('next_review')
-                if not next_review:
-                    continue
-                if next_review not in result:
-                    result[next_review] = []
-                entry = {
-                    "subject": subject,
-                    "topic": topic,
-                    "question": question_text,
-                }
-                entry.update(qdata)
-                result[next_review].append(entry)
-    return result
-
 
 @app.route('/flashcards_by_date')
 @login_required
@@ -927,19 +1211,15 @@ def flashcards_by_date():
     """
     Returnerar både nya frågor och due-frågor grupperade per next_review-datum.
     Nya frågor (utan metadata) får next_review = idag.
-    
-    Förbättrad version som korrekt hanterar användarspecifika ratings.
     """
     try:
-        # 1) Läs in metadata och alla sparade quizzar (användarspecifikt)
-        ratings = load_ratings()       # från spaced_repetition.py
-        all_quizzes = load_quizzes()   # från main app (användarspecifik)
+        all_quizzes = get_user_quizzes()
         today = datetime.now().date()
         today_str = today.isoformat()
 
         schedule = {}
 
-        # 2) För varje subject → varje quiz → varje fråga
+        # För varje subject → varje quiz → varje fråga
         for subject, quiz_list in all_quizzes.items():
             for quiz in quiz_list:
                 topic = quiz['title']
@@ -956,47 +1236,26 @@ def flashcards_by_date():
                     if not question:
                         continue
 
-                    # 3) Kontrollera om frågan finns i ratings-data
-                    question_meta = (ratings
-                                   .get(subject, {})
-                                   .get(topic, {})
-                                   .get(question))
+                    # Kontrollera om frågan finns i flashcard-data
+                    flashcard = get_flashcard_data(subject, topic, question)
 
-                    if question_meta and 'next_review' in question_meta:
+                    if flashcard and flashcard.next_review:
                         # Existerande fråga med metadata
-                        try:
-                            next_review_str = question_meta['next_review']
-                            next_review_date = datetime.strptime(next_review_str, '%Y-%m-%d').date()
-                            
-                            # Lägg till i schemat
-                            key = next_review_date.isoformat()
-                            if key not in schedule:
-                                schedule[key] = []
-                            
-                            schedule[key].append({
-                                'subject': subject,
-                                'topic': topic,
-                                'question': question,
-                                'is_new': False,
-                                'interval': question_meta.get('interval', 0),
-                                'repetitions': question_meta.get('repetitions', 0),
-                                'ease_factor': question_meta.get('ease_factor', 2.5)
-                            })
-                            
-                        except (ValueError, TypeError) as e:
-                            print(f"[WARNING] Invalid date format for question '{question[:30]}...': {e}")
-                            # Fallback till idag om datumet är korrupt
-                            if today_str not in schedule:
-                                schedule[today_str] = []
-                            schedule[today_str].append({
-                                'subject': subject,
-                                'topic': topic,
-                                'question': question,
-                                'is_new': True,
-                                'interval': 0,
-                                'repetitions': 0,
-                                'ease_factor': 2.5
-                            })
+                        next_review_date = flashcard.next_review
+                        key = next_review_date.isoformat()
+                        
+                        if key not in schedule:
+                            schedule[key] = []
+                        
+                        schedule[key].append({
+                            'subject': subject,
+                            'topic': topic,
+                            'question': question,
+                            'is_new': False,
+                            'interval': flashcard.interval,
+                            'repetitions': flashcard.repetitions,
+                            'ease_factor': flashcard.ease_factor
+                        })
                     else:
                         # Ny fråga utan metadata → schemalägg för idag
                         if today_str not in schedule:
@@ -1012,7 +1271,7 @@ def flashcards_by_date():
                             'ease_factor': 2.5
                         })
 
-        # 4) Sortera schema-nycklarna kronologiskt
+        # Sortera schema-nycklarna kronologiskt
         sorted_schedule = {}
         for date_key in sorted(schedule.keys()):
             sorted_schedule[date_key] = schedule[date_key]
@@ -1027,29 +1286,24 @@ def flashcards_by_date():
         traceback.print_exc()
         return jsonify({}), 500
 
-
 @app.route('/daily_quiz/<date>/<subject>/<path:topic>')
 @login_required
 def daily_quiz(date, subject, topic):
     """
     Förbättrad version som korrekt hanterar både nya och befintliga frågor
-    baserat på användarspecifik ratings-data
+    baserat på användarspecifik flashcard-data
     """
     subject = urllib.parse.unquote(subject)
     topic = urllib.parse.unquote(topic)
     
     try:
         # Hämta alla frågor från den ursprungliga quizen
-        all_quizzes = load_quizzes().get(subject, [])
+        all_quizzes = get_user_quizzes().get(subject, [])
         quiz = next((z for z in all_quizzes if z['title'] == topic), None)
         
         if not quiz:
             return f"Quiz '{topic}' not found for subject '{subject}'", 404
 
-        # Hämta spaced repetition data (användarspecifik)
-        ratings_data = load_ratings()  # från spaced_repetition.py
-        questions_meta = ratings_data.get(subject, {}).get(topic, {})
-        
         cards = []
         target_date = datetime.strptime(date, '%Y-%m-%d').date()
         target_date_str = target_date.isoformat()
@@ -1067,18 +1321,13 @@ def daily_quiz(date, subject, topic):
             
             should_include = False
             
-            if question in questions_meta:
+            # Kontrollera flashcard-data
+            flashcard = get_flashcard_data(subject, topic, question)
+            
+            if flashcard and flashcard.next_review:
                 # Frågan har metadata - kontrollera om den ska repeteras detta datum
-                next_review = questions_meta[question].get('next_review')
-                
-                if next_review:
-                    # Inkludera om schemalagd för target_date eller tidigare (försenade)
-                    if next_review <= target_date_str:
-                        should_include = True
-                else:
-                    # Metadata finns men inget next_review - behandla som ny
-                    if target_date_str == datetime.now().strftime("%Y-%m-%d"):
-                        should_include = True
+                if flashcard.next_review <= target_date:
+                    should_include = True
             else:
                 # Ny fråga som aldrig testats - inkludera bara för dagens datum
                 if target_date_str == datetime.now().strftime("%Y-%m-%d"):
@@ -1114,48 +1363,6 @@ def daily_quiz(date, subject, topic):
         import traceback
         traceback.print_exc()
         return f"Error loading quiz: {e}", 500
-
-
-
-
-def update_flashcard(old, rating, time_taken):
-    ef = old.get('ease_factor', 2.5)
-    reps = old.get('repetitions', 0)
-    interval = old.get('interval', 0)
-
-    q = int(rating)
-
-    # Update ease factor (min 1.3)
-    ef = max(1.3, ef + (0.1 - (4 - q) * (0.08 + (4 - q) * 0.02)))
-
-    if q < 3:
-        reps = 0
-        interval = 1
-    else:
-        reps += 1
-        if reps == 1:
-            interval = 1
-        elif reps == 2:
-            interval = 6
-        else:
-            interval = int(round(interval * ef))
-
-    # Bonus för snabbt perfekt svar
-    if q == 4 and time_taken is not None and time_taken < 5:
-        interval = max(interval, int(round(interval * ef * 1.2)))
-
-    next_review = (datetime.now() + timedelta(days=interval)).strftime("%Y-%m-%d")
-
-    return {
-        'rating': q,
-        'time': time_taken,
-        'ease_factor': round(ef, 2),
-        'repetitions': reps,
-        'interval': interval,
-        'next_review': next_review,
-        'timestamp': datetime.now().isoformat()
-    }
-
 
 if __name__ == '__main__':
     app.run(debug=True)
