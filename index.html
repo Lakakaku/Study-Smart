@@ -20,7 +20,10 @@
       <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
     </svg>
 
-    
+    <form method="POST" action="{{ url_for('logout') }}" style="display: inline;">
+      <button type="submit" class="logout-btn">LOG OUT</button>
+    </form>
+
     <button id="btn-2" class="head-btn">CALENDAR</button>
 
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="user_icon" role="img" aria-label="User Icon">
@@ -36,15 +39,130 @@
           <div class="modal-content">
             <span class="close">&times;</span>
             <h2>Create Subject</h2>
-            <form method="POST" id="create-subject-form">
-              <label for="subject-name">Subject Name:</label>
-              <input type="text" id="subject-name" name="subject" required />
-              <br />
-              <button type="submit">Submit</button>
-            </form>
-          </div>
+            
+
+            <div class="create-subject-section">
+              <div class="create-subject-tabs">
+                <button class="tab-button active" onclick="showTab('create')">Create Subject</button>
+                <button class="tab-button" onclick="showTab('join')">Join Subject</button>
+            </div>
+    
+            <!-- Create Subject Tab -->
+            <div id="create-tab" class="tab-content active">
+                <h3>Create New Subject</h3>
+                <form id="create-subject-form">
+                    <div class="form-group">
+                        <label for="subject-name">Subject Name:</label>
+                        <input type="text" id="subject-name" name="subject-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="is-shared" name="is-shared"> 
+                            Enable sharing (others can join with code)
+                        </label>
+                    </div>
+                    <button type="submit">Create Subject</button>
+                </form>
+            </div>
+    
+            <!-- Join Subject Tab -->
+            <div id="join-tab" class="tab-content">
+                <h3>Join Subject</h3>
+                <form id="join-subject-form">
+                    <div class="form-group">
+                        <label for="share-code">Share Code:</label>
+                        <input type="text" id="share-code" name="share-code" placeholder="Enter 8-character code" maxlength="8" required>
+                    </div>
+                    <button type="submit">Join Subject</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Uppdaterad subjects lista för att visa shared subjects -->
+        <div class="subjects-container">
+            <!-- Owned Subjects -->
+            {% if owned_subjects %}
+            <div class="subjects-section">
+                <h2>My Subjects</h2>
+                <div class="subjects-grid">
+                    {% for subject in owned_subjects %}
+                    <div class="subject-card owned-subject">
+                        <div class="subject-header">
+                            <h3>{{ subject.name }}</h3>
+                            <span class="subject-role owner">Owner</span>
+                        </div>
+                        <div class="subject-stats">
+                            <span class="stat">{{ subject.quiz_count }} quizzes</span>
+                            <span class="stat">{{ subject.flashcard_count }} flashcards</span>
+                            {% if subject.due_flashcards > 0 %}
+                              <span class="stat due">{{ subject.due_flashcards }} due</span>
+                            {% endif %}
+                        </div>
+                        <div class="subject-actions">
+                            <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Open</a>
+                            <button class="btn btn-secondary" onclick="toggleSharing({{ subject.id }}, {{ subject.is_shared|lower }})">
+                                {% if subject.is_shared %}Disable Sharing{% else %}Enable Sharing{% endif %}
+                            </button>
+                            {% if subject.is_shared %}
+                            <button class="btn btn-info" onclick="showShareCode('{{ subject.share_code }}')">Show Code</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+    
+            <!-- Shared Subjects -->
+            {% if shared_subjects %}
+            <div class="subjects-section">
+                <h2>Shared Subjects</h2>
+                <div class="subjects-grid">
+                    {% for subject in shared_subjects %}
+                    <div class="subject-card shared-subject">
+                        <div class="subject-header">
+                            <h3>{{ subject.name }}</h3>
+                            <span class="subject-role member">Member</span>
+                        </div>
+                        <div class="subject-stats">
+                            <span class="stat">{{ subject.quiz_count }} quizzes</span>
+                            <span class="stat">{{ subject.flashcard_count }} flashcards</span>
+                            {% if subject.due_flashcards > 0 %}
+                            <span class="stat due">{{ subject.due_flashcards }} due</span>
+                            {% endif %}
+                        </div>
+                        <div class="subject-actions">
+                            <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Open</a>
+                            <button class="btn btn-danger" onclick="leaveSubject({{ subject.id }})">Leave</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+    
+            {% if not owned_subjects and not shared_subjects %}
+            <div class="no-subjects">
+                <p>No subjects yet. Create your first subject or join an existing one!</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Share Code Modal -->
+        <div id="share-code-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h3>Share Code</h3>
+                <p>Share this code with others so they can join your subject:</p>
+                <div class="share-code-display">
+                    <input type="text" id="share-code-text" readonly>
+                    <button onclick="copyShareCode()">Copy</button>
+                </div>
+            </div>
         </div>
       </div>
+
+                  
 
       <p id="subject-header">Subjects:</p>
 
