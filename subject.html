@@ -4,16 +4,1035 @@
   <meta charset="UTF-8">
   <title>{{ subject_name }} - Study Smart</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/subject_styles.css') }}">
+  <style>
+
+    .quiz-section {
+    margin-bottom: 40px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+}
+
+.quiz-count {
+  background: #e9ecef;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #666;
+}
+
+.quiz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.quiz-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.quiz-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.quiz-card.subject-quiz {
+  border-left: 4px solid #007bff;
+}
+
+.quiz-card.personal-quiz {
+  border-left: 4px solid #28a745;
+}
+
+.quiz-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.quiz-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+}
+
+.quiz-creator {
+  font-size: 0.85em;
+  color: #666;
+  font-style: italic;
+}
+
+.personal-badge {
+  background: #28a745;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 500;
+}
+
+.quiz-meta {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.quiz-type {
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #495057;
+}
+
+.quiz-date {
+  font-size: 0.85em;
+  color: #6c757d;
+}
+
+.quiz-description {
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 15px;
+  line-height: 1.4;
+}
+
+.quiz-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.start-button {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.start-button:hover {
+  background: #0056b3;
+}
+
+.start-button.personal {
+  background: #28a745;
+}
+
+.start-button.personal:hover {
+  background: #1e7e34;
+}
+
+.delete-button {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: background-color 0.2s ease;
+}
+
+.delete-button:hover {
+  background: #c82333;
+}
+
+.delete-form {
+  margin: 0;
+}
+
+.create-quiz-section {
+  text-align: center;
+  padding: 30px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.create-quiz-button {
+  display: inline-block;
+  background: #28a745;
+  color: white;
+  text-decoration: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.create-quiz-button:hover {
+  background: #218838;
+  text-decoration: none;
+  color: white;
+}
+
+.create-quiz-info {
+  margin-top: 10px;
+  font-size: 0.9em;
+  color: #6c757d;
+}
+
+.no-quizzes {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.create-first-quiz-button {
+  display: inline-block;
+  background: #007bff;
+  color: white;
+  text-decoration: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-weight: 500;
+  margin-top: 20px;
+  transition: background-color 0.2s ease;
+}
+
+.create-first-quiz-button:hover {
+  background: #0056b3;
+  text-decoration: none;
+  color: white;
+}
+
+/* Styling for member role badges */
+.member-role-badge {
+  background: #6c757d;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.member-role-badge.owner {
+  background: #dc3545;
+}
+
+.member-role-badge.admin {
+  background: #ffc107;
+  color: #212529;
+}
+
+.member-role-badge.member {
+  background: #28a745;
+}
+
+/* Share section styling */
+.share-section {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.share-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.share-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-indicator.active {
+  background: #28a745;
+}
+
+.status-indicator.inactive {
+  background: #dc3545;
+}
+
+.share-code-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.share-code {
+  background: white;
+  border: 1px solid #ced4da;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #007bff;
+  min-width: 120px;
+}
+
+.copy-button {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.2s ease;
+}
+
+.copy-button:hover {
+  background: #0056b3;
+}
+
+.copy-button.copied {
+  background: #28a745;
+}
+
+.share-help {
+  background: #e7f3ff;
+  border: 1px solid #bee5eb;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 0.9em;
+  color: #0c5460;
+  margin-bottom: 15px;
+}
+
+.toggle-sharing, .regenerate-code {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-right: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.toggle-sharing:hover, .regenerate-code:hover {
+  background: #5a6268;
+}
+
+.members-count {
+  margin-top: 10px;
+  font-size: 0.9em;
+  color: #6c757d;
+}
+
+/* Shared files section */
+.shared-files-section {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.files-section-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.file-upload-area {
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+  transition: border-color 0.2s ease;
+}
+
+.file-upload-area:hover,
+.file-upload-area.drag-over {
+  border-color: #007bff;
+}
+
+.file-upload-input {
+  display: none;
+}
+
+.file-upload-label {
+  background: #007bff;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.file-upload-label:hover {
+  background: #0056b3;
+}
+
+.file-description-input {
+  width: 100%;
+  max-width: 400px;
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  margin-top: 15px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.upload-progress {
+  margin-top: 15px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.upload-progress-bar {
+  height: 4px;
+  background: #007bff;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.upload-status {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.upload-status.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.upload-status.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.file-list {
+  min-height: 100px;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.file-info {
+  flex: 1;
+}
+
+.file-name {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.file-extension {
+  background: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.75em;
+  margin-left: 8px;
+}
+
+.file-download-count {
+  color: #6c757d;
+  font-size: 0.85em;
+  margin-left: 8px;
+}
+
+.file-meta {
+  font-size: 0.85em;
+  color: #6c757d;
+}
+
+.file-description {
+  font-size: 0.9em;
+  color: #555;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.file-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.download-btn {
+  background: #007bff;
+  color: white;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  transition: background-color 0.2s ease;
+}
+
+.download-btn:hover {
+  background: #0056b3;
+  text-decoration: none;
+  color: white;
+}
+
+.delete-file-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: background-color 0.2s ease;
+}
+
+.delete-file-btn:hover {
+  background: #c82333;
+}
+
+.no-files-message {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.file-stats {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+  font-size: 0.9em;
+  color: #6c757d;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .quiz-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .quiz-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .quiz-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .start-button,
+  .delete-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .share-code-display {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .file-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .file-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+
+
+
+    .share-section {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .share-title {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #495057;
+    }
+    
+    .share-code-display {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .share-code {
+      background: #e9ecef;
+      padding: 10px 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 1.1em;
+      font-weight: bold;
+      letter-spacing: 2px;
+      color: #495057;
+      border: 2px solid #ced4da;
+      min-width: 120px;
+      text-align: center;
+    }
+    
+    .copy-button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: background-color 0.3s;
+    }
+    
+    .copy-button:hover {
+      background: #0056b3;
+    }
+    
+    .copy-button.copied {
+      background: #28a745;
+    }
+    
+    .share-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #28a745;
+    }
+    
+    .status-indicator.inactive {
+      background: #dc3545;
+    }
+    
+    .toggle-sharing {
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      margin-right: 10px;
+    }
+    
+    .toggle-sharing:hover {
+      background: #5a6268;
+    }
+    
+    .regenerate-code {
+      background: #ffc107;
+      color: #212529;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+    }
+    
+    .regenerate-code:hover {
+      background: #e0a800;
+    }
+    
+    .share-help {
+      background: #d4edda;
+      color: #155724;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      margin-top: 10px;
+    }
+    
+    .members-count {
+      color: #6c757d;
+      font-size: 0.9em;
+      margin-top: 10px;
+    }
+    
+    .member-role-badge {
+      background: #17a2b8;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.8em;
+      margin-left: 10px;
+    }
+    
+    .member-role-badge.owner {
+      background: #dc3545;
+    }
+    
+    .member-role-badge.admin {
+      background: #ffc107;
+      color: #212529;
+    }
+
+    /* Stilar för fildelning */
+    .shared-files-section {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .files-section-title {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #495057;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .file-upload-area {
+      border: 2px dashed #dee2e6;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 20px;
+      transition: border-color 0.3s;
+    }
+
+    .file-upload-area:hover {
+      border-color: #007bff;
+    }
+
+    .file-upload-area.drag-over {
+      border-color: #007bff;
+      background-color: #e3f2fd;
+    }
+
+    .file-upload-input {
+      display: none;
+    }
+
+    .file-upload-label {
+      background: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-block;
+      transition: background-color 0.3s;
+    }
+
+    .file-upload-label:hover {
+      background: #0056b3;
+    }
+
+    .file-description-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      margin-top: 10px;
+      max-width: 400px;
+    }
+
+    .file-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .file-item {
+      background: white;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .file-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .file-name {
+      font-weight: bold;
+      color: #495057;
+    }
+
+    .file-meta {
+      font-size: 0.9em;
+      color: #6c757d;
+    }
+
+    .file-description {
+      font-size: 0.9em;
+      color: #495057;
+      font-style: italic;
+    }
+
+    .file-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .download-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      text-decoration: none;
+      display: inline-block;
+      transition: background-color 0.3s;
+    }
+
+    .download-btn:hover {
+      background: #218838;
+    }
+
+    .delete-file-btn {
+      background: #dc3545;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: background-color 0.3s;
+    }
+
+    .delete-file-btn:hover {
+      background: #c82333;
+    }
+
+    .file-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 10px;
+    }
+
+    .file-stats {
+      background: #d4edda;
+      color: #155724;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      margin-top: 10px;
+    }
+
+    .no-files-message {
+      text-align: center;
+      padding: 40px;
+      color: #6c757d;
+      font-style: italic;
+    }
+
+    .upload-progress {
+      width: 100%;
+      height: 4px;
+      background: #e9ecef;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .upload-progress-bar {
+      height: 100%;
+      background: #007bff;
+      transition: width 0.3s;
+    }
+
+    .file-extension {
+      background: #e9ecef;
+      color: #495057;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.8em;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+
+    .file-download-count {
+      background: #17a2b8;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.8em;
+      margin-left: 5px;
+    }
+
+    .upload-status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    .upload-status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .upload-status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+  </style>
 </head>
 
 <body>
 
-  <a href="{{ url_for('home') }}" class="return-button">← Return</a>
+  <a href="{{ url_for('index') }}" class="return-button">← Return</a>
 
   <div class="subject-title-container">
     <div id="subject-title">
       {{ subject_name }}
+      {% if user_role %}
+        <span class="member-role-badge {{ user_role }}">{{ user_role.title() }}</span>
+      {% endif %}
     </div>
+  </div>
+
+  <!-- Share Section - only for owners -->
+  {% if user_role == 'owner' %}
+  <div class="share-section">
+    <div class="share-title">📤 Share This Subject</div>
+    
+    <div class="share-status">
+      <div class="status-indicator {{ 'active' if subject.is_shared else 'inactive' }}"></div>
+      <span>Sharing is {{ 'enabled' if subject.is_shared else 'disabled' }}</span>
+    </div>
+    
+    {% if subject.is_shared %}
+    <div class="share-code-display">
+      <label>Share Code:</label>
+      <div class="share-code" id="share-code-display">{{ subject.share_code }}</div>
+      <button class="copy-button" onclick="copyShareCode()">Copy</button>
+    </div>
+    
+    <div class="share-help">
+      💡 Other users can join this subject by entering the code above in their "Join Subject" dialog.
+    </div>
+    {% endif %}
+    
+    <div style="margin-top: 15px;">
+      <button class="toggle-sharing" onclick="toggleSharing()">
+        {{ 'Disable Sharing' if subject.is_shared else 'Enable Sharing' }}
+      </button>
+      
+      {% if subject.is_shared %}
+      <button class="regenerate-code" onclick="regenerateCode()">
+        Regenerate Code
+      </button>
+      {% endif %}
+    </div>
+    
+    <div class="members-count" id="members-count">
+      Loading member count...
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Shared Files Section -->
+  <div class="shared-files-section">
+    <div class="files-section-title">
+      📁 Shared Files
+      <span id="file-stats"></span>
+    </div>
+
+    <!-- File Upload Area - Only for owners -->
+    {% if user_role == 'owner' %}
+    <div class="file-upload-area" id="file-upload-area">
+      <input type="file" id="file-upload-input" class="file-upload-input" multiple>
+      <label for="file-upload-input" class="file-upload-label">
+        Choose Files or Drag & Drop
+      </label>
+      <div style="margin-top: 10px; color: #6c757d;">
+        Supported: PDF, DOC, DOCX, TXT, Images, Videos, Audio, Archives (Max 50MB per file)
+      </div>
+      <textarea id="file-description" class="file-description-input" placeholder="Optional description for the file(s)..."></textarea>
+      <div id="upload-progress" class="upload-progress" style="display: none;">
+        <div class="upload-progress-bar" id="progress-bar"></div>
+      </div>
+      <div id="upload-status" class="upload-status" style="display: none;"></div>
+    </div>
+    {% endif %}
+
+    <!-- File List -->
+    <div class="file-list" id="file-list">
+      <div class="no-files-message" id="no-files-message">
+        Loading files...
+      </div>
+    </div>
+
+    <!-- File Statistics for owners -->
+    {% if user_role == 'owner' %}
+    <div class="file-stats" id="file-stats-details" style="display: none;">
+    </div>
+    {% endif %}
   </div>
 
   <div class="under-title-container">
@@ -32,31 +1051,51 @@
     <div class="quiz-container">
       {% if quizzes %}
         <div class="quiz-grid">
+          
+          <!-- subject.html -->
           {% for quiz in quizzes %}
             <div class="quiz-card">
-              <div class="quiz-title flashcard-trigger"
-                   data-subject="{{ subject_name }}"
-                   data-quiz-index="{{ loop.index0 }}">
+              <div class="quiz-title">
                 {{ quiz.title }}
               </div>
+
+              <!-- Start-knapp -->
+              <form method="GET"
+                    action="{{ url_for('start_quiz',
+                                      subject_name=subject_name,
+                                      quiz_index=loop.index0) }}">
+                <button type="submit" class="start-button">
+                  Starta Flashcard-Quiz
+                </button>
+              </form>
+
+              <!-- Delete-formen du redan har -->
+              {% if user_role in ['owner', 'admin'] %}
               <form method="POST"
-                    action="{{ url_for('delete_quiz', subject_name=subject_name, quiz_index=loop.index0) }}"
+                    action="{{ url_for('delete_quiz',
+                                      subject_name=subject_name,
+                                      quiz_index=loop.index0) }}"
                     class="delete-form"
-                    onsubmit="return confirm('Are you sure you want to delete this quiz?');">
+                    onsubmit="return confirm('Är du säker på att du vill ta bort detta quiz?');">
                 <button type="submit" class="delete-button">Delete</button>
               </form>
+              {% endif %}
             </div>
           {% endfor %}
+
         </div>
       {% else %}
         <p>No quizzes available for this subject yet.</p>
       {% endif %}
     </div>
 
+    <!-- Documents Section - Only show for owners and admins -->
+    {% if user_role in ['owner', 'admin'] %}
     <div class="placeholder-panel">
       <div class="documents-section">
         <h3>Dokument</h3>
 
+        <!-- Upload area for owners/admins -->
         <div class="upload-area">
           <input type="file" id="pdf-upload" accept=".pdf" multiple>
           <label for="pdf-upload" class="upload-label">
@@ -77,21 +1116,22 @@
         </div>
 
         <div id="documents-container">
-          {% if documents %}
-            {% for doc_type in documents.keys() %}
-              <div class="document-item" data-doc-type="{{ doc_type }}">
+          {% if krav_docs %}
+            {% for doc in krav_docs %}
+              <div class="document-item" data-doc-type="{{ doc.doc_type }}">
                 <button class="remove-document"
-                        data-doc-type="{{ doc_type }}">×</button>
+                        data-doc-type="{{ doc.doc_type }}"
+                        data-doc-id="{{ doc.id }}">×</button>
                 <div class="document-header">
                   <span class="document-title">
-                    {{ doc_type|capitalize }}
+                    {{ doc.doc_type|capitalize }}
                   </span>
                 </div>
                 <div class="document-preview">
                   <!-- Iframe mot server-sparad PDF -->
                   <iframe
                     src="{{ url_for('static',
-                                    filename='uploads/krav/' ~ subject_name ~ '/' ~ doc_type ~ '.pdf') }}"
+                                    filename='uploads/krav/' ~ current_user.id ~ '/' ~ subject_name ~ '/' ~ doc.doc_type ~ '.pdf') }}"
                     width="100%"
                     height="300px"
                     style="border:1px solid #ccc;"
@@ -105,12 +1145,351 @@
         </div>
       </div>
     </div>
+    {% endif %}
+    <!-- End of Documents Section -->
+
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="{{ url_for('static', filename='js/subject.js') }}"></script>
   <script>
-    const currentSubject = "{{ subject_name }}";
+    // Globala variabler som subject.js behöver
+    const currentSubject = '{{ subject_name|safe }}';
+    const currentUserId = '{{ current_user.id }}';
+    const subjectId = {{ subject.id }};
+    const userRole = '{{ user_role }}';
+    
+    // Eventuella befintliga quiz-data (för bakåtkompatibilitet)
+    {% if quizzes %}
+    const initialQuizzes = {{ quizzes|tojson|safe }};
+    {% else %}
+    const initialQuizzes = [];
+    {% endif %}
+    
+    // Befintliga dokument (för bakåtkompatibilitet)
+    {% if krav_docs %}
+    const initialDocuments = {{ krav_docs|tojson|safe }};
+    {% else %}
+    const initialDocuments = [];
+    {% endif %}
+
+    // Share code functions
+    async function copyShareCode() {
+      const shareCode = document.getElementById('share-code-display').textContent;
+      const copyButton = document.querySelector('.copy-button');
+      
+      try {
+        await navigator.clipboard.writeText(shareCode);
+        copyButton.textContent = 'Copied!';
+        copyButton.classList.add('copied');
+        
+        setTimeout(() => {
+          copyButton.textContent = 'Copy';
+          copyButton.classList.remove('copied');
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy: ', err);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = shareCode;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        copyButton.textContent = 'Copied!';
+        copyButton.classList.add('copied');
+        
+        setTimeout(() => {
+          copyButton.textContent = 'Copy';
+          copyButton.classList.remove('copied');
+        }, 2000);
+      }
+    }
+
+    async function toggleSharing() {
+      try {
+        const response = await fetch(`/api/subject/${subjectId}/share`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          location.reload(); // Reload to update the UI
+        } else {
+          alert('Error: ' + data.message);
+        }
+      } catch (error) {
+        console.error('Error toggling sharing:', error);
+        alert('Failed to toggle sharing');
+      }
+    }
+
+    async function regenerateCode() {
+      if (!confirm('Are you sure you want to regenerate the share code? The old code will no longer work.')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/subject/${subjectId}/regenerate_code`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          document.getElementById('share-code-display').textContent = data.share_code;
+          alert('Share code regenerated successfully!');
+        } else {
+          alert('Error: ' + data.message);
+        }
+      } catch (error) {
+        console.error('Error regenerating code:', error);
+        alert('Failed to regenerate code');
+      }
+    }
+
+    // Load member count
+    async function loadMemberCount() {
+      try {
+        const response = await fetch(`/api/subject/${subjectId}/members`);
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          document.getElementById('members-count').textContent = 
+            `👥 ${data.total_members} member${data.total_members !== 1 ? 's' : ''}`;
+        }
+      } catch (error) {
+        console.error('Error loading member count:', error);
+        document.getElementById('members-count').textContent = '👥 Member count unavailable';
+      }
+    }
+
+    // File sharing functions
+    async function loadSharedFiles() {
+      try {
+        const response = await fetch(`/api/shared_files/${encodeURIComponent(currentSubject)}`);
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          displayFiles(data.files);
+          updateFileStats(data.total_files);
+        } else {
+          showNoFilesMessage(data.message);
+        }
+      } catch (error) {
+        console.error('Error loading shared files:', error);
+        showNoFilesMessage('Failed to load files');
+      }
+    }
+
+    function displayFiles(files) {
+      const fileList = document.getElementById('file-list');
+      const noFilesMessage = document.getElementById('no-files-message');
+      
+      if (files.length === 0) {
+        noFilesMessage.style.display = 'block';
+        noFilesMessage.textContent = 'No files have been shared yet.';
+        return;
+      }
+      
+      noFilesMessage.style.display = 'none';
+      fileList.innerHTML = '';
+      
+      files.forEach(file => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.innerHTML = `
+          <div class="file-info">
+            <div class="file-name">
+              ${file.filename}
+              <span class="file-extension">${file.extension.toUpperCase()}</span>
+              <span class="file-download-count">↓ ${file.download_count}</span>
+            </div>
+            <div class="file-meta">
+              ${file.file_size} • Uploaded by ${file.uploader} • ${file.created_at}
+            </div>
+            ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
+          </div>
+          <div class="file-actions">
+            <a href="/download_shared_file/${file.id}" class="download-btn">Download</a>
+            ${file.can_delete ? `<button class="delete-file-btn" onclick="deleteFile(${file.id})">×</button>` : ''}
+          </div>
+        `;
+        fileList.appendChild(fileItem);
+      });
+    }
+
+    function showNoFilesMessage(message) {
+      const noFilesMessage = document.getElementById('no-files-message');
+      noFilesMessage.style.display = 'block';
+      noFilesMessage.textContent = message;
+    }
+
+    function updateFileStats(totalFiles) {
+      const fileStats = document.getElementById('file-stats');
+      fileStats.textContent = `(${totalFiles} file${totalFiles !== 1 ? 's' : ''})`;
+    }
+
+    async function deleteFile(fileId) {
+      if (!confirm('Are you sure you want to delete this file?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/delete_shared_file', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            file_id: fileId
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          loadSharedFiles(); // Reload the file list
+          showUploadStatus('File deleted successfully!', 'success');
+        } else {
+          showUploadStatus('Error: ' + data.message, 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting file:', error);
+        showUploadStatus('Failed to delete file', 'error');
+      }
+    }
+
+    function showUploadStatus(message, type) {
+      const statusDiv = document.getElementById('upload-status');
+      statusDiv.textContent = message;
+      statusDiv.className = `upload-status ${type}`;
+      statusDiv.style.display = 'block';
+      
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 5000);
+    }
+
+    // File upload handling (only for owners)
+    if (userRole === 'owner') {
+      const fileInput = document.getElementById('file-upload-input');
+      const uploadArea = document.getElementById('file-upload-area');
+      const progressBar = document.getElementById('progress-bar');
+      const progressDiv = document.getElementById('upload-progress');
+      
+      // Drag and drop functionality
+      uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('drag-over');
+      });
+      
+      uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('drag-over');
+      });
+      
+      uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+        
+        const files = Array.from(e.dataTransfer.files);
+        uploadFiles(files);
+      });
+      
+      fileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        uploadFiles(files);
+      });
+      
+      async function uploadFiles(files) {
+        if (files.length === 0) return;
+        
+        const description = document.getElementById('file-description').value;
+        
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          await uploadSingleFile(file, description, i + 1, files.length);
+        }
+        
+        // Reset form
+        fileInput.value = '';
+        document.getElementById('file-description').value = '';
+        
+        // Reload file list
+        loadSharedFiles();
+      }
+      
+      async function uploadSingleFile(file, description, current, total) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('subject', currentSubject);
+        formData.append('description', description);
+        
+        try {
+          progressDiv.style.display = 'block';
+          progressBar.style.width = '0%';
+          
+          const response = await fetch('/upload_shared_file', {
+            method: 'POST',
+            body: formData
+          });
+          
+          const data = await response.json();
+          
+          if (data.status === 'success') {
+            progressBar.style.width = '100%';
+            showUploadStatus(`File ${current}/${total} uploaded successfully: ${data.filename}`, 'success');
+          } else {
+            showUploadStatus(`Error uploading file ${current}/${total}: ${data.message}`, 'error');
+          }
+        } catch (error) {
+          console.error('Error uploading file:', error);
+          showUploadStatus(`Failed to upload file ${current}/${total}`, 'error');
+        } finally {
+          if (current === total) {
+            setTimeout(() => {
+              progressDiv.style.display = 'none';
+            }, 1000);
+          }
+        }
+      }
+      
+      // Load file statistics for owners
+      async function loadFileStats() {
+        try {
+          const response = await fetch(`/api/shared_files/${subjectId}/stats`);
+          const data = await response.json();
+          
+          if (data.status === 'success') {
+            const statsDiv = document.getElementById('file-stats-details');
+            statsDiv.innerHTML = `
+              📊 Total files: ${data.total_files} • Total downloads: ${data.total_downloads}
+            `;
+            statsDiv.style.display = 'block';
+          }
+        } catch (error) {
+          console.error('Error loading file stats:', error);
+        }
+      }
+      
+      loadFileStats();
+    }
+
+    // Load member count when page loads
+    if (userRole === 'owner') {
+      loadMemberCount();
+    }
+    
+    // Load shared files when page loads
+    loadSharedFiles();
   </script>
 
 </body>
