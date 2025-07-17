@@ -40,144 +40,103 @@
             <span class="close">&times;</span>
             <h2>Create Subject</h2>
             
-
             <div class="create-subject-section">
               <div class="create-subject-tabs">
                 <button class="tab-button active" onclick="showTab('create')">Create Subject</button>
                 <button class="tab-button" onclick="showTab('join')">Join Subject</button>
-            </div>
+              </div>
     
-            <!-- Create Subject Tab -->
-            <div id="create-tab" class="tab-content active">
+              <!-- Create Subject Tab -->
+              <div id="create-tab" class="tab-content active">
                 <h3>Create New Subject</h3>
                 <form id="create-subject-form">
-                    <div class="form-group">
-                        <label for="subject-name">Subject Name:</label>
-                        <input type="text" id="subject-name" name="subject-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="is-shared" name="is-shared"> 
-                            Enable sharing (others can join with code)
-                        </label>
-                    </div>
-                    <button type="submit">Create Subject</button>
+                  <div class="form-group">
+                    <label for="subject-name">Subject Name:</label>
+                    <input type="text" id="subject-name" name="subject-name" required>
+                  </div>
+                  <div class="form-group">
+                    <label>
+                      <input type="checkbox" id="is-shared" name="is-shared"> 
+                      Enable sharing (others can join with code)
+                    </label>
+                  </div>
+                  <button type="submit">Create Subject</button>
                 </form>
-            </div>
+              </div>
     
-            <!-- Join Subject Tab -->
-            <div id="join-tab" class="tab-content">
+              <!-- Join Subject Tab -->
+              <div id="join-tab" class="tab-content">
                 <h3>Join Subject</h3>
                 <form id="join-subject-form">
-                    <div class="form-group">
-                        <label for="share-code">Share Code:</label>
-                        <input type="text" id="share-code" name="share-code" placeholder="Enter 8-character code" maxlength="8" required>
-                    </div>
-                    <button type="submit">Join Subject</button>
+                  <div class="form-group">
+                    <label for="share-code">Share Code:</label>
+                    <input type="text" id="share-code" name="share-code" placeholder="Enter 8-character code" maxlength="8" required>
+                  </div>
+                  <button type="submit">Join Subject</button>
                 </form>
+              </div>
             </div>
-        </div>
-
-        <!-- Uppdaterad subjects lista för att visa shared subjects -->
-        <div class="subjects-container">
-            <!-- Owned Subjects -->
-            {% if owned_subjects %}
-            <div class="subjects-section">
-                <h2>My Subjects</h2>
-                <div class="subjects-grid">
-                    {% for subject in owned_subjects %}
-                    <div class="subject-card owned-subject">
-                        <div class="subject-header">
-                            <h3>{{ subject.name }}</h3>
-                            <span class="subject-role owner">Owner</span>
-                        </div>
-                        <div class="subject-stats">
-                            <span class="stat">{{ subject.quiz_count }} quizzes</span>
-                            <span class="stat">{{ subject.flashcard_count }} flashcards</span>
-                            {% if subject.due_flashcards > 0 %}
-                              <span class="stat due">{{ subject.due_flashcards }} due</span>
-                            {% endif %}
-                        </div>
-                        <div class="subject-actions">
-                            <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Open</a>
-                            <button class="btn btn-secondary" onclick="toggleSharing({{ subject.id }}, {{ subject.is_shared|lower }})">
-                                {% if subject.is_shared %}Disable Sharing{% else %}Enable Sharing{% endif %}
-                            </button>
-                            {% if subject.is_shared %}
-                            <button class="btn btn-info" onclick="showShareCode('{{ subject.share_code }}')">Show Code</button>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-    
-            <!-- Shared Subjects -->
-            {% if shared_subjects %}
-            <div class="subjects-section">
-                <h2>Shared Subjects</h2>
-                <div class="subjects-grid">
-                    {% for subject in shared_subjects %}
-                    <div class="subject-card shared-subject">
-                        <div class="subject-header">
-                            <h3>{{ subject.name }}</h3>
-                            <span class="subject-role member">Member</span>
-                        </div>
-                        <div class="subject-stats">
-                            <span class="stat">{{ subject.quiz_count }} quizzes</span>
-                            <span class="stat">{{ subject.flashcard_count }} flashcards</span>
-                            {% if subject.due_flashcards > 0 %}
-                            <span class="stat due">{{ subject.due_flashcards }} due</span>
-                            {% endif %}
-                        </div>
-                        <div class="subject-actions">
-                            <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Open</a>
-                            <button class="btn btn-danger" onclick="leaveSubject({{ subject.id }})">Leave</button>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-    
-            {% if not owned_subjects and not shared_subjects %}
-            <div class="no-subjects">
-                <p>No subjects yet. Create your first subject or join an existing one!</p>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Share Code Modal -->
-        <div id="share-code-modal" class="modal">
-            <div class="modal-content">
-                <span class="close">&times;</span>
-                <h3>Share Code</h3>
-                <p>Share this code with others so they can join your subject:</p>
-                <div class="share-code-display">
-                    <input type="text" id="share-code-text" readonly>
-                    <button onclick="copyShareCode()">Copy</button>
-                </div>
-            </div>
+          </div>
         </div>
       </div>
 
-                  
-
       <p id="subject-header">Subjects:</p>
 
+      <!-- Fixed subject list with proper event handling -->
       <div class="subject-list">
-        {% for subject in subjects %}
-          <div class="subject">
-            <form method="POST" action="{{ url_for('delete_subject') }}" class="delete-form" onsubmit="return confirmDelete('{{ subject }}')">
-              <input type="hidden" name="subject" value="{{ subject }}" />
-              <button type="submit" class="delete-subject-btn" title="Remove subject">×</button>
-            </form>
-            <a href="{{ url_for('subject', subject_name=subject) }}">
-              <button class="subject-button">{{ subject }}</button>
+        <!-- Owned subjects -->
+        {% for subject in owned_subjects %}
+          <div class="subject owned-subject">
+            <!-- Subject link with proper event handling -->
+            <a href="{{ url_for('subject', subject_name=subject.name) }}" class="subject-link">
+              <div class="subject-button owned">
+                <span class="subject-title">{{ subject.name }}</span>
+                <div class="subject-badges">
+                  <span class="subject-role-badge">Owner</span>
+                  {% if subject.due_flashcards > 0 %}
+                    <span class="due-badge">{{ subject.due_flashcards }}</span>
+                  {% endif %}
+                </div>
+              </div>
             </a>
+            
+            <!-- Delete button with proper event handling -->
+            <form method="POST" action="{{ url_for('delete_subject') }}" class="delete-form" onsubmit="return confirmDelete('{{ subject.name }}')">
+              <input type="hidden" name="subject" value="{{ subject.name }}" />
+              <button type="submit" class="delete-subject-btn" title="Remove subject" onclick="event.stopPropagation();">×</button>
+            </form>
           </div>
         {% endfor %}
+
+        <!-- Shared subjects -->
+        {% for subject in shared_subjects %}
+          <div class="subject shared-subject">
+            <!-- Subject link with proper event handling -->
+            <a href="{{ url_for('subject', subject_name=subject.name) }}" class="subject-link">
+              <div class="subject-button shared">
+                <span class="subject-title">{{ subject.name }}</span>
+                <div class="subject-badges">
+                  <span class="subject-role-badge">Member</span>
+                  {% if subject.due_flashcards > 0 %}
+                    <span class="due-badge">{{ subject.due_flashcards }}</span>
+                  {% endif %}
+                </div>
+              </div>
+            </a>
+            
+            <!-- Leave button with proper event handling -->
+            <form method="POST" action="{{ url_for('leave_subject', subject_id=subject.id) }}" class="delete-form" onsubmit="return confirmLeave('{{ subject.name }}')">
+              <button type="submit" class="leave-subject-btn" title="Leave subject" onclick="event.stopPropagation();">⤷</button>
+            </form>
+          </div>
+        {% endfor %}
+
+        <!-- Show message if no subjects -->
+        {% if not owned_subjects and not shared_subjects %}
+          <div class="no-subjects-message">
+            <p>No subjects yet. Create your first subject or join an existing one!</p>
+          </div>
+        {% endif %}
       </div>
     </div>
 
@@ -193,7 +152,7 @@
         <button id="next-day-btn" aria-label="Next day">&gt;</button>
       </div>
       <div class="products-container" id="quizzes-container">
-        <!-- Quizzes kommer att laddas här via JavaScript -->
+        <!-- Quizzes will be loaded here via JavaScript -->
       </div>
     </div>
 
@@ -202,6 +161,95 @@
     </div>
   </div>
 
+  <!-- Rest of your modals remain the same -->
+  <div id="subjects-detail-modal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>Subject Management</h2>
+      
+      <!-- Owned Subjects -->
+      {% if owned_subjects %}
+      <div class="subjects-section">
+        <h3>My Subjects</h3>
+        <div class="subjects-grid">
+          {% for subject in owned_subjects %}
+          <div class="subject-card owned-subject">
+            <div class="subject-header">
+              <h4>{{ subject.name }}</h4>
+              <span class="subject-role owner">Owner</span>
+            </div>
+            <div class="subject-stats">
+              <span class="stat">{{ subject.quiz_count }} quizzes</span>
+              <span class="stat">{{ subject.flashcard_count }} flashcards</span>
+              {% if subject.due_flashcards > 0 %}
+                <span class="stat due">{{ subject.due_flashcards }} due</span>
+              {% endif %}
+            </div>
+            <div class="subject-actions">
+              <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Open</a>
+              <button class="btn btn-secondary" onclick="toggleSharing({{ subject.id }}, {{ subject.is_shared|lower }})">
+                {% if subject.is_shared %}Disable Sharing{% else %}Enable Sharing{% endif %}
+              </button>
+              {% if subject.is_shared %}
+              <button class="btn btn-info" onclick="showShareCode('{{ subject.share_code }}')">Show Code</button>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Shared Subjects -->
+      {% if shared_subjects %}
+      <div class="subjects-section">
+        <h3>Shared Subjects</h3>
+        <div class="subjects-grid">
+          {% for subject in shared_subjects %}
+          <div class="subject-card shared-subject">
+            <div class="subject-header">
+              <h4>{{ subject.name }}</h4>
+              <span class="subject-role member">Member</span>
+            </div>
+            <div class="subject-stats">
+              <span class="stat">{{ subject.quiz_count }} quizzes</span>
+              <span class="stat">{{ subject.flashcard_count }} flashcards</span>
+              {% if subject.due_flashcards > 0 %}
+              <span class="stat due">{{ subject.due_flashcards }} due</span>
+              {% endif %}
+            </div>
+            <div class="subject-actions">
+              <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Open</a>
+              <button class="btn btn-danger" onclick="leaveSubject({{ subject.id }})">Leave</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if not owned_subjects and not shared_subjects %}
+      <div class="no-subjects">
+        <p>No subjects yet. Create your first subject or join an existing one!</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Share Code Modal -->
+  <div id="share-code-modal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h3>Share Code</h3>
+      <p>Share this code with others so they can join your subject:</p>
+      <div class="share-code-display">
+        <input type="text" id="share-code-text" readonly>
+        <button onclick="copyShareCode()">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rest of your modals and JavaScript remain the same -->
   <div id="new-data-modal" class="modal">
     <div class="modal-content">
       <button id="close-new-data" class="close">&times;</button>
@@ -229,400 +277,18 @@
           <label for="subject">Select a subject:</label>
           <select name="subject" id="subject" required>
             <option value="" disabled selected hidden>Select a subject</option>
-            {% for subject in subjects %}
-              <option value="{{ subject }}">{{ subject }}</option>
+            {% for subject in owned_subjects %}
+              <option value="{{ subject.name }}">{{ subject.name }}</option>
+            {% endfor %}
+            {% for subject in shared_subjects %}
+              <option value="{{ subject.name }}">{{ subject.name }} (Shared)</option>
             {% endfor %}
           </select>
         </form>
       </div>
 
       <label for="pdf-notes" class="notes-label">Add notes about the PDF:</label>
-      <textarea id="#events-list {
-  max-height: 300px;  /* Adjust height as needed */
-  overflow-y: auto;
-  padding-right: 10px; /* Space for scrollbar */
-  margin-top: 10px;
-}
-
-/* Optional: make scrollbars look nicer (for WebKit browsers) */
-#events-list::-webkit-scrollbar {
-  width: 8px;
-}
-
-#events-list::-webkit-scrollbar-thumb {
-  background-color: #cccccc;
-  border-radius: 4px;
-}
-
-#events-list::-webkit-scrollbar-track {
-  background: #f0f0f0;
-}
-
-
-
-
-.products-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  grid-auto-rows: min-content;
-  max-height: 75vh;
-  overflow-y: auto;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-}
-
-.quiz-card {
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.quiz-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
-}
-
-.quiz-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-}
-
-.quiz-card-header {
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  position: relative;
-  overflow: hidden;
-}
-
-.quiz-card-header::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 100%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-  transform: rotate(45deg);
-}
-
-.quiz-subject {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem 0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  position: relative;
-  z-index: 1;
-}
-
-.quiz-title {
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin: 0;
-  line-height: 1.3;
-  position: relative;
-  z-index: 1;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.quiz-card-body {
-  padding: 1.5rem;
-}
-
-.quiz-stats {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: linear-gradient(135deg, #f8f9ff 0%, #e8f0ff 100%);
-  border-radius: 12px;
-  border: 1px solid rgba(102, 126, 234, 0.1);
-}
-
-.quiz-stat {
-  text-align: center;
-  flex: 1;
-}
-
-.quiz-stat-number {
-  display: block;
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #667eea;
-  margin-bottom: 0.25rem;
-}
-
-.quiz-stat-label {
-  font-size: 0.8rem;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.quiz-difficulty {
-  display: inline-block;
-  padding: 0.4rem 1rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 1.5rem;
-}
-
-.difficulty-easy {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-}
-
-.difficulty-medium {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-}
-
-.difficulty-hard {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-}
-
-.difficulty-basic {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  color: white;
-}
-
-.difficulty-very-hard {
-  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-  color: white;
-}
-
-.quiz-meta {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  font-size: 0.9rem;
-  color: #6b7280;
-}
-
-.quiz-meta-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.quiz-meta-icon {
-  width: 16px;
-  height: 16px;
-  opacity: 0.7;
-}
-
-.quiz-progress {
-  margin-bottom: 1.5rem;
-}
-
-.quiz-progress-label {
-  display: flex;
-  justify-content: between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  font-size: 0.85rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.quiz-progress-bar {
-  width: 100%;
-  height: 6px;
-  background-color: #e5e7eb;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.quiz-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.quiz-card-actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.quiz-action-btn {
-  flex: 1;
-  padding: 0.875rem 1rem;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.quiz-start-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
-
-.quiz-start-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-}
-
-.quiz-start-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  transition: left 0.5s;
-}
-
-.quiz-start-btn:hover::before {
-  left: 100%;
-}
-
-.quiz-review-btn {
-  background: transparent;
-  color: #667eea;
-  border: 2px solid #667eea;
-}
-
-.quiz-review-btn:hover {
-  background: #667eea;
-  color: white;
-  transform: translateY(-2px);
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .products-container {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    padding: 1rem;
-  }
-  
-  .quiz-card-header {
-    padding: 1.25rem;
-  }
-  
-  .quiz-card-body {
-    padding: 1.25rem;
-  }
-  
-  .quiz-stats {
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .quiz-card-actions {
-    flex-direction: column;
-  }
-}
-
-/* Animation for newly added cards */
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.quiz-card.new {
-  animation: slideInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Loading state */
-.quiz-card.loading {
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.quiz-card.loading .quiz-start-btn {
-  background: #9ca3af;
-  cursor: not-allowed;
-}
-
-/* Empty state */
-.quiz-empty-state {
-  text-align: center;
-  padding: 3rem 2rem;
-  color: #6b7280;
-}
-
-.quiz-empty-icon {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 1rem;
-  opacity: 0.5;
-}
-
-.quiz-empty-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #374151;
-}
-
-.quiz-empty-text {
-  font-size: 0.95rem;
-  line-height: 1.5;
-}
-
-/* Dark mode support (optional) */
-@media (prefers-color-scheme: dark) {
-  .products-container {
-    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-  }
-  
-  .quiz-card {
-    background: #1f2937;
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .quiz-stats {
-    background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .quiz-stat-label {
-    color: #9ca3af;
-  }
-  
-  .quiz-meta {
-    color: #9ca3af;
-  }
-  
-  .quiz-progress-bar {
-    background-color: #374151;
-  }
-}pdf-notes" class="notes-textarea" rows="5"></textarea>
+      <textarea id="pdf-notes" class="notes-textarea" rows="5"></textarea>
 
       <div id="generated-pdf-container" class="pdf-viewer-container">
         <h3>Generated PDF:</h3>
@@ -666,50 +332,504 @@
     </div>
   </div>
 
-
   <div id="add-event-modal" class="modal-a">
-    <button id="add-event-modal-close">&times;</button>
-    <h2 id="add-event-title">Add event</h2>
+  <button id="add-event-modal-close">&times;</button>
+  <h2 id="add-event-title">Add event</h2>
 
-    <!-- Subject Dropdown with Flask templating -->
-    <div class="form-group">
-      <label for="subject-select">Choose a subject:</label>
-      <select id="subject-select" required class="subject-select">
-        <option value="" disabled selected hidden>Select a subject</option>
-        {% for subject in subjects %}
-          <option value="{{ subject }}">{{ subject }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <!-- Test Type Dropdown -->
-    <div class="form-group">
-      <label for="test-type-select">Choose test type:</label>
-      <select id="test-type-select" required class="test-type-select">
-        <option value="" disabled selected hidden>Select test type</option>
-        <option value="test">Test</option>
-        <option value="assessment">Assessment</option>
-      </select>
-    </div>
-    
-    <!-- Event Title Input -->
-    <div class="form-group">
-      <label for="event-title">Event Title:</label>
-      <input type="text" id="event-title" placeholder="Enter event title" required>
-    </div>
-    
-    <!-- Event Description Textarea -->
-    <div class="form-group">
-      <label for="event-description">Description (optional):</label>
-      <textarea id="event-description" placeholder="Enter event description" rows="3"></textarea>
-    </div>
-    
-    <!-- Action Buttons -->
-    <div class="form-actions">
-      <button type="button" id="save-event-btn" class="save-btn">Save Event</button>
-      <button type="button" id="cancel-event-btn" class="cancel-btn">Cancel</button>
-    </div>
+  <!-- Subject Dropdown -->
+  <div class="form-group">
+    <label for="subject-select">Choose a subject:</label>
+    <select id="subject-select" required class="subject-select">
+      <option value="" disabled selected hidden>Select a subject</option>
+      {% for subject in owned_subjects %}
+        <option value="{{ subject.name }}" data-user-role="owner">{{ subject.name }}</option>
+      {% endfor %}
+      {% for subject in shared_subjects %}
+        <option value="{{ subject.name }}" data-user-role="member">{{ subject.name }} (Member)</option>
+      {% endfor %}
+    </select>
   </div>
 
+  <!-- Test Type Dropdown -->
+  <div class="form-group">
+    <label for="test-type-select">Choose test type:</label>
+    <select id="test-type-select" required class="test-type-select">
+      <option value="" disabled selected hidden>Select test type</option>
+      <option value="test">Test</option>
+      <option value="assessment">Assessment</option>
+      <option value="exam">Exam</option>
+      <option value="quiz">Quiz</option>
+    </select>
+  </div>
+  
+  <!-- Event Title Input -->
+  <div class="form-group">
+    <label for="event-title">Event Title:</label>
+    <input type="text" id="event-title" placeholder="Enter event title" required>
+  </div>
+  
+  <!-- Event Description Textarea -->
+  <div class="form-group">
+    <label for="event-description">Description (optional):</label>
+    <textarea id="event-description" placeholder="Enter event description" rows="3"></textarea>
+  </div>
+
+  <!-- Share with Members Checkbox (endast för ägare) -->
+  <div class="form-group" id="share-option-group" style="display: none;">
+    <label class="checkbox-label">
+      <input type="checkbox" id="share-with-members">
+      Share this event with all members of the subject
+      <span class="checkbox-info">Members will see this event in their calendars</span>
+    </label>
+  </div>
+  
+  <!-- Action Buttons -->
+  <div class="form-actions">
+    <button type="button" id="save-event-btn" class="save-btn">Save Event</button>
+    <button type="button" id="cancel-event-btn" class="cancel-btn">Cancel</button>
+  </div>
+</div>
+
+
+  <script>
+    // JavaScript for handling subject creation and joining
+    document.getElementById('create-subject-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const data = {
+        name: formData.get('subject-name'),
+        is_shared: formData.get('is-shared') === 'on'
+      };
+      
+      fetch('/add_subject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          alert(data.message);
+          location.reload(); // Reload page to show new subject
+        } else {
+          alert(data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while creating the subject');
+      });
+    });
+
+    document.getElementById('join-subject-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const data = {
+        share_code: formData.get('share-code')
+      };
+      
+      fetch('/join_subject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          alert(data.message);
+          location.reload(); // Reload page to show new subject
+        } else {
+          alert(data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while joining the subject');
+      });
+    });
+
+    // Function to confirm leaving a subject
+    function confirmLeave(subjectName) {
+      return confirm(`Are you sure you want to leave the subject "${subjectName}"?`);
+    }
+
+    // Function to confirm deleting a subject
+    function confirmDelete(subjectName) {
+      return confirm(`Are you sure you want to delete the subject "${subjectName}"? This action cannot be undone.`);
+    }
+
+    // Tab functionality for create/join modal
+    function showTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
+      });
+      
+      // Show selected tab
+      document.getElementById(tabName + '-tab').classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    // Handle sharing functionality
+    function toggleSharing(subjectId, isCurrentlyShared) {
+      fetch(`/api/subject/${subjectId}/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          alert(data.message);
+          location.reload();
+        } else {
+          alert(data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating sharing settings');
+      });
+    }
+
+    function showShareCode(code) {
+      document.getElementById('share-code-text').value = code;
+      document.getElementById('share-code-modal').style.display = 'block';
+    }
+
+    function copyShareCode() {
+      const shareCodeText = document.getElementById('share-code-text');
+      shareCodeText.select();
+      document.execCommand('copy');
+      alert('Share code copied to clipboard!');
+    }
+
+    function leaveSubject(subjectId) {
+      if (confirm('Are you sure you want to leave this subject?')) {
+        fetch(`/leave_subject/${subjectId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            alert(data.message);
+            location.reload();
+          } else {
+            alert(data.message);
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('An error occurred while leaving the subject');
+        });
+      }
+    }
+
+    // Prevent event bubbling on delete/leave buttons
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add event listeners to prevent link clicks when delete/leave buttons are clicked
+      document.querySelectorAll('.delete-subject-btn, .leave-subject-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          
+          // Get the form and submit it
+          const form = this.closest('form');
+          if (form) {
+            const confirmFunction = this.classList.contains('delete-subject-btn') ? 
+              () => confirmDelete(form.querySelector('input[name="subject"]').value) :
+              () => confirmLeave(this.getAttribute('title').replace('Leave subject', ''));
+            
+            if (confirmFunction()) {
+              form.submit();
+            }
+          }
+        });
+      });
+
+      // Ensure subject links work properly
+      document.querySelectorAll('.subject-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+          // Only prevent default if a delete/leave button was clicked
+          if (e.target.classList.contains('delete-subject-btn') || 
+              e.target.classList.contains('leave-subject-btn')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+          }
+          // Otherwise, let the link work normally
+        });
+      });
+
+      const subjectSelect = document.getElementById('subject-select');
+  const shareOptionGroup = document.getElementById('share-option-group');
+  const shareCheckbox = document.getElementById('share-with-members');
+
+  // Visa/dölj sharing option baserat på användarens roll
+  subjectSelect?.addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const userRole = selectedOption.getAttribute('data-user-role');
+    
+    if (userRole === 'owner') {
+      shareOptionGroup.style.display = 'block';
+    } else {
+      shareOptionGroup.style.display = 'none';
+      shareCheckbox.checked = false;
+    }
+  });
+
+    });
+  </script>
+
+
+  <style>
+    /* Enhanced styling for subject buttons and links */
+    .subject-link {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      width: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    .subject-link:hover {
+      text-decoration: none;
+    }
+
+    .subject-button {
+      width: 100%;
+      padding: 12px 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s ease;
+      text-align: left;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-right: 35px; /* Make room for delete/leave button */
+    }
+
+    .subject-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .subject-button.owned {
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+      color: white;
+      border-left: 4px solid #2E7D32;
+    }
+
+    .subject-button.shared {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+      color: white;
+      border-left: 4px solid #1565C0;
+    }
+
+    .subject-title {
+      font-weight: 600;
+      flex-grow: 1;
+    }
+
+    .subject-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .subject-role-badge {
+      font-size: 0.75em;
+      background-color: rgba(255, 255, 255, 0.2);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+
+    .due-badge {
+      background-color: #f44336;
+      color: white;
+      font-size: 0.75em;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .subject {
+      position: relative;
+      margin-bottom: 8px;
+    }
+
+    .delete-subject-btn,
+    .leave-subject-btn {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      background-color: rgba(255, 255, 255, 0.95);
+      color: #f44336;
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .delete-subject-btn:hover,
+    .leave-subject-btn:hover {
+      background-color: #f44336;
+      color: white;
+      transform: translateY(-50%) scale(1.1);
+    }
+
+    .leave-subject-btn {
+      background-color: rgba(255, 152, 0, 0.95);
+      color: white;
+    }
+
+    .leave-subject-btn:hover {
+      background-color: #f57c00;
+    }
+
+    .no-subjects-message {
+      text-align: center;
+      padding: 30px 20px;
+      color: #666;
+      font-style: italic;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .subject-list {
+      max-height: 400px;
+      overflow-y: auto;
+      padding-right: 5px;
+    }
+
+    .subject-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .subject-list::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+
+    .subject-list::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 3px;
+    }
+
+    .subject-list::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+
+    /* Rest of your existing styles */
+    .create-subject-tabs {
+      display: flex;
+      margin-bottom: 20px;
+    }
+
+    .tab-button {
+      flex: 1;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+
+    .tab-button.active {
+      background-color: #4CAF50;
+      color: white;
+      border-bottom-color: #2E7D32;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="email"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .share-code-display {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .share-code-display input {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      font-family: monospace;
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .share-code-display button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .share-code-display button:hover {
+      background-color: #45a049;
+    }
+  </style>
 </body>
 </html>
