@@ -1,5 +1,5 @@
 import json
-from flask import Flask, render_template, request, redirect, url_for, flash, render_template_string, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, render_template_string, jsonify, send_file, abort
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import requests
@@ -16,6 +16,8 @@ from sqlalchemy import JSON, Text
 from extensions import db
 import string
 import secrets
+import uuid
+import mimetypes
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -44,26 +46,82 @@ login_manager.login_message_category = 'info'
 import secrets
 import string
 
+
+# Lägg till dessa routes i din Flask app
+
+# Lägg till denna model i din models.py
+class SharedFile(db.Model):
+    __tablename__ = 'shared_files'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Upladdaren
+    filename = db.Column(db.String(255), nullable=False)  # Ursprungligt filnamn
+    file_path = db.Column(db.String(500), nullable=False)  # Sökväg på servern
+    file_size = db.Column(db.Integer)  # Storlek i bytes
+    file_type = db.Column(db.String(100))  # MIME-typ
+    description = db.Column(db.Text)  # Valfri beskrivning
+    is_active = db.Column(db.Boolean, default=True)  # För att "ta bort" filer
+    download_count = db.Column(db.Integer, default=0)  # Statistik
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    subject = db.relationship('Subject', backref='shared_files')
+    uploader = db.relationship('User', backref='uploaded_files')
+    
+    def __repr__(self):
+        return f"SharedFile('{self.filename}', subject='{self.subject.name if self.subject else 'Unknown'}')"
+    
+    def get_file_extension(self):
+        """Hämta filens extension"""
+        return self.filename.split('.')[-1].lower() if '.' in self.filename else ''
+    
+    def get_display_size(self):
+        """Formatera filstorlek för visning"""
+        if not self.file_size:
+            return "Okänd storlek"
+        
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if self.file_size < 1024.0:
+                return f"{self.file_size:.1f} {unit}"
+            self.file_size /= 1024.0
+        return f"{self.file_size:.1f} TB"
+    
+    def is_downloadable_by_user(self, user_id):
+        """Kontrollera om en användare kan ladda ner filen"""
+        # Ägaren kan alltid ladda ner
+        if self.user_id == user_id:
+            return True
+        
+        # Kontrollera om användaren har tillgång till ämnet
+        user = User.query.get(user_id)
+        if user and user.is_member_of_subject(self.subject_id):
+            return True
+        
+        return False
+
+
 # Uppdatera Subject model
 class Subject(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Skapare/admin
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    #owner = db.relationship('User', backref='owned_subjects', lazy=True)
+
+
+    # Kolumner som kommer att läggas till via migration
+    share_code = db.Column(db.String(8), unique=True, nullable=True)  # Gör nullable först
+    is_shared = db.Column(db.Boolean, default=False)
     
-    # Nya fält för sharing
-    share_code = db.Column(db.String(8), unique=True, nullable=False)  # Unik kod
-    is_shared = db.Column(db.Boolean, default=False)  # Om ämneet är delbart
-    
-    # Relationships - Korrigerade foreign keys
+    # Relationships
     quizzes = db.relationship('Quiz', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
                              foreign_keys='Quiz.subject_id')
     flashcards = db.relationship('Flashcard', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
                                 foreign_keys='Flashcard.subject_id')
     krav_documents = db.relationship('KravDocument', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
                                     foreign_keys='KravDocument.subject_id')
-    
-    # Ny relationship för members
     members = db.relationship('SubjectMember', backref='subject', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
@@ -71,9 +129,13 @@ class Subject(db.Model):
 
     def generate_share_code(self):
         """Generera en unik 8-karaktärs kod"""
+        import secrets
+        import string
+        
         while True:
             code = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
-            if not Subject.query.filter_by(share_code=code).first():
+            existing = Subject.query.filter_by(share_code=code).first()
+            if not existing:
                 return code
 
     @classmethod
@@ -86,6 +148,13 @@ class Subject(db.Model):
         )
         subject.share_code = subject.generate_share_code()
         return subject
+    
+    def update_subject_model():
+            shared_files = db.relationship('SharedFile', backref='subject_ref', lazy=True, cascade='all, delete-orphan')
+    pass
+
+    
+
 
 # Ny model för att hålla reda på vilka användare som är medlemmar i vilket subject
 class SubjectMember(db.Model):
@@ -102,7 +171,6 @@ class SubjectMember(db.Model):
     
     def __repr__(self):
         return f"SubjectMember(subject_id={self.subject_id}, user_id={self.user_id}, role='{self.role}')"
-
 # Uppdatera User model för att inkludera subject memberships
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
@@ -153,6 +221,61 @@ class User(db.Model, UserMixin):
         # Kontrollera membership
         membership = SubjectMember.query.filter_by(subject_id=subject_id, user_id=self.id).first()
         return membership.role if membership else None
+    def get_all_subjects(self):
+        """Hämta alla ämnen som användaren har tillgång till (äger eller är medlem i)"""
+        # Ämnen som användaren äger
+        owned_subjects = Subject.query.filter_by(user_id=self.id).all()
+        
+        # Ämnen som användaren är medlem i
+        member_subjects = db.session.query(Subject).join(SubjectMember).filter(
+            SubjectMember.user_id == self.id
+        ).all()
+        
+        # Kombinera och returnera unika ämnen
+        all_subjects = owned_subjects + member_subjects
+        return list(set(all_subjects))  # Ta bort duplicates
+    
+    def is_member_of_subject(self, subject_id):
+        """Kontrollera om användaren har tillgång till ett ämne"""
+        # Kontrollera om användaren äger ämnet
+        owned_subject = Subject.query.filter_by(id=subject_id, user_id=self.id).first()
+        if owned_subject:
+            return True
+        
+        # Kontrollera om användaren är medlem
+        membership = SubjectMember.query.filter_by(
+            subject_id=subject_id, 
+            user_id=self.id
+        ).first()
+        return membership is not None
+    
+    def get_role_in_subject(self, subject_id):
+        """Hämta användarens roll i ett ämne"""
+        # Kontrollera om användaren äger ämnet
+        owned_subject = Subject.query.filter_by(id=subject_id, user_id=self.id).first()
+        if owned_subject:
+            return 'owner'
+        
+        # Kontrollera medlemskap
+        membership = SubjectMember.query.filter_by(
+            subject_id=subject_id, 
+            user_id=self.id
+        ).first()
+        
+        if membership:
+            return membership.role
+        
+        return None
+    
+    def get_owned_subjects(self):
+        """Hämta ämnen som användaren äger"""
+        return Subject.query.filter_by(user_id=self.id).all()
+    
+    def get_shared_subjects(self):
+        """Hämta ämnen som användaren är medlem i (men inte äger)"""
+        return db.session.query(Subject).join(SubjectMember).filter(
+            SubjectMember.user_id == self.id
+        ).all()
 
 
 # Uppdatera init_database funktionen
@@ -161,6 +284,7 @@ def init_database():
     with app.app_context():
         # Skapa tabeller om de inte finns
         db.create_all()
+        migrate_krav_documents()
         
         # Lista över alla kolumner som behövs för varje tabell
         required_columns = {
@@ -189,6 +313,19 @@ def init_database():
             'krav_document': [
                 ('subject_name', 'VARCHAR(100)'),
                 ('subject_id', 'INTEGER')
+            ],
+            'shared_files': [
+                ('subject_id', 'INTEGER'),
+                ('user_id', 'INTEGER'), 
+                ('filename', 'VARCHAR(255)'),
+                ('file_path', 'VARCHAR(500)'),
+                ('file_size', 'INTEGER'),
+                ('file_type', 'VARCHAR(100)'),
+                ('description', 'TEXT'),
+                ('is_active', 'BOOLEAN'),
+                ('download_count', 'INTEGER'),
+                ('created_at', 'DATETIME'),
+                ('updated_at', 'DATETIME')
             ]
         }
         
@@ -210,8 +347,8 @@ def init_database():
                             default_value = ' DEFAULT 0'
                         elif column_type == 'DATETIME':
                             default_value = " DEFAULT CURRENT_TIMESTAMP"
-                        elif column_type == 'VARCHAR(8)':
-                            default_value = ''
+                        elif column_type == 'VARCHAR(8)' and column_name == 'share_code':
+                            default_value = ''  # Kommer fyllas i av generate_share_code()
                         else:
                             default_value = ''
                         
@@ -221,23 +358,22 @@ def init_database():
                     except Exception as e:
                         print(f"Error adding column {column_name} to {table_name}: {e}")
         
+        # Skapa unique index för share_code om det inte finns
+        try:
+            db.session.execute(db.text("CREATE UNIQUE INDEX IF NOT EXISTS idx_subject_share_code ON subject(share_code)"))
+            print("Created unique index for share_code")
+        except Exception as e:
+            print(f"Error creating share_code index: {e}")
+        
         # Generera share_codes för befintliga subjects som saknar dem
         try:
-            subjects_without_codes = Subject.query.filter(
-                db.or_(Subject.share_code == None, Subject.share_code == '')
-            ).all()
-            
-            for subject in subjects_without_codes:
+            subjects_without_code = Subject.query.filter_by(share_code=None).all()
+            for subject in subjects_without_code:
                 subject.share_code = subject.generate_share_code()
-                print(f"Generated share code {subject.share_code} for subject: {subject.name}")
-            
-            if subjects_without_codes:
-                db.session.commit()
-                print(f"Updated {len(subjects_without_codes)} subjects with share codes")
-                
+                db.session.add(subject)
+            print(f"Generated share codes for {len(subjects_without_code)} subjects")
         except Exception as e:
-            print(f"Error updating subjects with share codes: {e}")
-            db.session.rollback()
+            print(f"Error generating share codes: {e}")
         
         try:
             db.session.commit()
@@ -258,9 +394,9 @@ class Quiz(db.Model):
     questions = db.Column(JSON)  # Lista av frågor och svar
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def __repr__(self):
+    def repr(self):
         return f"Quiz('{self.title}')"
+    
 
 class Flashcard(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -289,9 +425,12 @@ class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD format
     subject = db.Column(db.String(100), nullable=False)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)  # Lägg till subject_id
     test_type = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(200), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    description = db.Column(db.Text)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Skaparen
+    is_shared = db.Column(db.Boolean, default=False)  # Om eventet är delat med medlemmar
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -299,13 +438,17 @@ class Event(db.Model):
             'id': self.id,
             'date': self.date,
             'subject': self.subject,
+            'subject_id': self.subject_id,
             'testType': self.test_type,
             'title': self.title,
-            'created': self.created_at.isoformat() if self.created_at else None
+            'description': self.description,
+            'created': self.created_at.isoformat() if self.created_at else None,
+            'is_shared': self.is_shared
         }
 
     def __repr__(self):
         return f"Event('{self.title}', '{self.date}')"
+
 
 class KravDocument(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -331,15 +474,90 @@ class FlashcardResponse(db.Model):
 
 
 
+def migrate_database():
+    """Migrera databas för att lägga till saknade kolumner"""
+    with app.app_context():
+        try:
+            # Försök att läsa från share_code kolumnen
+            db.session.execute(db.text("SELECT share_code FROM subject LIMIT 1"))
+            print("Database already has share_code column")
+        except Exception:
+            # Kolumnen finns inte, lägg till den
+            try:
+                print("Adding share_code column to subject table...")
+                db.session.execute(db.text("ALTER TABLE subject ADD COLUMN share_code VARCHAR(8)"))
+                db.session.commit()
+                print("✓ Added share_code column")
+            except Exception as e:
+                print(f"Error adding share_code column: {e}")
+                db.session.rollback()
+        
+        try:
+            # Försök att läsa från is_shared kolumnen
+            db.session.execute(db.text("SELECT is_shared FROM subject LIMIT 1"))
+            print("Database already has is_shared column")
+        except Exception:
+            # Kolumnen finns inte, lägg till den
+            try:
+                print("Adding is_shared column to subject table...")
+                db.session.execute(db.text("ALTER TABLE subject ADD COLUMN is_shared BOOLEAN DEFAULT 0"))
+                db.session.commit()
+                print("✓ Added is_shared column")
+            except Exception as e:
+                print(f"Error adding is_shared column: {e}")
+                db.session.rollback()
+        
+        # Generera share_codes för befintliga subjects som saknar dem
+        try:
+            subjects_without_codes = Subject.query.filter(
+                db.or_(Subject.share_code == None, Subject.share_code == '')
+            ).all()
+            
+            for subject in subjects_without_codes:
+                # Använd en enklare metod för att generera share_code
+                import secrets
+                import string
+                
+                # Generera unik kod
+                while True:
+                    code = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+                    existing = Subject.query.filter_by(share_code=code).first()
+                    if not existing:
+                        subject.share_code = code
+                        break
+                
+                # Sätt default värde för is_shared om det saknas
+                if subject.is_shared is None:
+                    subject.is_shared = False
+                
+                print(f"Generated share code {subject.share_code} for subject: {subject.name}")
+            
+            if subjects_without_codes:
+                db.session.commit()
+                print(f"✓ Updated {len(subjects_without_codes)} subjects with share codes")
+                
+        except Exception as e:
+            print(f"Error updating subjects with share codes: {e}")
+            db.session.rollback()
+
+
+
+
+
+
 # Lägg till denna funktion efter database models men före user_loader
 def init_database():
     """Initiera databas och hantera migrationer"""
     with app.app_context():
-        # Skapa tabeller om de inte finns
         db.create_all()
         
-        # Lista över alla kolumner som behövs för varje tabell
+        
+        # Resten av din befintliga kod...
         required_columns = {
+            'subject': [
+                ('share_code', 'VARCHAR(8)'),
+                ('is_shared', 'BOOLEAN')
+            ],
             'quiz': [
                 ('subject_name', 'VARCHAR(100)'),
                 ('subject_id', 'INTEGER'),
@@ -361,6 +579,11 @@ def init_database():
             'krav_document': [
                 ('subject_name', 'VARCHAR(100)'),
                 ('subject_id', 'INTEGER')
+            ],
+            'event': [  # Lägg till event kolumner
+                ('subject_id', 'INTEGER'),
+                ('is_shared', 'BOOLEAN'),
+                ('description', 'TEXT')
             ]
         }
         
@@ -412,6 +635,660 @@ def load_user(user_id):
 init_database()
 
 
+
+@app.route('/join_subject', methods=['POST'])
+@login_required
+def join_subject():
+    """Gå med i ett subject via share code"""
+    try:
+        data = request.get_json()
+        share_code = data.get('share_code', '').strip().upper()
+        
+        if not share_code:
+            return jsonify({'status': 'error', 'message': 'Share code is required'}), 400
+        
+        # Hitta subject med denna kod
+        subject = Subject.query.filter_by(share_code=share_code).first()
+        
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Invalid share code'}), 404
+        
+        if not subject.is_shared:
+            return jsonify({'status': 'error', 'message': 'This subject is not shared'}), 403
+        
+        # Kontrollera om användaren redan är medlem eller ägare
+        if subject.user_id == current_user.id:
+            return jsonify({'status': 'error', 'message': 'You are the owner of this subject'}), 400
+        
+        existing_membership = SubjectMember.query.filter_by(
+            subject_id=subject.id,
+            user_id=current_user.id
+        ).first()
+        
+        if existing_membership:
+            return jsonify({'status': 'error', 'message': 'You are already a member of this subject'}), 400
+        
+        # Lägg till användaren som medlem
+        membership = SubjectMember(
+            subject_id=subject.id,
+            user_id=current_user.id,
+            role='member'
+        )
+        
+        db.session.add(membership)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Successfully joined "{subject.name}"',
+            'subject_name': subject.name
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to join subject: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Failed to join subject'}), 500 
+
+
+@app.route('/api/subject/<int:subject_id>/share_code')
+@login_required
+def get_share_code(subject_id):
+    """Hämta share code för ett ämne (endast för ägaren)"""
+    try:
+        subject = Subject.query.filter_by(id=subject_id, user_id=current_user.id).first()
+        
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Subject not found or no access'}), 404
+        
+        return jsonify({
+            'status': 'success',
+            'share_code': subject.share_code,
+            'is_shared': subject.is_shared
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get share code: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to get share code'}), 500
+
+@app.route('/api/subject/<int:subject_id>/regenerate_code', methods=['POST'])
+@login_required
+def regenerate_share_code(subject_id):
+    """Regenerera share code för ett ämne"""
+    try:
+        subject = Subject.query.filter_by(id=subject_id, user_id=current_user.id).first()
+        
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Subject not found or no access'}), 404
+        
+        # Generera ny kod
+        subject.share_code = subject.generate_share_code()
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'share_code': subject.share_code,
+            'message': 'Share code regenerated successfully'
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to regenerate share code: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Failed to regenerate share code'}), 500
+
+@app.route('/api/my_subjects')
+@login_required
+def get_my_subjects():
+    """Hämta alla ämnen som användaren har tillgång till"""
+    try:
+        owned_subjects = current_user.get_owned_subjects()
+        shared_subjects = current_user.get_shared_subjects()
+        
+        owned_data = []
+        for subject in owned_subjects:
+            owned_data.append({
+                'id': subject.id,
+                'name': subject.name,
+                'share_code': subject.share_code,
+                'is_shared': subject.is_shared,
+                'role': 'owner',
+                'created_at': subject.created_at.isoformat()
+            })
+        
+        shared_data = []
+        for subject in shared_subjects:
+            membership = SubjectMember.query.filter_by(
+                subject_id=subject.id,
+                user_id=current_user.id
+            ).first()
+            
+            shared_data.append({
+                'id': subject.id,
+                'name': subject.name,
+                'role': membership.role if membership else 'member',
+                'joined_at': membership.joined_at.isoformat() if membership else None,
+                'owner': subject.owner.username
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'owned_subjects': owned_data,
+            'shared_subjects': shared_data
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get subjects: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to get subjects'}), 500
+
+
+@app.route('/api/subject/<int:subject_id>/share', methods=['POST'])
+@login_required
+def toggle_subject_sharing(subject_id):
+    """Aktivera/inaktivera delning av ett subject"""
+    try:
+        subject = Subject.query.filter_by(id=subject_id, user_id=current_user.id).first()
+        
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
+        
+        # Toggle sharing status
+        subject.is_shared = not subject.is_shared
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'is_shared': subject.is_shared,
+            'share_code': subject.share_code if subject.is_shared else None,
+            'message': f'Subject sharing {"enabled" if subject.is_shared else "disabled"}'
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to toggle subject sharing: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Failed to update sharing'}), 500
+
+@app.route('/api/subject/<int:subject_id>/members')
+@login_required
+def get_subject_members(subject_id):
+    """Hämta medlemmar för ett subject"""
+    try:
+        subject = Subject.query.filter_by(id=subject_id, user_id=current_user.id).first()
+        
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
+        
+        members = db.session.query(SubjectMember, User).join(User).filter(
+            SubjectMember.subject_id == subject_id
+        ).all()
+        
+        members_data = []
+        for membership, user in members:
+            members_data.append({
+                'id': user.id,
+                'username': user.username,
+                'role': membership.role,
+                'joined_at': membership.joined_at.isoformat()
+            })
+        
+        # Lägg till ägaren
+        owner_data = {
+            'id': subject.user_id,
+            'username': subject.owner.username,
+            'role': 'owner',
+            'joined_at': subject.created_at.isoformat()
+        }
+        
+        return jsonify({
+            'status': 'success',
+            'owner': owner_data,
+            'members': members_data,
+            'total_members': len(members_data) + 1  # +1 för ägaren
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get subject members: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to get members'}), 500
+
+@app.route('/api/subject/<int:subject_id>/member/<int:user_id>', methods=['DELETE'])
+@login_required
+def remove_subject_member(subject_id, user_id):
+    """Ta bort en medlem från ett subject"""
+    try:
+        subject = Subject.query.filter_by(id=subject_id, user_id=current_user.id).first()
+        
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
+        
+        membership = SubjectMember.query.filter_by(
+            subject_id=subject_id,
+            user_id=user_id
+        ).first()
+        
+        if not membership:
+            return jsonify({'status': 'error', 'message': 'Member not found'}), 404
+        
+        removed_user = User.query.get(user_id)
+        username = removed_user.username if removed_user else 'Unknown'
+        
+        db.session.delete(membership)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Removed {username} from subject'
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to remove subject member: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Failed to remove member'}), 500
+
+@app.route('/leave_subject/<int:subject_id>', methods=['POST'])
+@login_required
+def leave_subject(subject_id):
+    """Lämna ett subject som medlem"""
+    try:
+        membership = SubjectMember.query.filter_by(
+            subject_id=subject_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not membership:
+            return jsonify({'status': 'error', 'message': 'You are not a member of this subject'}), 404
+        
+        subject = Subject.query.get(subject_id)
+        subject_name = subject.name if subject else 'Unknown'
+        
+        db.session.delete(membership)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Left subject "{subject_name}"'
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to leave subject: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Failed to leave subject'}), 500
+
+
+# Uppdatera din befintliga index route med denna kod
+
+@app.route('/')
+@login_required
+def index():
+    """Huvudsida som visar alla ämnen användaren har tillgång till"""
+    try:
+        # Hämta alla ämnen som användaren har tillgång till (äger eller är medlem i)
+        all_subjects = current_user.get_all_subjects()
+        
+        # Separera ägda och delade ämnen
+        owned_subjects = [s for s in all_subjects if s.user_id == current_user.id]
+        shared_subjects = [s for s in all_subjects if s.user_id != current_user.id]
+        
+        # Lägg till extra information för varje ämne
+        for subject in all_subjects:
+            # Räkna quiz för detta ämne
+            quiz_count = Quiz.query.filter_by(subject_id=subject.id).count()
+            subject.quiz_count = quiz_count
+            
+            # Räkna flashcards för detta ämne
+            flashcard_count = Flashcard.query.filter_by(subject_id=subject.id).count()
+            subject.flashcard_count = flashcard_count
+            
+            # Räkna due flashcards för användaren
+            today = datetime.now().date()
+            due_count = Flashcard.query.filter(
+                Flashcard.subject_id == subject.id,
+                Flashcard.user_id == current_user.id,
+                db.or_(
+                    Flashcard.next_review <= today,
+                    Flashcard.next_review == None
+                )
+            ).count()
+            subject.due_flashcards = due_count
+            
+            # Lägg till användarens roll
+            subject.user_role = current_user.get_role_in_subject(subject.id)
+        
+        # Hämta totala statistik för användaren
+        total_due = Flashcard.query.filter(
+            Flashcard.user_id == current_user.id,
+            db.or_(
+                Flashcard.next_review <= datetime.now().date(),
+                Flashcard.next_review == None
+            )
+        ).count()
+        
+        return render_template('index.html', 
+                             owned_subjects=owned_subjects,
+                             shared_subjects=shared_subjects,
+                             total_due_flashcards=total_due)
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to load index: {e}")
+        flash('Error loading subjects', 'error')
+        return render_template('index.html', owned_subjects=[], shared_subjects=[], total_due_flashcards=0)
+
+
+@app.route('/add_subject', methods=['POST'])
+@login_required
+def add_subject():
+    """Skapa ett nytt ämne"""
+    try:
+        data = request.get_json()
+        subject_name = data.get('name', '').strip()
+        is_shared = data.get('is_shared', False)
+        
+        if not subject_name:
+            return jsonify({'status': 'error', 'message': 'Subject name is required'}), 400
+        
+        # Kontrollera om ämnet redan finns för användaren
+        existing = Subject.query.filter_by(name=subject_name, user_id=current_user.id).first()
+        if existing:
+            return jsonify({'status': 'error', 'message': 'Subject already exists'}), 400
+        
+        # Skapa nytt ämne med automatisk share_code
+        subject = Subject.create_with_code(
+            name=subject_name,
+            user_id=current_user.id,
+            is_shared=is_shared
+        )
+        
+        db.session.add(subject)
+        db.session.commit()
+        
+        # Lägg till räknare för quiz och flashcards (börjar med 0)
+        subject.quiz_count = 0
+        subject.flashcard_count = 0
+        subject.due_flashcards = 0
+        subject.user_role = 'owner'  # Skaparen är alltid owner
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Subject "{subject_name}" created successfully',
+            'subject': {
+                'id': subject.id,
+                'name': subject.name,
+                'share_code': subject.share_code,
+                'is_shared': subject.is_shared,
+                'quiz_count': 0,
+                'flashcard_count': 0,
+                'due_flashcards': 0,
+                'user_role': 'owner'
+            }
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to add subject: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Failed to create subject'}), 500
+# Uppdatera dina befintliga quiz routes med denna kod för att hantera shared subjects
+
+@app.route('/subject/<subject_name>')
+@login_required
+def subject(subject_name):
+    """Subject page - visa olika quizzes baserat på användarens roll"""
+    subject_obj = Subject.query.filter_by(name=subject_name).first()
+    if not subject_obj:
+        flash('Subject not found', 'error')
+        return redirect(url_for('index'))
+    
+    # Kontrollera att användaren har tillgång till detta subject
+    if not current_user.is_member_of_subject(subject_obj.id):
+        flash('You do not have access to this subject', 'error')
+        return redirect(url_for('index'))
+    
+    user_role = current_user.get_role_in_subject(subject_obj.id)
+    
+    # Hämta quizzes baserat på användarens roll
+    if user_role in ['owner', 'admin']:
+        # Owners och admins ser alla quizzes (subject-wide + sina egna personliga)
+        subject_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id, is_personal=False).all()
+
+        personal_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id, user_id=current_user.id, is_personal=True).all()
+        all_quizzes = subject_quizzes + personal_quizzes
+    else:
+        # Medlemmar ser bara subject-wide quizzes + sina egna personliga
+        subject_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id, is_personal=False).all()
+        personal_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id, user_id=current_user.id, is_personal=True).all()
+        all_quizzes = subject_quizzes + personal_quizzes
+    
+    # Hämta krav-dokument (alla medlemmar kan se dessa)
+    krav_docs = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
+    
+    return render_template('subject.html',
+                         subject_name=subject_name,
+                         subject=subject_obj,
+                         quizzes=all_quizzes,
+                         krav_docs=krav_docs,
+                         user_role=user_role)
+
+
+
+@app.route('/create-quiz', methods=['GET', 'POST'])
+@login_required
+def create_quiz():
+    """Skapa quiz - nu med stöd för shared subjects"""
+    # Hämta alla subjects som användaren har tillgång till
+    all_subjects = current_user.get_all_subjects()
+    subject_names = [s.name for s in all_subjects]
+
+    if request.method == 'POST':
+        subject_name = request.form.get('subject')
+        
+        # Kontrollera att användaren har tillgång till detta subject
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj or not current_user.is_member_of_subject(subject_obj.id):
+            flash('You do not have access to this subject', 'error')
+            return redirect(url_for('create_quiz'))
+        
+        # Kontrollera att användaren kan skapa quiz (admin eller owner)
+        user_role = current_user.get_role_in_subject(subject_obj.id)
+        if user_role not in ['admin', 'owner']:
+            flash('You do not have permission to create quizzes in this subject', 'error')
+            return redirect(url_for('create_quiz'))
+        
+        # Resten av din befintliga create_quiz logik...
+        # (Kopiera din befintliga POST-logik här, men se till att sätta subject_id korrekt)
+        
+        uploaded_files = request.files.getlist('data1')
+        user_title = request.form.get('quiz_title', '').strip()
+        quiz_type = request.form.get('quiz-drop')
+        description = request.form.get('quiz-description', '').strip()
+        use_docs = bool(request.form.get('use_documents'))
+        create_flashcards = bool(request.form.get('create_flashcards', True))
+
+        # Map quiz_type to number of questions
+        type_map = {
+            'ten': 10,
+            'twenty-five': 25,
+            'fifty': 50,
+            'extended-response': None,
+            'exam': None
+        }
+        desired_count = type_map.get(quiz_type)
+
+        # Build title
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        quiz_title = user_title or f"{subject_name} - {quiz_type.replace('-', ' ').title()} - {now}"
+
+        # Handle file uploads and extract content
+        saved_files = []
+        file_contents = []
+        upload_folder = os.path.join('static', 'uploads', str(current_user.id), subject_name)
+        os.makedirs(upload_folder, exist_ok=True)
+
+        for file in uploaded_files:
+            if not file or not file.filename:
+                continue
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(upload_folder, filename)
+            file.save(filepath)
+            saved_files.append(filepath)
+
+            ext = os.path.splitext(filename)[1].lower()
+            try:
+                if ext == '.pdf':
+                    text = ''
+                    with fitz.open(filepath) as doc:
+                        for page in doc:
+                            text += page.get_text()
+                    if not text.strip():
+                        images = convert_from_path(filepath)
+                        for image in images:
+                            text += pytesseract.image_to_string(image)
+                    file_contents.append(text)
+                elif ext in ['.txt', '.doc', '.docx']:
+                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                        file_contents.append(f.read())
+            except Exception as e:
+                print(f"[ERROR] Failed to process '{filename}': {e}")
+
+        combined_text = "\n\n".join(file_contents) if file_contents else ''
+
+        # Append krav documents
+        if use_docs:
+            krav_docs = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
+            krav_texts = []
+            for doc in krav_docs:
+                if doc.content.strip():
+                    krav_texts.append(f"{doc.doc_type.capitalize()}: {doc.content}")
+            
+            if krav_texts:
+                combined_text += "\n\n" + "\n\n".join(krav_texts)
+
+        # Build AI prompt
+        prompt = f"You're an AI quiz generator – create"
+        if desired_count:
+            prompt += f" a {desired_count}-question"
+        else:
+            prompt += " an appropriate"
+        prompt += f" {quiz_type.replace('-', ' ')} quiz. Use the following materials to craft questions testing understanding:\n\n"
+        prompt += f"Description: {description}\n\n"
+        if combined_text:
+            prompt += f"Material:\n{combined_text}\n\n"
+        prompt += "Format as Q: [Question]\nA: [Answer]"
+
+        # Call AI
+        try:
+            response = requests.post(
+                "https://ai.hackclub.com/chat/completions",
+                json={"messages": [{"role": "user", "content": prompt}]},
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            raw = response.json().get("choices", [])[0].get("message", {}).get("content", "")
+        except Exception as e:
+            raw = ""
+
+        # Parse AI output
+        questions = []
+        q = None
+        for line in raw.splitlines():
+            if line.lower().startswith('q:'):
+                q = line[2:].strip()
+            elif line.lower().startswith('a:') and q:
+                a = line[2:].strip()
+                questions.append({'question': q, 'answer': a})
+                q = None
+
+        if not questions:
+            questions = [{'question': '[Error]', 'answer': 'Could not generate questions.'}]
+
+        # Truncate to desired count
+        if desired_count and len(questions) > desired_count:
+            questions = questions[:desired_count]
+
+        # Spara quiz
+        new_quiz = Quiz(
+            title=quiz_title,
+            quiz_type=quiz_type,
+            description=description,
+            files=saved_files,
+            use_documents=use_docs,
+            questions=questions,
+            subject_name=subject_name,
+            subject_id=subject_obj.id,
+            user_id=current_user.id  # Quiz är fortfarande kopplat till skaparen
+        )
+        
+        db.session.add(new_quiz)
+        db.session.commit()
+        
+        # Skapa flashcards för alla medlemmar i subject
+        if create_flashcards:
+            create_flashcards_for_all_members(new_quiz, subject_obj)
+        
+        flash(f'Quiz "{quiz_title}" created successfully', 'success')
+        return redirect(url_for('subject', subject_name=subject_name))
+
+    # GET - visa create quiz form
+    events = Event.query.filter_by(user_id=current_user.id).all()
+    events_data = [event.to_dict() for event in events]
+    return render_template('create-quiz.html', subjects=subject_names, events=events_data)
+
+
+def create_flashcards_for_all_members(quiz, subject_obj):
+    """Skapa flashcards för alla medlemmar i ett shared subject"""
+    try:
+        # Hämta alla användare som har tillgång till detta subject
+        member_ids = [subject_obj.user_id]  # Ägaren
+        
+        # Lägg till alla medlemmar
+        members = SubjectMember.query.filter_by(subject_id=subject_obj.id).all()
+        for member in members:
+            member_ids.append(member.user_id)
+        
+        questions = quiz.questions
+        if isinstance(questions, str):
+            questions = json.loads(questions)
+        
+        created_count = 0
+        
+        for user_id in member_ids:
+            for q_data in questions:
+                question_text = q_data.get('question', '')
+                answer_text = q_data.get('answer', '')
+                
+                if not question_text or not answer_text:
+                    continue
+                
+                # Kontrollera om flashcard redan finns för denna användare
+                existing = Flashcard.query.filter(
+                    Flashcard.user_id == user_id,
+                    Flashcard.question == question_text,
+                    Flashcard.subject_id == subject_obj.id
+                ).first()
+                
+                if not existing:
+                    flashcard = Flashcard(
+                        question=question_text,
+                        answer=answer_text,
+                        subject=subject_obj.name,
+                        subject_id=subject_obj.id,
+                        topic=quiz.title,
+                        user_id=user_id,
+                        ease_factor=2.5,
+                        interval=0,
+                        repetitions=0,
+                        next_review=None
+                    )
+                    db.session.add(flashcard)
+                    created_count += 1
+        
+        db.session.commit()
+        print(f"[INFO] Created {created_count} flashcards for all members in subject: {subject_obj.name}")
+        return created_count
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to create flashcards for all members: {e}")
+        db.session.rollback()
+        return 0
+
+
+
+
 # -------------------- Helper Functions --------------------
 
 def get_user_subjects():
@@ -437,27 +1314,34 @@ def add_user_subject(subject_name):
     return True
 
 def get_user_quizzes(subject_name=None):
-    """Hämta quiz för nuvarande användare, eventuellt filtrerat på ämne"""
+    """Hämta quizzes för nuvarande användare (både egna och från ämnen man är medlem i)"""
     if not current_user.is_authenticated:
-        return {}
-    
-    query = Quiz.query.filter_by(user_id=current_user.id)
-    if subject_name:
-        query = query.filter_by(subject_name=subject_name)
-    
-    quizzes = query.all()
+        return []
     
     if subject_name:
-        # Returnera lista för specifikt ämne
-        return [quiz_to_dict(quiz) for quiz in quizzes]
+        # För ett specifikt ämne, hämta quizzes från alla användare som har tillgång till ämnet
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return []
+        
+        # Kontrollera om användaren har tillgång till detta ämne
+        if not current_user.is_member_of_subject(subject_obj.id):
+            return []
+        
+        # Hämta alla quizzes för detta ämne (från ägaren)
+        quizzes = Quiz.query.filter_by(subject_id=subject_obj.id).all()
+        return quizzes
     else:
-        # Returnera grupperat per ämne
-        result = {}
-        for quiz in quizzes:
-            if quiz.subject_name not in result:
-                result[quiz.subject_name] = []
-            result[quiz.subject_name].append(quiz_to_dict(quiz))
-        return result
+        # Hämta alla ämnen användaren har tillgång till
+        accessible_subjects = current_user.get_all_subjects()
+        
+        # Hämta quizzes för alla dessa ämnen
+        subject_ids = [subject.id for subject in accessible_subjects]
+        quizzes = Quiz.query.filter(Quiz.subject_id.in_(subject_ids)).all()
+        return quizzes
+
+
+
 
 def quiz_to_dict(quiz):
     """Konvertera Quiz-objekt till dictionary"""
@@ -472,20 +1356,32 @@ def quiz_to_dict(quiz):
 
 # Uppdatera din befintliga add_user_quiz funktion i paste-2.txt
 
+
 def add_user_quiz(subject_name, quiz_data):
     """Lägg till nytt quiz för nuvarande användare och skapa flashcards"""
     if not current_user.is_authenticated:
         return False
     
     # Hitta Subject-objektet
-    subject_obj = Subject.query.filter_by(user_id=current_user.id, name=subject_name).first()
+    subject_obj = Subject.query.filter_by(name=subject_name).first()
+    if not subject_obj:
+        return False
+    
+    # Kontrollera om användaren har tillgång till detta ämne
+    if not current_user.is_member_of_subject(subject_obj.id):
+        return False
+    
+    # Endast ägaren eller admins kan skapa quizzes
+    user_role = current_user.get_role_in_subject(subject_obj.id)
+    if user_role not in ['owner', 'admin']:
+        return False
     
     quiz = Quiz(
         title=quiz_data['title'],
         quiz_type=quiz_data['type'],
         description=quiz_data.get('description', ''),
         subject_name=subject_name,  # Behåll för bakåtkompatibilitet
-        subject_id=subject_obj.id if subject_obj else None,  # Ny foreign key
+        subject_id=subject_obj.id,  # Ny foreign key
         use_documents=quiz_data.get('use_documents', False),
         files=quiz_data.get('files', []),
         questions=quiz_data.get('questions', []),
@@ -505,24 +1401,69 @@ def add_user_quiz(subject_name, quiz_data):
     return True
 
 
+
+
+def get_user_flashcards(subject_name=None):
+    """Hämta flashcards för nuvarande användare (både egna och från ämnen man är medlem i)"""
+    if not current_user.is_authenticated:
+        return []
+    
+    if subject_name:
+        # För ett specifikt ämne, hämta flashcards från alla användare som har tillgång till ämnet
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return []
+        
+        # Kontrollera om användaren har tillgång till detta ämne
+        if not current_user.is_member_of_subject(subject_obj.id):
+            return []
+        
+        # Hämta alla flashcards för detta ämne (från ägaren)
+        flashcards = Flashcard.query.filter_by(subject_id=subject_obj.id).all()
+        return flashcards
+    else:
+        # Hämta alla ämnen användaren har tillgång till
+        accessible_subjects = current_user.get_all_subjects()
+        
+        # Hämta flashcards för alla dessa ämnen
+        subject_ids = [subject.id for subject in accessible_subjects]
+        flashcards = Flashcard.query.filter(Flashcard.subject_id.in_(subject_ids)).all()
+        return flashcards
+
+
+
+
 def get_user_krav_documents(subject_name=None):
-    """Hämta krav-dokument för nuvarande användare"""
+    """Hämta krav-dokument för nuvarande användare (både egna och från ämnen man är medlem i)"""
     if not current_user.is_authenticated:
         return {}
     
-    query = KravDocument.query.filter_by(user_id=current_user.id)
     if subject_name:
-        query = query.filter_by(subject_name=subject_name)
-    
-    documents = query.all()
-    
-    if subject_name:
+        # För ett specifikt ämne, hämta dokument från alla användare som har tillgång till ämnet
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return {}
+        
+        # Kontrollera om användaren har tillgång till detta ämne
+        if not current_user.is_member_of_subject(subject_obj.id):
+            return {}
+        
+        # Hämta alla krav-dokument för detta ämne (från ägaren)
+        documents = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
+        
         # Returnera dictionary för specifikt ämne
         result = {}
         for doc in documents:
             result[doc.doc_type] = {'innehåll': doc.content}
         return result
     else:
+        # Hämta alla ämnen användaren har tillgång till
+        accessible_subjects = current_user.get_all_subjects()
+        
+        # Hämta dokument för alla dessa ämnen
+        subject_ids = [subject.id for subject in accessible_subjects]
+        documents = KravDocument.query.filter(KravDocument.subject_id.in_(subject_ids)).all()
+        
         # Returnera grupperat per ämne
         result = {}
         for doc in documents:
@@ -531,31 +1472,43 @@ def get_user_krav_documents(subject_name=None):
             result[doc.subject_name][doc.doc_type] = {'innehåll': doc.content}
         return result
 
+
+
+
 def save_krav_document(subject_name, doc_type, content):
     """Spara eller uppdatera krav-dokument"""
     if not current_user.is_authenticated:
         return False
     
     # Hitta Subject-objektet
-    subject_obj = Subject.query.filter_by(user_id=current_user.id, name=subject_name).first()
+    subject_obj = Subject.query.filter_by(name=subject_name).first()
+    if not subject_obj:
+        return False
     
-    # Leta efter befintligt dokument
+    # Kontrollera om användaren har tillgång till detta ämne
+    if not current_user.is_member_of_subject(subject_obj.id):
+        return False
+    
+    # Endast ägaren eller admins kan redigera krav-dokument
+    user_role = current_user.get_role_in_subject(subject_obj.id)
+    if user_role not in ['owner', 'admin']:
+        return False
+    
+    # Leta efter befintligt dokument (sök efter subject_id istället för user_id)
     existing = KravDocument.query.filter_by(
-        user_id=current_user.id,
-        subject_name=subject_name,
+        subject_id=subject_obj.id,
         doc_type=doc_type
     ).first()
     
     if existing:
         existing.content = content
-        existing.subject_id = subject_obj.id if subject_obj else None  # Uppdatera foreign key
     else:
         doc = KravDocument(
             subject_name=subject_name,
-            subject_id=subject_obj.id if subject_obj else None,  # Ny foreign key
+            subject_id=subject_obj.id,
             doc_type=doc_type,
             content=content,
-            user_id=current_user.id
+            user_id=current_user.id  # Behåll för att spåra vem som skapade/redigerade
         )
         db.session.add(doc)
     
@@ -563,14 +1516,28 @@ def save_krav_document(subject_name, doc_type, content):
     return True
 
 
+
 def delete_krav_document(subject_name, doc_type):
     """Ta bort krav-dokument"""
     if not current_user.is_authenticated:
         return False
     
+    # Hitta Subject-objektet
+    subject_obj = Subject.query.filter_by(name=subject_name).first()
+    if not subject_obj:
+        return False
+    
+    # Kontrollera om användaren har tillgång till detta ämne
+    if not current_user.is_member_of_subject(subject_obj.id):
+        return False
+    
+    # Endast ägaren eller admins kan ta bort krav-dokument
+    user_role = current_user.get_role_in_subject(subject_obj.id)
+    if user_role not in ['owner', 'admin']:
+        return False
+    
     doc = KravDocument.query.filter_by(
-        user_id=current_user.id,
-        subject_name=subject_name,
+        subject_id=subject_obj.id,
         doc_type=doc_type
     ).first()
     
@@ -579,6 +1546,7 @@ def delete_krav_document(subject_name, doc_type):
         db.session.commit()
         return True
     return False
+
 
 # -------------------- Spaced Repetition Functions --------------------
 
@@ -1112,58 +2080,6 @@ def home():
 
 
 
-@app.route('/subject/<subject_name>')
-@login_required
-def subject(subject_name):
-    """Subject page med automatisk rensning av förfallna quiz"""
-    
-    # Rensa förfallna quiz för denna användare och detta ämne
-    cleanup_expired_quizzes_for_user_subject(current_user.id, subject_name)
-    
-    # Hämta quiz från SQL-databasen
-    quizzes = Quiz.query.filter_by(
-        user_id=current_user.id,
-        subject_name=subject_name
-    ).order_by(Quiz.created_at.desc()).all()
-    
-    # Konvertera till lista av dictionaries för template
-    quiz_list = []
-    for quiz in quizzes:
-        questions = quiz.questions
-        if isinstance(questions, str):
-            try:
-                questions = json.loads(questions)
-            except:
-                questions = []
-        
-        quiz_data = {
-            'id': quiz.id,
-            'title': quiz.title,
-            'type': quiz.quiz_type,
-            'description': quiz.description,
-            'questions': questions or [],
-            'created_at': quiz.created_at.isoformat() if quiz.created_at else None
-        }
-        quiz_list.append(quiz_data)
-    
-    # Hämta krav-dokument
-    krav_documents = KravDocument.query.filter_by(
-        user_id=current_user.id,
-        subject_name=subject_name
-    ).all()
-    
-    documents = {}
-    for doc in krav_documents:
-        documents[doc.doc_type] = {
-            'innehåll': doc.content,
-            'created_at': doc.created_at.isoformat() if doc.created_at else None
-        }
-    
-    return render_template('subject.html', 
-                         subject_name=subject_name, 
-                         quizzes=quiz_list,
-                         documents=documents)
-
 
 
 
@@ -1395,7 +2311,7 @@ def delete_subject():
 @app.route('/quiz/<subject_name>/<path:quiz_title>')
 @login_required
 def quiz_route(subject_name, quiz_title):
-    """Route to start a flashcard quiz"""
+    """Route to start a flashcard quiz - nu med stöd för shared subjects"""
     try:
         # Decode URL parameters
         subject_name = urllib.parse.unquote(subject_name)
@@ -1403,16 +2319,26 @@ def quiz_route(subject_name, quiz_title):
         
         print(f"[DEBUG] Looking for quiz: subject='{subject_name}', title='{quiz_title}'")
         
-        # Find the quiz in the database
+        # Hitta subject först
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            flash('Subject not found', 'error')
+            return redirect(url_for('index'))
+        
+        # Kontrollera om användaren har tillgång till detta subject
+        if not current_user.is_member_of_subject(subject_obj.id):
+            flash('You do not have access to this subject', 'error')
+            return redirect(url_for('index'))
+        
+        # Hitta quiz baserat på subject_id och title (inte user_id)
         quiz = Quiz.query.filter_by(
-            user_id=current_user.id,
-            subject_name=subject_name,
+            subject_id=subject_obj.id,
             title=quiz_title
         ).first()
         
         if not quiz:
             print(f"[DEBUG] Quiz not found. Available quizzes:")
-            all_quizzes = Quiz.query.filter_by(user_id=current_user.id).all()
+            all_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id).all()
             for q in all_quizzes:
                 print(f"  - Subject: '{q.subject_name}', Title: '{q.title}'")
             
@@ -1444,8 +2370,8 @@ def quiz_route(subject_name, quiz_title):
             flash('No valid questions found in this quiz', 'error')
             return redirect(url_for('subject', subject_name=subject_name))
         
-        # Create flashcards from quiz if they don't exist
-        created_count = create_flashcards_from_quiz(quiz, valid_questions)
+        # Skapa flashcards för den aktuella användaren om de inte finns
+        created_count = create_flashcards_for_user(quiz, valid_questions, current_user.id)
         if created_count > 0:
             flash(f'Created {created_count} new flashcards', 'success')
         
@@ -1453,7 +2379,7 @@ def quiz_route(subject_name, quiz_title):
                              subject_name=subject_name,
                              quiz_title=quiz_title,
                              questions=valid_questions,
-                             is_spaced_repetition=True)  # Markera som spaced repetition
+                             is_spaced_repetition=True)
         
     except Exception as e:
         print(f"[ERROR] Quiz route failed: {e}")
@@ -1463,7 +2389,64 @@ def quiz_route(subject_name, quiz_title):
         return redirect(url_for('home'))
 
 
-
+def create_flashcards_for_user(quiz, questions, user_id):
+    """Skapa flashcards för en specifik användare från quiz"""
+    try:
+        # Hitta subject
+        subject_obj = Subject.query.get(quiz.subject_id)
+        if not subject_obj:
+            return 0
+        
+        created_count = 0
+        
+        for question_data in questions:
+            # Om question_data är en sträng i formatet "question|answer"
+            if isinstance(question_data, str) and '|' in question_data:
+                question_text, answer_text = question_data.split('|', 1)
+                question_text = question_text.strip()
+                answer_text = answer_text.strip()
+            else:
+                # Om det är en dictionary
+                if isinstance(question_data, dict):
+                    question_text = question_data.get('question', '').strip()
+                    answer_text = question_data.get('answer', '').strip()
+                else:
+                    continue
+            
+            if not question_text or not answer_text:
+                continue
+            
+            # Kontrollera om flashcard redan finns för denna användare
+            existing = Flashcard.query.filter(
+                Flashcard.user_id == user_id,
+                Flashcard.question == question_text,
+                Flashcard.subject_id == subject_obj.id
+            ).first()
+            
+            if not existing:
+                flashcard = Flashcard(
+                    question=question_text,
+                    answer=answer_text,
+                    subject=subject_obj.name,
+                    subject_id=subject_obj.id,
+                    topic=quiz.title,
+                    user_id=user_id,
+                    ease_factor=2.5,
+                    interval=0,
+                    repetitions=0,
+                    next_review=None
+                )
+                db.session.add(flashcard)
+                created_count += 1
+        
+        db.session.commit()
+        print(f"[INFO] Created {created_count} flashcards for user {user_id} in subject: {subject_obj.name}")
+        return created_count
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to create flashcards for user: {e}")
+        db.session.rollback()
+        return 0
 
 @app.route('/flashcards/<subject_name>/<path:quiz_title>')
 @login_required  
@@ -1476,16 +2459,95 @@ def flashcards_route(subject_name, quiz_title):
 import urllib.parse
 
 # Also add this route to handle the specific URL pattern from your subject.html template
+@app.route('/subject/<subject_name>/quiz/<int:quiz_index>')
+@login_required
+def start_quiz(subject_name, quiz_index):
+    """Start quiz från subject page - nu med stöd för shared subjects"""
+    try:
+        # Hitta subject först
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            flash('Subject not found', 'error')
+            return redirect(url_for('index'))
+        
+        # Kontrollera om användaren har tillgång till detta subject
+        if not current_user.is_member_of_subject(subject_obj.id):
+            flash('You do not have access to this subject', 'error')
+            return redirect(url_for('index'))
+        
+        # Hämta quiz baserat på subject_id och index (inte user_id)
+        quiz = (Quiz.query
+                .filter_by(subject_id=subject_obj.id)
+                .order_by(Quiz.created_at.desc())
+                .offset(quiz_index)
+                .first())
+
+        if not quiz:
+            flash('Quiz not found', 'error')
+            return redirect(url_for('subject', subject_name=subject_name))
+
+        # quiz.questions är lagrat som list objekt (inte JSON-sträng)
+        raw_questions = quiz.questions or []
+        if isinstance(raw_questions, str):
+            try:
+                raw_questions = json.loads(raw_questions)
+            except ValueError:
+                raw_questions = []
+
+        # Bygg en lista ["Fråga|Svar", ...]
+        questions = []
+        for q in raw_questions:
+            question_text = q.get('question', '').strip()
+            answer_text = q.get('answer', '').strip()
+            if question_text:
+                questions.append(f"{question_text}|{answer_text}")
+
+        if not questions:
+            flash('No valid questions in this quiz', 'error')
+            return redirect(url_for('subject', subject_name=subject_name))
+
+        # Skapa flashcards för den aktuella användaren
+        created_count = create_flashcards_for_user(quiz, questions, current_user.id)
+        if created_count > 0:
+            flash(f'Created {created_count} new flashcards', 'success')
+
+        # Rendera flashcards.html med rätt parametrar
+        return render_template('flashcards.html',
+                               subject_name=subject_name,
+                               quiz_title=quiz.title,
+                               questions=questions,
+                               is_spaced_repetition=True)
+        
+    except Exception as e:
+        print(f"[ERROR] Start quiz failed: {e}")
+        flash('Error loading quiz', 'error')
+        return redirect(url_for('subject', subject_name=subject_name))
+
+
+
+
 @app.route('/subject/<subject_name>/quiz/<int:quiz_index>/flashcards')
 @login_required
 def start_flashcard_quiz(subject_name, quiz_index):
-    """Start flashcard quiz from subject page using quiz index"""
+    """Start flashcard quiz from subject page - nu med stöd för shared subjects"""
     try:
-        # Get the quiz by index
-        quiz = Quiz.query.filter_by(
-            user_id=current_user.id,
-            subject_name=subject_name
-        ).order_by(Quiz.created_at.desc()).offset(quiz_index).first()
+        # Hitta subject först
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            flash('Subject not found', 'error')
+            return redirect(url_for('index'))
+        
+        # Kontrollera om användaren har tillgång till detta subject
+        if not current_user.is_member_of_subject(subject_obj.id):
+            flash('You do not have access to this subject', 'error')
+            return redirect(url_for('index'))
+        
+        # Get the quiz by index från subject_id
+        quiz = (Quiz.query
+                .filter_by(subject_id=subject_obj.id)
+                .order_by(Quiz.created_at.desc())
+                .offset(quiz_index)
+                .first())
         
         if not quiz:
             flash('Quiz not found', 'error')
@@ -1503,269 +2565,88 @@ def start_flashcard_quiz(subject_name, quiz_index):
 
 
 
-@app.route('/subject/<subject_name>/quiz/<int:quiz_index>')
+
+def create_flashcards_from_quiz(subject_name_or_quiz, quiz_title_or_questions, questions=None):
+    """Skapa flashcards från quiz-frågor - stöder båda anropsmetoderna"""
+    if not current_user.is_authenticated:
+        return False
+    
+    # Kontrollera vilken anropsmetod som används
+    if questions is None:
+        # Anropas som create_flashcards_from_quiz(quiz, questions)
+        quiz = subject_name_or_quiz
+        questions = quiz_title_or_questions
+        return create_flashcards_for_user(quiz, questions, current_user.id)
+    else:
+        # Anropas som create_flashcards_from_quiz(subject_name, quiz_title, questions)
+        subject_name = subject_name_or_quiz
+        quiz_title = quiz_title_or_questions
+        
+        # Hitta subject
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return 0
+        
+        # Hitta quiz
+        quiz = Quiz.query.filter_by(subject_id=subject_obj.id, title=quiz_title).first()
+        if not quiz:
+            return 0
+        
+        return create_flashcards_for_user(quiz, questions, current_user.id)
+
+
+@app.route('/create_krav_document', methods=['POST'])
 @login_required
-def start_quiz(subject_name, quiz_index):
-    # Hämta quiz från SQL baserat på index
-    quiz = (Quiz.query
-            .filter_by(user_id=current_user.id, subject_name=subject_name)
-            .order_by(Quiz.created_at.desc())
-            .offset(quiz_index)
-            .first())
-
-    if not quiz:
-        flash('Quiz inte hittat', 'error')
-        return redirect(url_for('subject', subject_name=subject_name))
-
-    # quiz.questions är lagrat som list objekt (inte JSON-sträng)
-    raw_questions = quiz.questions or []
-    # Om det mot förmodan är sträng:
-    if isinstance(raw_questions, str):
-        try:
-            raw_questions = json.loads(raw_questions)
-        except ValueError:
-            raw_questions = []
-
-    # Bygg en lista ["Fråga|Svar", ...]
-    questions = []
-    for q in raw_questions:
-        question_text = q.get('question', '').strip()
-        answer_text   = q.get('answer', '').strip()
-        if question_text:
-            questions.append(f"{question_text}|{answer_text}")
-
-    if not questions:
-        flash('Inga giltiga frågor i detta quiz', 'error')
-        return redirect(url_for('subject', subject_name=subject_name))
-
-    # Skapa flashcards automatiskt för nya quiz
-    created_count = create_flashcards_from_quiz(quiz, questions)
-    if created_count > 0:
-        flash(f'Skapade {created_count} nya flashcards', 'success')
-
-    # Rendera flashcards.html med rätt parametrar
-    return render_template('flashcards.html',
-                           subject_name=subject_name,
-                           quiz_title=quiz.title,
-                           questions=questions,
-                           is_spaced_repetition=True)
-
-@app.route('/create-quiz', methods=['GET', 'POST'])
-@login_required
-def create_quiz():
-    # Hämta ämnen från SQL
-    subjects = Subject.query.filter_by(user_id=current_user.id).all()
-    subject_names = [s.name for s in subjects]
-
-    if request.method == 'POST':
-        # Form inputs
-        uploaded_files = request.files.getlist('data1')
-        user_title = request.form.get('quiz_title', '').strip()
-        subject = request.form.get('subject')
-        quiz_type = request.form.get('quiz-drop')
-        description = request.form.get('quiz-description', '').strip()
-        use_docs = bool(request.form.get('use_documents'))
-        create_flashcards = bool(request.form.get('create_flashcards', True))  # Ny parameter
-
-        # Map quiz_type to number of questions
-        type_map = {
-            'ten': 10,
-            'twenty-five': 25,
-            'fifty': 50,
-            'extended-response': None,
-            'exam': None
-        }
-        desired_count = type_map.get(quiz_type)
-
-        # Build title
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        quiz_title = user_title or f"{subject} - {quiz_type.replace('-', ' ').title()} - {now}"
-
-        # Handle file uploads and extract content
-        saved_files = []
-        file_contents = []
-        # Användarspecifik upload-mapp
-        upload_folder = os.path.join('static', 'uploads', str(current_user.id), subject)
-        os.makedirs(upload_folder, exist_ok=True)
-
-        for file in uploaded_files:
-            if not file or not file.filename:
-                continue
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(upload_folder, filename)
-            file.save(filepath)
-            saved_files.append(filepath)
-
-            ext = os.path.splitext(filename)[1].lower()
-            try:
-                if ext == '.pdf':
-                    text = ''
-                    with fitz.open(filepath) as doc:
-                        for page in doc:
-                            text += page.get_text()
-                    if not text.strip():
-                        images = convert_from_path(filepath)
-                        for image in images:
-                            text += pytesseract.image_to_string(image)
-                    file_contents.append(text)
-                elif ext in ['.txt', '.doc', '.docx']:
-                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                        file_contents.append(f.read())
-            except Exception as e:
-                print(f"[ERROR] Failed to process '{filename}': {e}")
-
-        combined_text = "\n\n".join(file_contents) if file_contents else ''
-
-        # Append krav documents från SQL
-        if use_docs:
-            krav_docs = KravDocument.query.filter_by(
-                user_id=current_user.id,
-                subject_name=subject
-            ).all()
-            
-            krav_texts = []
-            for doc in krav_docs:
-                if doc.content.strip():
-                    krav_texts.append(f"{doc.doc_type.capitalize()}: {doc.content}")
-            
-            if krav_texts:
-                combined_text += "\n\n" + "\n\n".join(krav_texts)
-
-        # Build AI prompt
-        prompt = f"You're an AI quiz generator – create"
-        if desired_count:
-            prompt += f" a {desired_count}-question"
-        else:
-            prompt += " an appropriate"
-        prompt += f" {quiz_type.replace('-', ' ')} quiz. Use the following materials to craft questions testing understanding:\n\n"
-        prompt += f"Description: {description}\n\n"
-        if combined_text:
-            prompt += f"Material:\n{combined_text}\n\n"
-        prompt += "Format as Q: [Question]\nA: [Answer]"
-
-        # Call AI
-        try:
-            response = requests.post(
-                "https://ai.hackclub.com/chat/completions",
-                json={"messages": [{"role": "user", "content": prompt}]},
-                headers={"Content-Type": "application/json"}
-            )
-            response.raise_for_status()
-            raw = response.json().get("choices", [])[0].get("message", {}).get("content", "")
-        except Exception as e:
-            raw = ""
-
-        # Parse AI output
-        questions = []
-        q = None
-        for line in raw.splitlines():
-            if line.lower().startswith('q:'):
-                q = line[2:].strip()
-            elif line.lower().startswith('a:') and q:
-                a = line[2:].strip()
-                questions.append({'question': q, 'answer': a})
-                q = None
-
-        if not questions:
-            questions = [{'question': '[Error]', 'answer': 'Could not generate questions.'}]
-
-        # Truncate to desired count
-        if desired_count and len(questions) > desired_count:
-            questions = questions[:desired_count]
-
-        # Hitta subject_id
-        subject_obj = Subject.query.filter_by(user_id=current_user.id, name=subject).first()
-        subject_id = subject_obj.id if subject_obj else None
-
-        # Spara quiz i SQL istället för JSON
-        new_quiz = Quiz(
-            title=quiz_title,
-            quiz_type=quiz_type,
-            description=description,
-            files=saved_files,
-            use_documents=use_docs,
-            questions=questions,
-            subject_name=subject,
-            subject_id=subject_id,
+def create_krav_document():
+    """Skapa krav-dokument - nu med stöd för shared subjects"""
+    try:
+        data = request.get_json()
+        subject_name = data.get('subject_name')
+        doc_type = data.get('doc_type')
+        content = data.get('content')
+        
+        if not all([subject_name, doc_type, content]):
+            return jsonify({'status': 'error', 'message': 'Missing required fields'}), 400
+        
+        # Hitta subject
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
+        
+        # Kontrollera om användaren har tillgång och behörighet
+        if not current_user.is_member_of_subject(subject_obj.id):
+            return jsonify({'status': 'error', 'message': 'You do not have access to this subject'}), 403
+        
+        user_role = current_user.get_role_in_subject(subject_obj.id)
+        if user_role not in ['admin', 'owner']:
+            return jsonify({'status': 'error', 'message': 'You do not have permission to create documents'}), 403
+        
+        # Skapa krav-dokument med både subject_name och subject_id
+        krav_doc = KravDocument(
+            subject_name=subject_name,
+            subject_id=subject_obj.id,  # Viktigt: Sätt subject_id
+            doc_type=doc_type,
+            content=content,
             user_id=current_user.id
         )
         
-        db.session.add(new_quiz)
+        db.session.add(krav_doc)
         db.session.commit()
         
-        # Skapa flashcards automatiskt för spaced repetition
-        if create_flashcards:
-            create_flashcards_from_quiz(new_quiz)
-        
-        return redirect(url_for('subject', subject_name=subject))
-
-    # GET - läs events från SQL
-    events = Event.query.filter_by(user_id=current_user.id).all()
-    events_data = [event.to_dict() for event in events]
-    return render_template('create-quiz.html', subjects=subject_names, events=events_data)
-
-def create_flashcards_from_quiz(quiz, valid_questions=None):
-    """
-    Skapa flashcards från quiz-frågor för spaced repetition
-    """
-    try:
-        questions = valid_questions or quiz.questions
-        if isinstance(questions, str):
-            questions = json.loads(questions)
-        
-        # Hitta subject_id
-        subject_obj = Subject.query.filter_by(
-            user_id=quiz.user_id, 
-            name=quiz.subject_name
-        ).first()
-        
-        created_count = 0
-        
-        for q_data in questions:
-            # Hantera både formatet från valid_questions och quiz.questions
-            if isinstance(q_data, str) and '|' in q_data:
-                # Format från valid_questions: "question|answer"
-                question_text, answer_text = q_data.split('|', 1)
-            else:
-                # Format från quiz.questions: dict
-                question_text = q_data.get('question', '')
-                answer_text = q_data.get('answer', '')
-            
-            if not question_text or not answer_text:
-                continue
-            
-            # Kontrollera om flashcard redan finns
-            existing = Flashcard.query.filter(
-                Flashcard.user_id == quiz.user_id,
-                Flashcard.question == question_text,
-                Flashcard.subject == quiz.subject_name
-            ).first()
-            
-            if not existing:
-                flashcard = Flashcard(
-                    question=question_text,
-                    answer=answer_text,
-                    subject=quiz.subject_name,
-                    subject_id=subject_obj.id if subject_obj else None,
-                    topic=quiz.title,
-                    user_id=quiz.user_id,
-                    ease_factor=2.5,
-                    interval=0,
-                    repetitions=0,
-                    next_review=None  # Nya kort har inget datum satt
-                )
-                db.session.add(flashcard)
-                created_count += 1
-        
-        db.session.commit()
-        print(f"[INFO] Created {created_count} flashcards for quiz: {quiz.title}")
-        return created_count
+        return jsonify({
+            'status': 'success',
+            'message': f'{doc_type} document created successfully',
+            'document': {
+                'id': krav_doc.id,
+                'doc_type': krav_doc.doc_type,
+                'content': krav_doc.content
+            }
+        })
         
     except Exception as e:
-        print(f"[ERROR] Failed to create flashcards from quiz: {e}")
+        print(f"[ERROR] Failed to create krav document: {e}")
         db.session.rollback()
-        return 0
-
+        return jsonify({'status': 'error', 'message': 'Failed to create document'}), 500
 
 
 @app.route('/api/due_flashcards_today')
@@ -1813,23 +2694,44 @@ def get_due_flashcards_today():
         return jsonify({'error': 'Failed to get due flashcards'}), 500
 
 
+
 @app.route('/subject/<subject_name>/delete_quiz/<int:quiz_index>', methods=['POST'])
 @login_required
 def delete_quiz(subject_name, quiz_index):
-    # Hitta quiz i SQL baserat på index
-    quiz_to_delete = Quiz.query.filter_by(
-        user_id=current_user.id,
-        subject_name=subject_name
-    ).offset(quiz_index).first()
-    
-    if quiz_to_delete:
-        db.session.delete(quiz_to_delete)
-        db.session.commit()
-        flash(f"Deleted quiz: {quiz_to_delete.title}", "success")
-    else:
-        flash("Quiz not found.", "error")
+    try:
+        # Hitta subject först
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        
+        if not subject_obj:
+            flash("Subject not found.", "error")
+            return redirect(url_for('index'))
+        
+        # Kontrollera om användaren har tillgång till detta subject
+        if not current_user.is_member_of_subject(subject_obj.id):
+            flash('You do not have access to this subject', 'error')
+            return redirect(url_for('index'))
+        
+        # Hitta quiz baserat på subject_id och index
+        quiz_to_delete = Quiz.query.filter_by(
+            subject_id=subject_obj.id
+        ).offset(quiz_index).first()
+        
+        if quiz_to_delete:
+            quiz_title = quiz_to_delete.title
+            db.session.delete(quiz_to_delete)
+            db.session.commit()
+            flash(f"Deleted quiz: {quiz_title}", "success")
+        else:
+            flash("Quiz not found.", "error")
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to delete quiz: {e}")
+        flash("Error deleting quiz.", "error")
+        db.session.rollback()
     
     return redirect(url_for('subject', subject_name=subject_name))
+
+
 
 @app.route('/subject/<subject_name>/flashcards')
 @login_required
@@ -2120,56 +3022,203 @@ def reset_question_route():
 @login_required
 def get_events():
     try:
-        events = Event.query.filter_by(user_id=current_user.id).all()
-        events_data = [event.to_dict() for event in events]
-        return jsonify(events_data)
+        # Hämta events som användaren har skapat
+        owned_events = Event.query.filter_by(user_id=current_user.id).all()
+        
+        # Hämta shared events från subjects som användaren är medlem i
+        shared_events = db.session.query(Event).join(Subject).join(SubjectMember).filter(
+            SubjectMember.user_id == current_user.id,
+            Event.is_shared == True,
+            Event.user_id != current_user.id  # Exkludera egna events
+        ).all()
+        
+        # Kombinera alla events
+        all_events = owned_events + shared_events
+        
+        return jsonify([event.to_dict() for event in all_events])
     except Exception as e:
-        return jsonify([]), 500
+        print(f"Error fetching events: {e}")
+        return jsonify({'error': 'Failed to fetch events'}), 500
 
+
+@app.route('/api/user_subjects', methods=['GET'])
+@login_required
+def get_user_subjects():
+    """Hämta alla subjects som användaren har tillgång till och deras roll"""
+    try:
+        user_subjects = []
+        
+        # Hämta ägda subjects
+        owned_subjects = Subject.query.filter_by(user_id=current_user.id).all()
+        for subject in owned_subjects:
+            user_subjects.append({
+                'id': subject.id,
+                'name': subject.name,
+                'user_role': 'owner'
+            })
+        
+        # Hämta subjects som användaren är medlem i
+        member_subjects = db.session.query(Subject).join(SubjectMember).filter(
+            SubjectMember.user_id == current_user.id
+        ).all()
+        
+        for subject in member_subjects:
+            user_subjects.append({
+                'id': subject.id,
+                'name': subject.name,
+                'user_role': 'member'
+            })
+        
+        return jsonify(user_subjects)
+        
+    except Exception as e:
+        print(f"Error fetching user subjects: {e}")
+        return jsonify({'error': 'Failed to fetch user subjects'}), 500
+
+
+
+# Uppdaterad API route för att skapa events
 @app.route('/api/events', methods=['POST'])
 @login_required
-def save_event():
+def create_event():
     try:
-        event_data = request.get_json()
+        data = request.get_json()
+        
+        # Validera required fields
         required_fields = ['date', 'subject', 'testType', 'title']
         for field in required_fields:
-            if field not in event_data or not event_data[field]:
+            if not data.get(field):
                 return jsonify({'error': f'Missing required field: {field}'}), 400
-
+        
+        # Hitta subject_id baserat på subject name
+        subject = Subject.query.filter_by(name=data['subject']).first()
+        if not subject:
+            return jsonify({'error': 'Subject not found'}), 404
+        
+        # Kontrollera om användaren har rätt att skapa events för detta subject
+        # Endast ägare kan skapa events
+        if subject.user_id != current_user.id:
+            return jsonify({'error': 'You can only create events for subjects you own'}), 403
+        
+        # Skapa eventet
         event = Event(
-            date=event_data['date'],
-            subject=event_data['subject'],
-            test_type=event_data['testType'],
-            title=event_data['title'],
-            user_id=current_user.id
+            date=data['date'],
+            subject=data['subject'],
+            subject_id=subject.id,  # Spara subject_id
+            test_type=data['testType'],
+            title=data['title'],
+            description=data.get('description', ''),
+            user_id=current_user.id,
+            is_shared=data.get('share_with_members', False)
         )
         
         db.session.add(event)
         db.session.commit()
-
-        return jsonify({'success': True, 'message': 'Event saved successfully'})
-
+        
+        message = 'Event created successfully'
+        if event.is_shared:
+            message += ' and shared with all members'
+        
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'event': event.to_dict()
+        })
+        
     except Exception as e:
-        print(f"[ERROR] Failed to save event: {e}")
         db.session.rollback()
-        return jsonify({'error': 'Failed to save event'}), 500
+        print(f"Error creating event: {e}")
+        return jsonify({'error': 'Failed to create event'}), 500
+
+@app.route('/api/events/<int:event_id>/share', methods=['POST'])
+@login_required
+def toggle_event_sharing(event_id):
+    try:
+        event = Event.query.get_or_404(event_id)
+        
+        # Kontrollera om användaren har rätt att ändra sharing
+        # Användaren kan ändra om de är skaparen ELLER ägaren av subjektet
+        can_modify = (event.user_id == current_user.id)
+        
+        if event.subject_id:
+            subject = Subject.query.get(event.subject_id)
+            if subject and subject.user_id == current_user.id:
+                can_modify = True
+        
+        if not can_modify:
+            return jsonify({'error': 'You do not have permission to modify this event'}), 403
+        
+        # Toggle sharing status
+        event.is_shared = not event.is_shared
+        db.session.commit()
+        
+        message = 'Event is now shared with all members' if event.is_shared else 'Event is now private'
+        
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'is_shared': event.is_shared
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error toggling event sharing: {e}")
+        return jsonify({'error': 'Failed to update sharing settings'}), 500
+
+
+# Hjälpfunktion för att migrera befintliga events
+def migrate_events():
+    """Migrera befintliga events för att lägga till subject_id och is_shared"""
+    try:
+        events_without_subject_id = Event.query.filter_by(subject_id=None).all()
+        
+        for event in events_without_subject_id:
+            # Hitta subject baserat på namn
+            subject = Subject.query.filter_by(name=event.subject).first()
+            if subject:
+                event.subject_id = subject.id
+                # Sätt is_shared till False för befintliga events
+                if not hasattr(event, 'is_shared') or event.is_shared is None:
+                    event.is_shared = False
+        
+        db.session.commit()
+        print(f"Migrated {len(events_without_subject_id)} events")
+        
+    except Exception as e:
+        print(f"Error migrating events: {e}")
+        db.session.rollback()
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
 @login_required
 def delete_event(event_id):
     try:
-        event = Event.query.filter_by(id=event_id, user_id=current_user.id).first()
-        if event:
-            db.session.delete(event)
-            db.session.commit()
-            return jsonify({'success': True, 'message': 'Event deleted successfully'})
-        else:
-            return jsonify({'error': 'Event not found'}), 404
-
+        event = Event.query.get_or_404(event_id)
+        
+        # Kontrollera om användaren har rätt att ta bort eventet
+        # Användaren kan ta bort om de är skaparen ELLER ägaren av subjektet
+        can_delete = (event.user_id == current_user.id)
+        
+        if event.subject_id:
+            subject = Subject.query.get(event.subject_id)
+            if subject and subject.user_id == current_user.id:
+                can_delete = True
+        
+        if not can_delete:
+            return jsonify({'error': 'You do not have permission to delete this event'}), 403
+        
+        db.session.delete(event)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Event deleted successfully'
+        })
+        
     except Exception as e:
-        print(f"[ERROR] Failed to delete event: {e}")
         db.session.rollback()
+        print(f"Error deleting event: {e}")
         return jsonify({'error': 'Failed to delete event'}), 500
+
 
 @app.route("/get_events_for_date")
 @login_required
@@ -2217,49 +3266,40 @@ def get_krav_documents_api(subject_name):
 
 @app.route('/api/quizzes/<subject_name>')
 @login_required
-def get_quizzes_api(subject_name):
-    """API endpoint för att hämta quiz för ett ämne"""
-    try:
-        # Hämta quiz-objekt direkt från SQL-databasen
-        quizzes = Quiz.query.filter_by(
-            user_id=current_user.id,
-            subject_name=subject_name
-        ).order_by(Quiz.created_at.desc()).all()
-        
-        quiz_list = []
-        for quiz in quizzes:
-            # Konvertera JSON-fält till Python-objekt om de är strängar
-            files = quiz.files
-            if isinstance(files, str):
-                try:
-                    files = json.loads(files)
-                except:
-                    files = []
-            
-            questions = quiz.questions
-            if isinstance(questions, str):
-                try:
-                    questions = json.loads(questions)
-                except:
-                    questions = []
-            
-            quiz_data = {
-                'id': quiz.id,
-                'title': quiz.title,
-                'type': quiz.quiz_type,
-                'description': quiz.description,
-                'files': files or [],
-                'use_documents': quiz.use_documents,
-                'questions': questions or [],
-                'created_at': quiz.created_at.isoformat() if quiz.created_at else None,
-                'subject_id': quiz.subject_id
-            }
-            quiz_list.append(quiz_data)
-        
-        return jsonify(quiz_list)
-    except Exception as e:
-        print(f"[ERROR] Failed to get quizzes: {e}")
-        return jsonify({'error': 'Failed to get quizzes'}), 500
+def api_get_quizzes(subject_name):
+    """API för att hämta quizzes för ett subject"""
+    subject_obj = Subject.query.filter_by(name=subject_name).first()
+    if not subject_obj or not current_user.is_member_of_subject(subject_obj.id):
+        return jsonify({'error': 'Access denied'}), 403
+    
+    user_role = current_user.get_role_in_subject(subject_obj.id)
+    
+    # Hämta quizzes baserat på användarens roll
+    if user_role in ['owner', 'admin']:
+        subject_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id, is_personal=False).all()
+        personal_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id, user_id=current_user.id, is_personal=True).all()
+        all_quizzes = subject_quizzes + personal_quizzes
+    else:
+        subject_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id, is_personal=False).all()
+        personal_quizzes = Quiz.query.filter_by(subject_id=subject_obj.id, user_id=current_user.id, is_personal=True).all()
+        all_quizzes = subject_quizzes + personal_quizzes
+    
+    quizzes_data = []
+    for quiz in all_quizzes:
+        quizzes_data.append({
+            'id': quiz.id,
+            'title': quiz.title,
+            'quiz_type': quiz.quiz_type,
+            'description': quiz.description,
+            'is_personal': quiz.is_personal,
+            'created_at': quiz.created_at.isoformat() if quiz.created_at else None,
+            'user_id': quiz.user_id,
+            'can_delete': quiz.user_id == current_user.id or user_role in ['owner', 'admin']
+        })
+    
+    return jsonify(quizzes_data)
+
+
 
 @app.route('/api/quiz/<int:quiz_id>', methods=['DELETE'])
 @login_required
@@ -2640,6 +3680,50 @@ def spaced_repetition_quiz(subject, topic, date):
         return redirect(url_for('index'))
 
 
+# Hjälpfunktion för att migrera befintliga events
+def migrate_events():
+    """Migrera befintliga events för att lägga till subject_id och is_shared"""
+    try:
+        events_without_subject_id = Event.query.filter_by(subject_id=None).all()
+        
+        for event in events_without_subject_id:
+            # Hitta subject baserat på namn
+            subject = Subject.query.filter_by(name=event.subject).first()
+            if subject:
+                event.subject_id = subject.id
+                # Sätt is_shared till False för befintliga events
+                if not hasattr(event, 'is_shared') or event.is_shared is None:
+                    event.is_shared = False
+        
+        db.session.commit()
+        print(f"Migrated {len(events_without_subject_id)} events")
+        
+    except Exception as e:
+        print(f"Error migrating events: {e}")
+        db.session.rollback()
+
+
+def migrate_krav_documents():
+    """Migrera befintliga krav-dokument för att sätta subject_id"""
+    try:
+        # Hämta alla krav-dokument som saknar subject_id
+        krav_docs = KravDocument.query.filter_by(subject_id=None).all()
+        
+        for doc in krav_docs:
+            # Hitta matching subject baserat på subject_name
+            subject = Subject.query.filter_by(name=doc.subject_name).first()
+            if subject:
+                doc.subject_id = subject.id
+                db.session.add(doc)
+        
+        db.session.commit()
+        print(f"[INFO] Migrated {len(krav_docs)} krav documents with subject_id")
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to migrate krav documents: {e}")
+        db.session.rollback()
+
+
 
 @app.route('/daily_quiz/<date>/<subject>/<topic>')
 @login_required 
@@ -2725,5 +3809,6 @@ def daily_quiz_all(date):
         return redirect(url_for('index'))
 
 if __name__ == '__main__':
+    migrate_database()
     app.run(debug=True)
     cleanup_on_startup()
