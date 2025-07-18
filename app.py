@@ -1420,37 +1420,18 @@ def create_flashcards_for_all_members(quiz, subject_obj):
     """Skapa flashcards för alla medlemmar i ett subject (endast för shared quizzes)"""
     if not quiz.questions:
         return
-    
+        
     # Hämta alla medlemmar (inklusive ägaren)
     members = db.session.query(SubjectMember.user_id).filter_by(subject_id=subject_obj.id).all()
     member_ids = [member.user_id for member in members]
     
-    # Lägg till ägaren
+    # Lägg till ägaren om den inte redan finns
     if subject_obj.user_id not in member_ids:
         member_ids.append(subject_obj.user_id)
     
     # Skapa flashcards för varje medlem
     for user_id in member_ids:
-        for q_data in quiz.questions:
-            question = q_data.get('question', '')
-            answer = q_data.get('answer', '')
-            
-            if question and answer:
-                flashcard = Flashcard(
-                    question=question,
-                    answer=answer,
-                    subject=quiz.subject_name,
-                    subject_id=quiz.subject_id,
-                    topic=quiz.title,
-                    user_id=user_id
-                )
-                db.session.add(flashcard)
-    
-    try:
-        db.session.commit()
-    except Exception as e:
-        print(f"[ERROR] Failed to create flashcards for all members: {e}")
-        db.session.rollback()
+        create_flashcards_for_user(quiz, user_id)
 
 
 
@@ -2607,47 +2588,57 @@ def quiz_route(subject_name, quiz_title):
 
 
 # 4. Lägg till hjälpfunktion för att skapa flashcards för en enskild användare
-def create_flashcards_for_user(quiz, questions, user_id):
+# Uppdaterad create_flashcards_for_user funktion
+def create_flashcards_for_user(quiz, user_id, subject_obj=None):
     """Skapa flashcards för en specifik användare"""
     try:
-        # Questions are already processed and passed as parameter
+        # Hämta questions direkt från quiz-objektet
+        questions = quiz.questions
         if not questions:
+            print(f"[INFO] No questions found in quiz {quiz.title}")
             return 0
-            
+
         created_count = 0
-        for question_line in questions:
-            # Split the "question|answer" format
-            if '|' in question_line:
-                question_text, answer_text = question_line.split('|', 1)
-                question_text = question_text.strip()
-                answer_text = answer_text.strip()
-                
-                if not question_text or not answer_text:
+        for q_data in questions:
+            # Hantera både dict-format och sträng-format
+            if isinstance(q_data, dict):
+                question_text = q_data.get('question', '')
+                answer_text = q_data.get('answer', '')
+            else:
+                # Om det är en sträng i "question|answer" format
+                if '|' in str(q_data):
+                    question_text, answer_text = str(q_data).split('|', 1)
+                    question_text = question_text.strip()
+                    answer_text = answer_text.strip()
+                else:
                     continue
+            
+            if not question_text or not answer_text:
+                continue
                 
-                # Kontrollera om flashcard redan finns för denna användare
-                existing = Flashcard.query.filter(
-                    Flashcard.user_id == user_id,
-                    Flashcard.question == question_text,
-                    Flashcard.subject_id == quiz.subject_id
-                ).first()
+            # Kontrollera om flashcard redan finns för denna användare
+            existing = Flashcard.query.filter(
+                Flashcard.user_id == user_id,
+                Flashcard.question == question_text,
+                Flashcard.subject_id == quiz.subject_id
+            ).first()
+            
+            if not existing:
+                flashcard = Flashcard(
+                    question=question_text,
+                    answer=answer_text,
+                    subject=quiz.subject_name,
+                    subject_id=quiz.subject_id,
+                    topic=quiz.title,
+                    user_id=user_id,
+                    ease_factor=2.5,
+                    interval=0,
+                    repetitions=0,
+                    next_review=None
+                )
+                db.session.add(flashcard)
+                created_count += 1
                 
-                if not existing:
-                    flashcard = Flashcard(
-                        question=question_text,
-                        answer=answer_text,
-                        subject=quiz.subject_name,
-                        subject_id=quiz.subject_id,
-                        topic=quiz.title,
-                        user_id=user_id,
-                        ease_factor=2.5,
-                        interval=0,
-                        repetitions=0,
-                        next_review=None
-                    )
-                    db.session.add(flashcard)
-                    created_count += 1
-        
         db.session.commit()
         print(f"[INFO] Created {created_count} flashcards for user {user_id}")
         return created_count
@@ -2657,6 +2648,82 @@ def create_flashcards_for_user(quiz, questions, user_id):
         db.session.rollback()
         return 0
 
+# Uppdaterad create_flashcards_for_all_members funktion
+def create_flashcards_for_all_members(quiz, subject_obj):
+    """Skapa flashcards för alla medlemmar i ett subject (endast för shared quizzes)"""
+    if not quiz.questions:
+        return
+        
+    # Hämta alla medlemmar (inklusive ägaren)
+    members = db.session.query(SubjectMember.user_id).filter_by(subject_id=subject_obj.id).all()
+    member_ids = [member.user_id for member in members]
+    
+    # Lägg till ägaren om den inte redan finns
+    if subject_obj.user_id not in member_ids:
+        member_ids.append(subject_obj.user_id)
+    
+    # Skapa flashcards för varje medlem
+    for user_id in member_ids:
+        create_flashcards_for_user(quiz, user_id)
+
+# Uppdaterad add_user_quiz funktion
+def add_user_quiz(subject_name, quiz_data):
+    """Lägg till nytt quiz för nuvarande användare och skapa flashcards"""
+    if not current_user.is_authenticated:
+        return False
+        
+    # Hitta Subject-objektet
+    subject_obj = Subject.query.filter_by(name=subject_name).first()
+    if not subject_obj:
+        return False
+        
+    # Kontrollera om användaren har tillgång till detta ämne
+    if not current_user.is_member_of_subject(subject_obj.id):
+        return False
+        
+    # Avgör om quiz ska vara personlig baserat på användarens roll
+    user_role = current_user.get_role_in_subject(subject_obj.id)
+    
+    # Kontrollera om användaren försöker skapa ett shared quiz utan behörighet
+    requested_personal = quiz_data.get('is_personal', True)
+    if not requested_personal and user_role not in ['owner', 'admin']:
+        # Tvinga till personlig quiz för medlemmar
+        is_personal = True
+    else:
+        is_personal = requested_personal
+        
+    quiz = Quiz(
+        title=quiz_data['title'],
+        quiz_type=quiz_data['type'],
+        description=quiz_data.get('description', ''),
+        subject_name=subject_name,
+        subject_id=subject_obj.id,
+        use_documents=quiz_data.get('use_documents', False),
+        files=quiz_data.get('files', []),
+        questions=quiz_data.get('questions', []),
+        user_id=current_user.id,
+        is_personal=is_personal
+    )
+    
+    try:
+        db.session.add(quiz)
+        db.session.commit()
+        
+        # Skapa flashcards baserat på quiz-typ
+        if quiz_data.get('questions'):
+            if is_personal:
+                # Endast för skaparen
+                create_flashcards_for_user(quiz, current_user.id)
+            else:
+                # För alla medlemmar i subject
+                create_flashcards_for_all_members(quiz, subject_obj)
+                
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to add quiz: {e}")
+        db.session.rollback()
+        return False
 
 @app.route('/flashcards/<subject_name>/<path:quiz_title>')
 @login_required  
