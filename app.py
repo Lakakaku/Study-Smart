@@ -140,8 +140,7 @@ class Subject(db.Model):
                              foreign_keys='Quiz.subject_id')
     flashcards = db.relationship('Flashcard', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
                                 foreign_keys='Flashcard.subject_id')
-    krav_documents = db.relationship('KravDocument', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
-                                    foreign_keys='KravDocument.subject_id')
+
     members = db.relationship('SubjectMember', backref='subject', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
@@ -203,7 +202,6 @@ class User(db.Model, UserMixin):
     quizzes = db.relationship('Quiz', backref='owner', lazy=True, cascade='all, delete-orphan')
     flashcards = db.relationship('Flashcard', backref='owner', lazy=True, cascade='all, delete-orphan')
     events = db.relationship('Event', backref='owner', lazy=True, cascade='all, delete-orphan')
-    krav_documents = db.relationship('KravDocument', backref='owner', lazy=True, cascade='all, delete-orphan')
     
     # Ny relationship för subject memberships
     subject_memberships = db.relationship('SubjectMember', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -342,7 +340,6 @@ def init_database():
     with app.app_context():
         # Skapa tabeller om de inte finns
         db.create_all()
-        migrate_krav_documents()
         
         # Lista över alla kolumner som behövs för varje tabell
         required_columns = {
@@ -369,10 +366,7 @@ def init_database():
                 ('time_taken', 'FLOAT'),
                 ('updated_at', 'DATETIME')
             ],
-            'krav_document': [
-                ('subject_name', 'VARCHAR(100)'),
-                ('subject_id', 'INTEGER')
-            ],
+            
             'shared_files': [
                 ('subject_id', 'INTEGER'),
                 ('user_id', 'INTEGER'), 
@@ -532,14 +526,6 @@ class Event(db.Model):
         return f"Event('{self.title}', '{self.date}')"
 
 
-class KravDocument(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    subject_name = db.Column(db.String(100), nullable=False)  # Behåll för bakåtkompatibilitet
-    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)  # Ny foreign key
-    doc_type = db.Column(db.String(100), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class FlashcardResponse(db.Model):
@@ -551,8 +537,7 @@ class FlashcardResponse(db.Model):
     rating = db.Column(db.Integer, nullable=False)
     time_taken = db.Column(db.Integer, nullable=False)  # i sekunder
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    def __repr__(self):
-        return f"KravDocument('{self.subject_name}', '{self.doc_type}')"
+    
 
 
 def create_shared_files_table():
@@ -600,29 +585,6 @@ def ensure_upload_directories():
 
 
 
-
-def migrate_krav_documents():
-    """Migrera befintliga krav-dokument för att sätta subject_id"""
-    try:
-        # Hämta alla krav-dokument som saknar subject_id
-        krav_docs = KravDocument.query.filter_by(subject_id=None).all()
-        
-        for doc in krav_docs:
-            # Hitta matching subject baserat på subject_name och user_id
-            subject = Subject.query.filter_by(
-                name=doc.subject_name, 
-                user_id=doc.user_id
-            ).first()
-            if subject:
-                doc.subject_id = subject.id
-                db.session.add(doc)
-        
-        db.session.commit()
-        print(f"[INFO] Migrated {len(krav_docs)} krav documents with subject_id")
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to migrate krav documents: {e}")
-        db.session.rollback()
 
 def migrate_database():
     """Migrera databas för att lägga till saknade kolumner"""
@@ -700,7 +662,6 @@ def init_database():
     with app.app_context():
         # Skapa tabeller om de inte finns
         db.create_all()
-        migrate_krav_documents()
         
         # Lista över alla kolumner som behövs för varje tabell
         required_columns = {
@@ -727,10 +688,7 @@ def init_database():
                 ('time_taken', 'FLOAT'),
                 ('updated_at', 'DATETIME')
             ],
-            'krav_document': [
-                ('subject_name', 'VARCHAR(100)'),
-                ('subject_id', 'INTEGER')
-            ],
+            
             'shared_files': [
                 ('subject_id', 'INTEGER'),
                 ('user_id', 'INTEGER'), 
@@ -1487,8 +1445,6 @@ def subject(subject_name):
         ).all()
         all_quizzes = shared_quizzes + personal_quizzes
     
-    # Hämta krav-dokument (alla medlemmar kan se dessa)
-    krav_docs = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
     
     # Konvertera quiz-objekt till dictionaries för JSON-serialisering
     quizzes_dict = [quiz.to_dict() for quiz in all_quizzes]
@@ -1502,7 +1458,6 @@ def subject(subject_name):
         'quizzes': quizzes_dict,  # Använd dict-versionen för JSON
         'shared_quizzes': shared_quizzes_dict,
         'personal_quizzes': personal_quizzes_dict,
-        'krav_docs': krav_docs,
         'user_role': user_role,
         'can_create_shared': user_role in ['owner', 'admin'],
         'can_create_personal': True  # Alla kan skapa personliga quizzes
@@ -1592,17 +1547,7 @@ def create_quiz():
 
         combined_text = "\n\n".join(file_contents) if file_contents else ''
 
-        # Append krav documents
-        if use_docs:
-            krav_docs = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
-            krav_texts = []
-            for doc in krav_docs:
-                if doc.content.strip():
-                    krav_texts.append(f"{doc.doc_type.capitalize()}: {doc.content}")
-            
-            if krav_texts:
-                combined_text += "\n\n" + "\n\n".join(krav_texts)
-
+        
         # Build AI prompt
         prompt = f"You're an AI quiz generator – create"
         if desired_count:
@@ -1940,119 +1885,10 @@ def get_user_flashcards(subject_name=None):
 
 
 
-def get_user_krav_documents(subject_name=None):
-    """Hämta krav-dokument för nuvarande användare (både egna och från ämnen man är medlem i)"""
-    if not current_user.is_authenticated:
-        return {}
-    
-    if subject_name:
-        # För ett specifikt ämne, hämta dokument från alla användare som har tillgång till ämnet
-        subject_obj = Subject.query.filter_by(name=subject_name).first()
-        if not subject_obj:
-            return {}
-        
-        # Kontrollera om användaren har tillgång till detta ämne
-        if not current_user.is_member_of_subject(subject_obj.id):
-            return {}
-        
-        # Hämta alla krav-dokument för detta ämne (från ägaren)
-        documents = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
-        
-        # Returnera dictionary för specifikt ämne
-        result = {}
-        for doc in documents:
-            result[doc.doc_type] = {'innehåll': doc.content}
-        return result
-    else:
-        # Hämta alla ämnen användaren har tillgång till
-        accessible_subjects = current_user.get_all_subjects()
-        
-        # Hämta dokument för alla dessa ämnen
-        subject_ids = [subject.id for subject in accessible_subjects]
-        documents = KravDocument.query.filter(KravDocument.subject_id.in_(subject_ids)).all()
-        
-        # Returnera grupperat per ämne
-        result = {}
-        for doc in documents:
-            if doc.subject_name not in result:
-                result[doc.subject_name] = {}
-            result[doc.subject_name][doc.doc_type] = {'innehåll': doc.content}
-        return result
 
 
 
 
-def save_krav_document(subject_name, doc_type, content):
-    """Spara eller uppdatera krav-dokument"""
-    if not current_user.is_authenticated:
-        return False
-    
-    # Hitta Subject-objektet
-    subject_obj = Subject.query.filter_by(name=subject_name).first()
-    if not subject_obj:
-        return False
-    
-    # Kontrollera om användaren har tillgång till detta ämne
-    if not current_user.is_member_of_subject(subject_obj.id):
-        return False
-    
-    # Endast ägaren eller admins kan redigera krav-dokument
-    user_role = current_user.get_role_in_subject(subject_obj.id)
-    if user_role not in ['owner', 'admin']:
-        return False
-    
-    # Leta efter befintligt dokument (sök efter subject_id istället för user_id)
-    existing = KravDocument.query.filter_by(
-        subject_id=subject_obj.id,
-        doc_type=doc_type
-    ).first()
-    
-    if existing:
-        existing.content = content
-    else:
-        doc = KravDocument(
-            subject_name=subject_name,
-            subject_id=subject_obj.id,
-            doc_type=doc_type,
-            content=content,
-            user_id=current_user.id  # Behåll för att spåra vem som skapade/redigerade
-        )
-        db.session.add(doc)
-    
-    db.session.commit()
-    return True
-
-
-
-def delete_krav_document(subject_name, doc_type):
-    """Ta bort krav-dokument"""
-    if not current_user.is_authenticated:
-        return False
-    
-    # Hitta Subject-objektet
-    subject_obj = Subject.query.filter_by(name=subject_name).first()
-    if not subject_obj:
-        return False
-    
-    # Kontrollera om användaren har tillgång till detta ämne
-    if not current_user.is_member_of_subject(subject_obj.id):
-        return False
-    
-    # Endast ägaren eller admins kan ta bort krav-dokument
-    user_role = current_user.get_role_in_subject(subject_obj.id)
-    if user_role not in ['owner', 'admin']:
-        return False
-    
-    doc = KravDocument.query.filter_by(
-        subject_id=subject_obj.id,
-        doc_type=doc_type
-    ).first()
-    
-    if doc:
-        db.session.delete(doc)
-        db.session.commit()
-        return True
-    return False
 
 
 # -------------------- Spaced Repetition Functions --------------------
@@ -3185,60 +3021,6 @@ def create_flashcards_from_quiz(subject_name_or_quiz, quiz_title_or_questions, q
         return create_flashcards_for_user(quiz, questions, current_user.id)
 
 
-@app.route('/create_krav_document', methods=['POST'])
-@login_required
-def create_krav_document():
-    """Skapa krav-dokument - nu med stöd för shared subjects"""
-    try:
-        data = request.get_json()
-        subject_name = data.get('subject_name')
-        doc_type = data.get('doc_type')
-        content = data.get('content')
-        
-        if not all([subject_name, doc_type, content]):
-            return jsonify({'status': 'error', 'message': 'Missing required fields'}), 400
-        
-        # Hitta subject
-        subject_obj = Subject.query.filter_by(name=subject_name).first()
-        if not subject_obj:
-            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
-        
-        # Kontrollera om användaren har tillgång och behörighet
-        if not current_user.is_member_of_subject(subject_obj.id):
-            return jsonify({'status': 'error', 'message': 'You do not have access to this subject'}), 403
-        
-        user_role = current_user.get_role_in_subject(subject_obj.id)
-        if user_role not in ['admin', 'owner']:
-            return jsonify({'status': 'error', 'message': 'You do not have permission to create documents'}), 403
-        
-        # Skapa krav-dokument med både subject_name och subject_id
-        krav_doc = KravDocument(
-            subject_name=subject_name,
-            subject_id=subject_obj.id,  # Viktigt: Sätt subject_id
-            doc_type=doc_type,
-            content=content,
-            user_id=current_user.id
-        )
-        
-        db.session.add(krav_doc)
-        db.session.commit()
-        
-        return jsonify({
-            'status': 'success',
-            'message': f'{doc_type} document created successfully',
-            'document': {
-                'id': krav_doc.id,
-                'doc_type': krav_doc.doc_type,
-                'content': krav_doc.content
-            }
-        })
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to create krav document: {e}")
-        db.session.rollback()
-        return jsonify({'status': 'error', 'message': 'Failed to create document'}), 500
-
-
 @app.route('/api/due_flashcards_today')
 @login_required
 def get_due_flashcards_today():
@@ -3829,32 +3611,6 @@ def get_events_for_date():
         return jsonify([]), 500
 
 
-@app.route('/api/krav_documents/<subject_name>')
-@login_required
-def get_krav_documents_api(subject_name):
-    """API endpoint för att hämta krav-dokument för ett ämne"""
-    try:
-        # Hämta dokument direkt från SQL-databasen
-        documents = KravDocument.query.filter_by(
-            user_id=current_user.id,
-            subject_name=subject_name
-        ).all()
-        
-        # Formatera dokumenten
-        enhanced_documents = {}
-        for doc in documents:
-            enhanced_documents[doc.doc_type] = {
-                'id': doc.id,
-                'innehåll': doc.content,
-                'created_at': doc.created_at.isoformat() if doc.created_at else None,
-                'subject_id': doc.subject_id
-            }
-        
-        return jsonify(enhanced_documents)
-    except Exception as e:
-        print(f"[ERROR] Failed to get krav documents: {e}")
-        return jsonify({'error': 'Failed to get documents'}), 500
-
 
 
 
@@ -3937,136 +3693,8 @@ def delete_quiz_api(quiz_id):
         print(f"[ERROR] Failed to delete quiz: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/upload_krav_pdf', methods=['POST'])
-@login_required
-def upload_krav_pdf():
-    """Uppdaterad version som returnerar mer detaljerad information och använder SQL"""
-    try:
-        subject = request.form['subject']
-        doc_type = request.form['type']
-        file = request.files.get('file')
-        
-        if not file:
-            return jsonify(status='error', message='Ingen fil'), 400
 
-        # Skapa användarspecifik mapp
-        folder = os.path.join('static', 'uploads', 'krav', str(current_user.id), subject)
-        os.makedirs(folder, exist_ok=True)
-        
-        # Säker filnamn
-        original_filename = secure_filename(file.filename)
-        file_path = os.path.join(folder, f"{doc_type}.pdf")
-        file.save(file_path)
 
-        # Extrahera text från PDF
-        text = ''
-        try:
-            with fitz.open(file_path) as doc:
-                for page in doc:
-                    text += page.get_text()
-            
-            # Fallback OCR om tomt
-            if not text.strip():
-                from pdf2image import convert_from_path
-                images = convert_from_path(file_path)
-                for img in images:
-                    text += pytesseract.image_to_string(img)
-        except Exception as e:
-            print(f"Error extracting text from PDF: {e}")
-            text = "Kunde inte extrahera text från PDF"
-
-        # Spara till SQL-databas
-        # Kontrollera om dokumentet redan finns
-        existing_doc = KravDocument.query.filter_by(
-            user_id=current_user.id,
-            subject_name=subject,
-            doc_type=doc_type
-        ).first()
-        
-        if existing_doc:
-            # Uppdatera befintligt dokument
-            existing_doc.content = text
-            existing_doc.created_at = datetime.now()
-            doc_obj = existing_doc
-        else:
-            # Skapa nytt dokument
-            doc_obj = KravDocument(
-                user_id=current_user.id,
-                subject_name=subject,
-                doc_type=doc_type,
-                content=text,
-                created_at=datetime.now()
-            )
-            db.session.add(doc_obj)
-        
-        db.session.commit()
-
-        response_data = {
-            'status': 'success',
-            'message': 'Dokument uppladdat framgångsrikt',
-            'filename': original_filename,
-            'doc_type': doc_type,
-            'document_id': doc_obj.id,
-            'created_at': doc_obj.created_at.isoformat() if doc_obj.created_at else None
-        }
-
-        return jsonify(response_data)
-        
-    except Exception as e:
-        print(f"Upload error: {e}")
-        db.session.rollback()
-        return jsonify(status='error', message=f'Fel vid uppladdning: {str(e)}'), 500
-
-@app.route('/delete_krav_document', methods=['POST'])
-@login_required
-def delete_krav_document_route():
-    """Uppdaterad version som hanterar både doc_type och doc_id och använder SQL"""
-    try:
-        data = request.get_json()
-        subject = data.get('subject')
-        doc_type = data.get('doc_type')
-        doc_id = data.get('doc_id')  # Ny parameter
-
-        if not subject or not doc_type:
-            return jsonify({'status': 'error', 'message': 'Saknar subject eller doc_type'}), 400
-
-        # Ta bort från SQL-databas
-        query = KravDocument.query.filter_by(
-            user_id=current_user.id,
-            subject_name=subject,
-            doc_type=doc_type
-        )
-        
-        # Om doc_id är specificerat, lägg till det i filtret
-        if doc_id:
-            try:
-                query = query.filter_by(id=int(doc_id))
-            except ValueError:
-                return jsonify({'status': 'error', 'message': 'Ogiltigt dokument-ID'}), 400
-
-        doc = query.first()
-        
-        if not doc:
-            return jsonify({'status': 'error', 'message': 'Dokument hittades inte'}), 404
-
-        # Ta bort fysisk fil
-        file_path = os.path.join('static', 'uploads', 'krav', str(current_user.id), subject, f"{doc_type}.pdf")
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        except Exception as e:
-            print(f"Warning: Could not delete file {file_path}: {e}")
-
-        # Ta bort från SQL-databas
-        db.session.delete(doc)
-        db.session.commit()
-
-        return jsonify({'status': 'success', 'message': 'Dokument borttaget'})
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"Delete error: {e}")
-        return jsonify({'status': 'error', 'message': f'Fel vid borttagning: {str(e)}'}), 500
 
 @app.route('/api/subjects')
 @login_required  
@@ -4083,7 +3711,6 @@ def get_subjects_api():
                 'created_at': subject.created_at.isoformat() if subject.created_at else None,
                 'quiz_count': len(subject.quizzes),
                 'flashcard_count': len(subject.flashcards),
-                'document_count': len(subject.krav_documents)
             }
             subject_list.append(subject_data)
         
@@ -4123,17 +3750,11 @@ def get_subject_stats_api(subject_name):
             Flashcard.next_review <= today
         ).count()
         
-        # Räkna dokument
-        document_count = KravDocument.query.filter_by(
-            user_id=current_user.id,
-            subject_name=subject_name
-        ).count()
         
         stats = {
             'quiz_count': quiz_count,
             'total_flashcards': total_flashcards,
             'due_flashcards': due_flashcards,
-            'document_count': document_count,
             'created_at': subject_obj.created_at.isoformat() if subject_obj.created_at else None
         }
         
