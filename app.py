@@ -334,7 +334,7 @@ def check_quiz_schema():
 
 
 
-# Uppdatera init_database funktionen
+# Update your init_database function to include the new table
 def init_database():
     """Initiera databas och hantera migrationer"""
     with app.app_context():
@@ -353,7 +353,7 @@ def init_database():
                 ('use_documents', 'BOOLEAN'),
                 ('files', 'JSON'),
                 ('questions', 'JSON'),
-                ('is_personal', 'BOOLEAN')  # Lägg till denna
+                ('is_personal', 'BOOLEAN')
             ],
             'flashcard': [
                 ('subject', 'VARCHAR(100)'),
@@ -366,7 +366,6 @@ def init_database():
                 ('time_taken', 'FLOAT'),
                 ('updated_at', 'DATETIME')
             ],
-            
             'shared_files': [
                 ('subject_id', 'INTEGER'),
                 ('user_id', 'INTEGER'), 
@@ -377,6 +376,16 @@ def init_database():
                 ('description', 'TEXT'),
                 ('is_active', 'BOOLEAN'),
                 ('download_count', 'INTEGER'),
+                ('created_at', 'DATETIME'),
+                ('updated_at', 'DATETIME')
+            ],
+            'krav_documents': [
+                ('subject_id', 'INTEGER'),
+                ('user_id', 'INTEGER'),
+                ('doc_type', 'VARCHAR(50)'),
+                ('filename', 'VARCHAR(255)'),
+                ('file_path', 'VARCHAR(500)'),
+                ('file_size', 'INTEGER'),
                 ('created_at', 'DATETIME'),
                 ('updated_at', 'DATETIME')
             ]
@@ -430,7 +439,6 @@ def init_database():
         except Exception as e:
             print(f"Error updating is_personal: {e}")
         
-        # Resten av din befintliga init_database kod...
         try:
             db.session.commit()
             print("Database schema updated successfully")
@@ -538,6 +546,38 @@ class FlashcardResponse(db.Model):
     time_taken = db.Column(db.Integer, nullable=False)  # i sekunder
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+class KravDocument(db.Model):
+    """Model för krav-dokument som kunskapskrav, begreppslistor etc."""
+    __tablename__ = 'krav_documents'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    doc_type = db.Column(db.String(50), nullable=False)  # 'begrippslista', 'kunskapskrav', 'kunskapsmal'
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    subject = db.relationship('Subject', backref='krav_documents')
+    user = db.relationship('User', backref='krav_documents')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'subject_id': self.subject_id,
+            'doc_type': self.doc_type,
+            'filename': self.filename,
+            'file_url': f'/static/uploads/krav/{self.user_id}/{self.subject.name}/{self.doc_type}.pdf',
+            'file_size': self.file_size,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+    
+    def __repr__(self):
+        return f"KravDocument('{self.doc_type}', '{self.filename}')"
+
 
 
 def create_shared_files_table():
@@ -673,6 +713,194 @@ init_database()
 
 
 
+@app.route('/upload_krav_pdf', methods=['POST'])
+@login_required
+def upload_krav_pdf():
+    """Upload a krav document PDF"""
+    try:
+        # Get form data
+        subject_name = request.form.get('subject')
+        doc_type = request.form.get('type')
+        file = request.files.get('file')
+        
+        if not all([subject_name, doc_type, file]):
+            return jsonify({'status': 'error', 'message': 'Missing required fields'}), 400
+        
+        # Validate document type
+        allowed_types = ['begrippslista', 'kunskapskrav', 'kunskapsmal']
+        if doc_type not in allowed_types:
+            return jsonify({'status': 'error', 'message': 'Invalid document type'}), 400
+        
+        # Get subject and check permissions
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
+        
+        user_role = current_user.get_role_in_subject(subject_obj.id)
+        if user_role not in ['owner', 'admin']:
+            return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
+        
+        # Validate file
+        if not file.filename.lower().endswith('.pdf'):
+            return jsonify({'status': 'error', 'message': 'Only PDF files are allowed'}), 400
+        
+        # Check file size (50MB limit)
+        file.seek(0, 2)  # Seek to end
+        file_size = file.tell()
+        file.seek(0)  # Reset to beginning
+        
+        if file_size > 50 * 1024 * 1024:  # 50MB
+            return jsonify({'status': 'error', 'message': 'File too large. Maximum size is 50MB'}), 400
+        
+        # Create directory structure
+        upload_dir = os.path.join(app.static_folder, 'uploads', 'krav', str(current_user.id), subject_name)
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Save file with standardized name
+        filename = f"{doc_type}.pdf"
+        file_path = os.path.join(upload_dir, filename)
+        
+        # Save the file
+        file.save(file_path)
+        
+        # Remove existing document of same type if exists
+        existing_doc = KravDocument.query.filter_by(
+            subject_id=subject_obj.id, 
+            doc_type=doc_type
+        ).first()
+        
+        if existing_doc:
+            # Remove old file
+            try:
+                if os.path.exists(existing_doc.file_path):
+                    os.remove(existing_doc.file_path)
+            except Exception as e:
+                print(f"Error removing old file: {e}")
+            
+            # Update existing record
+            existing_doc.filename = file.filename
+            existing_doc.file_path = file_path
+            existing_doc.file_size = file_size
+            existing_doc.updated_at = datetime.utcnow()
+            document_id = existing_doc.id
+        else:
+            # Create new record
+            new_doc = KravDocument(
+                subject_id=subject_obj.id,
+                user_id=current_user.id,
+                doc_type=doc_type,
+                filename=file.filename,
+                file_path=file_path,
+                file_size=file_size
+            )
+            db.session.add(new_doc)
+            db.session.flush()  # Get the ID
+            document_id = new_doc.id
+        
+        db.session.commit()
+        
+        # Return success response
+        return jsonify({
+            'status': 'success',
+            'message': 'Document uploaded successfully',
+            'document_id': document_id,
+            'filename': file.filename,
+            'file_url': f'/static/uploads/krav/{current_user.id}/{subject_name}/{filename}',
+            'created_at': datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error uploading krav document: {e}")
+        return jsonify({'status': 'error', 'message': 'Upload failed'}), 500
+
+
+@app.route('/remove_krav_pdf', methods=['POST'])
+@login_required
+def remove_krav_pdf():
+    """Remove a krav document"""
+    try:
+        data = request.get_json()
+        subject_name = data.get('subject')
+        doc_type = data.get('type')
+        document_id = data.get('document_id')
+        
+        if not all([subject_name, doc_type]):
+            return jsonify({'status': 'error', 'message': 'Missing required fields'}), 400
+        
+        # Get subject and check permissions
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
+        
+        user_role = current_user.get_role_in_subject(subject_obj.id)
+        if user_role not in ['owner', 'admin']:
+            return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
+        
+        # Find and remove document
+        if document_id:
+            doc = KravDocument.query.filter_by(
+                id=document_id,
+                subject_id=subject_obj.id,
+                doc_type=doc_type
+            ).first()
+        else:
+            doc = KravDocument.query.filter_by(
+                subject_id=subject_obj.id,
+                doc_type=doc_type
+            ).first()
+        
+        if not doc:
+            return jsonify({'status': 'error', 'message': 'Document not found'}), 404
+        
+        # Remove file from filesystem
+        try:
+            if os.path.exists(doc.file_path):
+                os.remove(doc.file_path)
+        except Exception as e:
+            print(f"Error removing file: {e}")
+        
+        # Remove from database
+        db.session.delete(doc)
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'message': 'Document removed successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error removing krav document: {e}")
+        return jsonify({'status': 'error', 'message': 'Removal failed'}), 500
+
+
+@app.route('/api/krav_documents/<subject_name>')
+@login_required
+def get_krav_documents(subject_name):
+    """Get all krav documents for a subject"""
+    try:
+        # Get subject and check permissions
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
+        
+        if not current_user.is_member_of_subject(subject_obj.id):
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Get all krav documents for this subject
+        documents = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
+        
+        # Convert to dictionaries
+        docs_data = [doc.to_dict() for doc in documents]
+        
+        return jsonify({
+            'status': 'success',
+            'documents': docs_data
+        })
+        
+    except Exception as e:
+        print(f"Error getting krav documents: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to load documents'}), 500
+
+
 
 @app.route('/join_subject', methods=['POST'])
 @login_required
@@ -772,6 +1000,10 @@ def regenerate_share_code(subject_id):
         print(f"[ERROR] Failed to regenerate share code: {e}")
         db.session.rollback()
         return jsonify({'status': 'error', 'message': 'Failed to regenerate share code'}), 500
+
+
+
+
 
 @app.route('/api/my_subjects')
 @login_required
@@ -1346,6 +1578,8 @@ def subject(subject_name):
         ).all()
         all_quizzes = shared_quizzes + personal_quizzes
     
+    # Hämta krav dokument
+    krav_docs = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
     
     # Konvertera quiz-objekt till dictionaries för JSON-serialisering
     quizzes_dict = [quiz.to_dict() for quiz in all_quizzes]
@@ -1359,6 +1593,7 @@ def subject(subject_name):
         'quizzes': quizzes_dict,  # Använd dict-versionen för JSON
         'shared_quizzes': shared_quizzes_dict,
         'personal_quizzes': personal_quizzes_dict,
+        'krav_docs': krav_docs,  # Lägg till krav dokument
         'user_role': user_role,
         'can_create_shared': user_role in ['owner', 'admin'],
         'can_create_personal': True  # Alla kan skapa personliga quizzes
@@ -3904,6 +4139,24 @@ def daily_quiz_all(date):
         print(f"[ERROR] Failed to load daily flashcards overview: {e}")
         flash('Fel vid laddning av dagens flashcards', 'error')
         return redirect(url_for('index'))
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 if __name__ == '__main__':
     migrate_database()
