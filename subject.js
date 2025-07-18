@@ -1,4 +1,23 @@
+
 document.addEventListener('DOMContentLoaded', () => {
+  // PDF.js worker setup (prioriterad från andra dokumentet)
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  // Initiera gemensam filuppladdning (endast ägare)
+  initializeSharedFiles();
+
+  // Initiera hantering av krav-dokument
+  initializeDocumentHandling();
+
+  // Ladda initiala data
+  loadSharedFiles();
+  if (userRole === 'owner') {
+    loadMemberCount();
+    loadFileStats();
+  }
+
   // Flashcard navigation
   document.querySelectorAll('.flashcard-trigger').forEach(elem => {
     elem.addEventListener('click', () => {
@@ -10,29 +29,304 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // PDF.js worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  // Quiz-hantering
+  if (typeof currentSubject !== 'undefined') {
+    loadExistingDocuments();
+    initializeQuizHandling();
+  }
+});
 
-  const pdfUpload = document.getElementById('pdf-upload');
-  const documentType = document.getElementById('document-type');
-  const documentsContainer = document.getElementById('documents-container');
+// ----------- SHARED FILES FUNKTIONER -----------
+function initializeSharedFiles() {
+  if (userRole !== 'owner') return;
 
-  // När användaren väljer PDF-filer
-  pdfUpload.addEventListener('change', async (event) => {
-    const files = Array.from(event.target.files);
-    const type = documentType.value;
+  const fileInput = document.getElementById('file-upload-input');
+  const uploadArea = document.getElementById('file-upload-area');
+  const progressBar = document.getElementById('progress-bar');
+  const progressDiv = document.getElementById('upload-progress');
 
-    for (const file of files) {
-      if (file.type === 'application/pdf') {
-        await uploadAndDisplayPDF(file, type);
-      }
-    }
-    pdfUpload.value = '';
+  if (!fileInput || !uploadArea) return;
+
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('drag-over');
   });
 
-  // Ladda upp filen (FormData) och lägg till iframe i DOM
-  async function uploadAndDisplayPDF(file, type) {
+  uploadArea.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+  });
+
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) handleFileUpload(files[0]);
+  });
+
+  uploadArea.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) handleFileUpload(e.target.files[0]);
+  });
+
+  const uploadForm = document.getElementById('file-upload-form');
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const formData = new FormData(uploadForm);
+      uploadFile(formData);
+    });
+  }
+}
+
+function handleFileUpload(file) {
+  const maxSize = 50 * 1024 * 1024;
+  if (file.size > maxSize) {
+    showNotification('Filen är för stor. Maximal storlek är 50MB.', 'error');
+    return;
+  }
+
+  const allowedExtensions = [
+    'pdf', 'doc', 'docx', 'txt', 'rtf',
+    'jpg', 'jpeg', 'png', 'gif', 'bmp',
+    'mp4', 'avi', 'mov', 'wmv', 'flv',
+    'mp3', 'wav', 'ogg', 'flac',
+    'zip', 'rar', '7z', 'tar', 'gz'
+  ];
+
+  const fileExtension = file.name.split('.').pop().toLowerCase();
+  if (!allowedExtensions.includes(fileExtension)) {
+    showNotification('Filtyp inte tillåten. Kontrollera tillåtna filtyper.', 'error');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('subject', subjectName);
+  formData.append('description', document.getElementById('file-description')?.value || '');
+
+  uploadFile(formData);
+}
+
+function uploadFile(formData) {
+  const progressDiv = document.getElementById('upload-progress');
+  const progressBar = document.getElementById('progress-bar');
+  const uploadButton = document.getElementById('upload-button');
+
+  if (progressDiv) progressDiv.style.display = 'block';
+  if (progressBar) progressBar.style.width = '0%';
+  if (uploadButton) {
+    uploadButton.disabled = true;
+    uploadButton.textContent = 'Laddar upp...';
+  }
+
+  const xhr = new XMLHttpRequest();
+
+  xhr.upload.addEventListener('progress', (e) => {
+    if (e.lengthComputable && progressBar) {
+      const percent = (e.loaded / e.total) * 100;
+      progressBar.style.width = percent + '%';
+      progressBar.textContent = Math.round(percent) + '%';
+    }
+  });
+
+  xhr.addEventListener('load', () => {
+    if (uploadButton) {
+      uploadButton.disabled = false;
+      uploadButton.textContent = 'Ladda upp fil';
+    }
+    if (progressDiv) progressDiv.style.display = 'none';
+
+    try {
+      const res = JSON.parse(xhr.responseText);
+      if (res.status === 'success') {
+        showNotification('Fil uppladdad framgångsrikt!', 'success');
+        loadSharedFiles();
+        resetUploadForm();
+      } else {
+        showNotification(res.message || 'Uppladdning misslyckades', 'error');
+      }
+    } catch (err) {
+      showNotification('Ett fel uppstod vid uppladdning', 'error');
+    }
+  });
+
+  xhr.addEventListener('error', () => {
+    if (uploadButton) {
+      uploadButton.disabled = false;
+      uploadButton.textContent = 'Ladda upp fil';
+    }
+    if (progressDiv) progressDiv.style.display = 'none';
+    showNotification('Nätverksfel vid uppladdning', 'error');
+  });
+
+  xhr.open('POST', '/upload_shared_file');
+  xhr.send(formData);
+}
+
+function resetUploadForm() {
+  const fileInput = document.getElementById('file-upload-input');
+  const descriptionInput = document.getElementById('file-description');
+  const uploadArea = document.getElementById('file-upload-area');
+
+  if (fileInput) fileInput.value = '';
+  if (descriptionInput) descriptionInput.value = '';
+  if (uploadArea) uploadArea.classList.remove('drag-over');
+}
+
+function loadSharedFiles() {
+  fetch(`/api/shared_files/${subjectName}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === 'success') {
+        displaySharedFiles(data.files);
+      } else {
+        console.error('Error loading shared files:', data.message);
+      }
+    })
+    .catch(err => console.error('Error loading shared files:', err));
+}
+
+function displaySharedFiles(files) {
+  const container = document.getElementById('shared-files-list');
+  if (!container) return;
+
+  if (files.length === 0) {
+    container.innerHTML = '<p class="no-files">Inga filer uppladdade ännu.</p>';
+    return;
+  }
+
+  container.innerHTML = files.map(file => `
+    <div class="file-item" data-file-id="${file.id}">
+      <div class="file-info">
+        <div class="file-name">
+          <i class="fas fa-file-${getFileIcon(file.extension)}"></i>
+          <span>${file.filename}</span>
+        </div>
+        <div class="file-details">
+          <span class="file-size">${file.file_size}</span>
+          <span class="file-date">${file.created_at}</span>
+          <span class="file-uploader">av ${file.uploader}</span>
+          <span class="download-count">${file.download_count} nedladdningar</span>
+        </div>
+        ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
+      </div>
+      <div class="file-actions">
+        <button class="btn btn-sm btn-primary" onclick="downloadFile(${file.id})">
+          <i class="fas fa-download"></i> Ladda ned
+        </button>
+        ${file.can_delete ? `
+          <button class="btn btn-sm btn-danger" onclick="deleteFile(${file.id})">
+            <i class="fas fa-trash"></i> Ta bort
+          </button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function getFileIcon(ext) {
+  const icons = {
+    pdf: 'pdf', doc: 'word', docx: 'word', txt: 'text', rtf: 'text',
+    jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', bmp: 'image',
+    mp4: 'video', avi: 'video', mov: 'video', wmv: 'video', flv: 'video',
+    mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio',
+    zip: 'archive', rar: 'archive', '7z': 'archive', tar: 'archive', gz: 'archive'
+  };
+  return icons[ext] || 'alt';
+}
+
+function downloadFile(id) {
+  const link = document.createElement('a');
+  link.href = `/download_shared_file/${id}`;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function deleteFile(id) {
+  if (!confirm('Är du säker på att du vill ta bort denna fil?')) return;
+
+  fetch('/delete_shared_file', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_id: id })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === 'success') {
+        showNotification('Fil borttagen framgångsrikt', 'success');
+        loadSharedFiles();
+        if (userRole === 'owner') loadFileStats();
+      } else {
+        showNotification(data.message || 'Kunde inte ta bort filen', 'error');
+      }
+    })
+    .catch(err => {
+      console.error('Error deleting file:', err);
+      showNotification('Ett fel uppstod vid borttagning', 'error');
+    });
+}
+
+function loadFileStats() {
+  if (userRole !== 'owner') return;
+  fetch(`/api/shared_files/${subjectId}/stats`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === 'success') {
+        updateFileStats(data.total_files, data.total_downloads);
+      }
+    })
+    .catch(err => console.error('Error loading file stats:', err));
+}
+
+function updateFileStats(totalFiles, totalDownloads) {
+  const fileCount = document.getElementById('files-count');
+  const downloadCount = document.getElementById('downloads-count');
+  if (fileCount) fileCount.textContent = totalFiles;
+  if (downloadCount) downloadCount.textContent = totalDownloads;
+}
+
+function loadMemberCount() {
+  // Placeholder
+}
+
+// ----------- NOTIFICATION SYSTEM -----------
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.innerHTML = `
+    <span>${message}</span>
+    <button class="notification-close" onclick="this.parentElement.remove()">×</button>
+  `;
+
+  let container = document.getElementById('notifications-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'notifications-container';
+    container.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      max-width: 300px;
+    `;
+    document.body.appendChild(container);
+  }
+
+  container.appendChild(notification);
+  setTimeout(() => notification.remove(), 5000);
+}
+
+
+
+
+
+
+async function uploadAndDisplayPDF(file, type) {
     try {
       // Visa loading indikator
       showLoadingIndicator('Laddar upp dokument...');
@@ -125,323 +419,3 @@ document.addEventListener('DOMContentLoaded', () => {
       hideLoadingIndicator();
     }
   }
-
-  // Ta bort dokument med SQL-baserad hantering
-  document.addEventListener('click', async (e) => {
-    if (!e.target.classList.contains('remove-document')) return;
-    
-    const type = e.target.dataset.docType;
-    const docId = e.target.dataset.docId;
-    
-    if (!confirm(`Vill du verkligen ta bort ${getDocumentTypeDisplayName(type).toLowerCase()}?`)) {
-      return;
-    }
-
-    try {
-      showLoadingIndicator('Tar bort dokument...');
-
-      const payload = {
-        subject: currentSubject,
-        doc_type: type
-      };
-
-      // Lägg till document ID om tillgängligt för mer specifik borttagning
-      if (docId) {
-        payload.doc_id = docId;
-      }
-
-      const res = await fetch('/delete_krav_document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      const data = await res.json();
-      
-      if (data.status === 'success') {
-        const el = e.target.closest('.document-item');
-        if (el) {
-          // Animerad borttagning
-          el.style.transition = 'opacity 0.3s ease-out';
-          el.style.opacity = '0';
-          setTimeout(() => el.remove(), 300);
-        }
-        showSuccessMessage(`${getDocumentTypeDisplayName(type)} har tagits bort!`);
-      } else {
-        showErrorMessage('Kunde inte ta bort dokument: ' + (data.message || 'Okänt fel'));
-      }
-    } catch (err) {
-      console.error('Deletion error:', err);
-      showErrorMessage('Fel vid borttagning: ' + err.message);
-    } finally {
-      hideLoadingIndicator();
-    }
-  });
-
-  // Ladda befintliga dokument från SQL-databas
-  async function loadExistingDocuments() {
-    try {
-      const res = await fetch(`/api/krav_documents/${encodeURIComponent(currentSubject)}`);
-      if (!res.ok) {
-        console.warn('Could not load existing documents');
-        return;
-      }
-      
-      const documents = await res.json();
-      
-      // Rendera befintliga dokument
-      Object.entries(documents).forEach(([docType, docData]) => {
-        displayExistingDocument(docType, docData);
-      });
-      
-    } catch (err) {
-      console.error('Error loading existing documents:', err);
-    }
-  }
-
-  // Visa befintligt dokument
-  function displayExistingDocument(type, docData) {
-    const item = document.createElement('div');
-    item.className = 'document-item existing-document';
-    item.dataset.docType = type;
-    item.dataset.docId = docData.id || '';
-
-    // Ta bort-knapp
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'remove-document';
-    removeBtn.dataset.docType = type;
-    removeBtn.dataset.docId = docData.id || '';
-    removeBtn.textContent = '×';
-    removeBtn.title = 'Ta bort dokument';
-    item.appendChild(removeBtn);
-
-    // Header
-    const header = document.createElement('div');
-    header.className = 'document-header';
-    
-    const title = document.createElement('span');
-    title.className = 'document-title';
-    title.textContent = getDocumentTypeDisplayName(type);
-    header.appendChild(title);
-
-    // Metadata
-    if (docData.created_at) {
-      const dateSpan = document.createElement('span');
-      dateSpan.className = 'document-date';
-      dateSpan.textContent = formatDate(docData.created_at);
-      header.appendChild(dateSpan);
-    }
-
-    item.appendChild(header);
-
-    // Preview
-    const preview = document.createElement('div');
-    preview.className = 'document-preview';
-    const iframe = document.createElement('iframe');
-    iframe.src = `/static/uploads/krav/${currentUserId}/${encodeURIComponent(currentSubject)}/${encodeURIComponent(type)}.pdf`;
-    iframe.width = '100%';
-    iframe.height = '300px';
-    iframe.style.border = '1px solid #ccc';
-    iframe.style.borderRadius = '4px';
-    
-    // Hantera fel vid iframe-laddning
-    iframe.onerror = () => {
-      preview.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">Förhandsvisning ej tillgänglig</p>';
-    };
-    
-    preview.appendChild(iframe);
-    item.appendChild(preview);
-
-    documentsContainer.appendChild(item);
-  }
-
-  // Hjälpfunktioner
-  function getDocumentTypeDisplayName(type) {
-    const displayNames = {
-      'begrippslista': 'Begrippslista',
-      'kunskapskrav': 'Kunskapskrav',
-      'kunskapsmal': 'Kunskapsmål',
-      'kursmål': 'Kursmål',
-      'betygskriterier': 'Betygskriterier'
-    };
-    return displayNames[type] || type.charAt(0).toUpperCase() + type.slice(1);
-  }
-
-  function formatDate(dateString) {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('sv-SE', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch (err) {
-      return dateString;
-    }
-  }
-
-  function showLoadingIndicator(message = 'Laddar...') {
-    // Ta bort befintlig indikator
-    hideLoadingIndicator();
-    
-    const indicator = document.createElement('div');
-    indicator.id = 'loading-indicator';
-    indicator.innerHTML = `
-      <div style="
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0,0,0,0.8);
-        color: white;
-        padding: 20px;
-        border-radius: 8px;
-        z-index: 1000;
-        text-align: center;
-      ">
-        <div style="margin-bottom: 10px;">
-          <div style="
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #007bff;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-          "></div>
-        </div>
-        ${message}
-      </div>
-      <style>
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      </style>
-    `;
-    document.body.appendChild(indicator);
-  }
-
-  function hideLoadingIndicator() {
-    const indicator = document.getElementById('loading-indicator');
-    if (indicator) {
-      indicator.remove();
-    }
-  }
-
-  function showSuccessMessage(message) {
-    showMessage(message, 'success');
-  }
-
-  function showErrorMessage(message) {
-    showMessage(message, 'error');
-  }
-
-  function showMessage(message, type = 'info') {
-    const messageEl = document.createElement('div');
-    messageEl.className = `flash-message flash-${type}`;
-    messageEl.textContent = message;
-    messageEl.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 15px 20px;
-      background: ${type === 'success' ? '#d4edda' : type === 'error' ? '#f8d7da' : '#d1ecf1'};
-      color: ${type === 'success' ? '#155724' : type === 'error' ? '#721c24' : '#0c5460'};
-      border: 1px solid ${type === 'success' ? '#c3e6cb' : type === 'error' ? '#f5c6cb' : '#bee5eb'};
-      border-radius: 4px;
-      z-index: 1001;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      transition: opacity 0.3s ease-out;
-    `;
-
-    document.body.appendChild(messageEl);
-
-    // Auto-remove efter 3 sekunder
-    setTimeout(() => {
-      messageEl.style.opacity = '0';
-      setTimeout(() => messageEl.remove(), 300);
-    }, 3000);
-  }
-
-  // Quiz-hantering med SQL-baserad data
-  function initializeQuizHandling() {
-    // Ladda quiz-data från SQL via backend API
-    loadQuizzesFromSQL();
-    
-    // Hantera quiz-borttagning
-    document.addEventListener('click', async (e) => {
-      if (e.target.classList.contains('delete-quiz-btn')) {
-        const quizId = e.target.dataset.quizId;
-        const quizTitle = e.target.dataset.quizTitle;
-        
-        if (!confirm(`Vill du verkligen ta bort quiz "${quizTitle}"?`)) {
-          return;
-        }
-        
-        try {
-          const res = await fetch(`/api/quiz/${quizId}`, {
-            method: 'DELETE'
-          });
-          
-          const data = await res.json();
-          
-          if (data.status === 'success') {
-            e.target.closest('.quiz-item').remove();
-            showSuccessMessage('Quiz har tagits bort!');
-          } else {
-            showErrorMessage('Kunde inte ta bort quiz: ' + (data.message || 'Okänt fel'));
-          }
-        } catch (err) {
-          console.error('Error deleting quiz:', err);
-          showErrorMessage('Fel vid borttagning av quiz');
-        }
-      }
-    });
-  }
-
-  async function loadQuizzesFromSQL() {
-    try {
-      const res = await fetch(`/api/quizzes/${encodeURIComponent(currentSubject)}`);
-      if (!res.ok) return;
-      
-      const quizzes = await res.json();
-      updateQuizDisplay(quizzes);
-    } catch (err) {
-      console.error('Error loading quizzes:', err);
-    }
-  }
-
-  function updateQuizDisplay(quizzes) {
-    const quizContainer = document.getElementById('quiz-container');
-    if (!quizContainer) return;
-    
-    // Uppdatera quiz-visning baserat på SQL-data
-    // Detta beror på din HTML-struktur för quiz-visning
-    quizzes.forEach((quiz, index) => {
-      const quizElement = quizContainer.querySelector(`[data-quiz-index="${index}"]`);
-      if (quizElement) {
-        // Uppdatera med SQL ID och annan metadata
-        quizElement.dataset.quizId = quiz.id;
-        quizElement.dataset.quizTitle = quiz.title;
-      }
-    });
-  }
-
-  // Initiera allt när sidan laddas
-  if (typeof currentSubject !== 'undefined') {
-    loadExistingDocuments();
-    initializeQuizHandling();
-  }
-});
-
-// Global funktion för att uppdatera quiz-data från SQL
-window.refreshQuizData = async function() {
-  if (typeof currentSubject !== 'undefined') {
-    const res = await fetch(`/api/quizzes/${encodeURIComponent(currentSubject)}`);
-    if (res.ok) {
-      const quizzes = await res.json();
-      window.dispatchEvent(new CustomEvent('quizDataUpdated', { detail: quizzes }));
-    }
-  }
-};
