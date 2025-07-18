@@ -82,11 +82,12 @@ class SharedFile(db.Model):
         if not self.file_size:
             return "Okänd storlek"
         
+        size = self.file_size
         for unit in ['B', 'KB', 'MB', 'GB']:
-            if self.file_size < 1024.0:
-                return f"{self.file_size:.1f} {unit}"
-            self.file_size /= 1024.0
-        return f"{self.file_size:.1f} TB"
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
     
     def is_downloadable_by_user(self, user_id):
         """Kontrollera om en användare kan ladda ner filen"""
@@ -100,6 +101,25 @@ class SharedFile(db.Model):
             return True
         
         return False
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'subject_id': self.subject_id,
+            'user_id': self.user_id,
+            'filename': self.filename,
+            'file_path': self.file_path,
+            'file_size': self.file_size,
+            'file_type': self.file_type,
+            'description': self.description,
+            'is_active': self.is_active,
+            'download_count': self.download_count,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'extension': self.get_file_extension(),
+            'display_size': self.get_display_size()
+        }
 
 
 # Uppdatera Subject model
@@ -535,6 +555,51 @@ class FlashcardResponse(db.Model):
         return f"KravDocument('{self.subject_name}', '{self.doc_type}')"
 
 
+def create_shared_files_table():
+    """Create the shared_files table if it doesn't exist"""
+    try:
+        # Check if table exists
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        
+        if 'shared_files' not in inspector.get_table_names():
+            # Create the table
+            db.create_all()
+            print("✅ shared_files table created successfully!")
+        else:
+            print("ℹ️  shared_files table already exists")
+        
+        # Verify the table structure
+        columns = [column['name'] for column in inspector.get_columns('shared_files')]
+        required_columns = [
+            'id', 'subject_id', 'user_id', 'filename', 'file_path', 
+            'file_size', 'file_type', 'description', 'is_active', 
+            'download_count', 'created_at', 'updated_at'
+        ]
+        
+        missing_columns = [col for col in required_columns if col not in columns]
+        if missing_columns:
+            print(f"⚠️  Missing columns in shared_files table: {missing_columns}")
+            print("You may need to run a proper migration to add these columns.")
+        else:
+            print("✅ All required columns exist in shared_files table")
+            
+    except Exception as e:
+        print(f"❌ Error creating shared_files table: {str(e)}")
+
+def ensure_upload_directories():
+    """Ensure upload directories exist"""
+    import os
+    
+    # Create base upload directory
+    upload_base = os.path.join(app.root_path, 'static', 'uploads')
+    shared_files_dir = os.path.join(upload_base, 'shared_files')
+    
+    os.makedirs(shared_files_dir, exist_ok=True)
+    print(f"✅ Upload directories created: {shared_files_dir}")
+
+
+
 
 def migrate_krav_documents():
     """Migrera befintliga krav-dokument för att sätta subject_id"""
@@ -746,6 +811,7 @@ def load_user(user_id):
 
 # Skapa tabeller om de inte finns
 init_database()
+
 
 
 
@@ -1137,6 +1203,253 @@ def add_subject():
         db.session.rollback()
         return jsonify({'status': 'error', 'message': 'Failed to create subject'}), 500
 # Uppdatera dina befintliga quiz routes med denna kod för att hantera shared subjects
+
+
+@app.route('/upload_shared_file', methods=['POST'])
+@login_required
+def upload_shared_file():
+    """Upload a shared file to a subject (only owners can upload)"""
+    try:
+        # Get form data
+        subject_name = request.form.get('subject')
+        description = request.form.get('description', '')
+        
+        if not subject_name:
+            return jsonify({'status': 'error', 'message': 'Subject name is required'})
+        
+        # Find subject
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return jsonify({'status': 'error', 'message': 'Subject not found'})
+        
+        # Check if user is owner (only owners can upload shared files)
+        user_role = current_user.get_role_in_subject(subject_obj.id)
+        if user_role != 'owner':
+            return jsonify({'status': 'error', 'message': 'Only subject owners can upload shared files'})
+        
+        # Get uploaded file
+        if 'file' not in request.files:
+            return jsonify({'status': 'error', 'message': 'No file uploaded'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'status': 'error', 'message': 'No file selected'})
+        
+        # Validate file size (50MB limit)
+        file.seek(0, 2)  # Seek to end
+        file_size = file.tell()
+        file.seek(0)  # Reset to beginning
+        
+        if file_size > 50 * 1024 * 1024:  # 50MB
+            return jsonify({'status': 'error', 'message': 'File too large (max 50MB)'})
+        
+        # Validate file type
+        allowed_extensions = {
+            'pdf', 'doc', 'docx', 'txt', 'rtf',
+            'jpg', 'jpeg', 'png', 'gif', 'bmp',
+            'mp4', 'avi', 'mov', 'wmv', 'flv',
+            'mp3', 'wav', 'ogg', 'flac',
+            'zip', 'rar', '7z', 'tar', 'gz'
+        }
+        
+        file_extension = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        if file_extension not in allowed_extensions:
+            return jsonify({'status': 'error', 'message': 'File type not allowed'})
+        
+        # Create upload directory
+        upload_dir = os.path.join(app.root_path, 'static', 'uploads', 'shared_files', str(current_user.id))
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Generate unique filename
+        original_filename = secure_filename(file.filename)
+        unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
+        file_path = os.path.join(upload_dir, unique_filename)
+        
+        # Save file
+        file.save(file_path)
+        
+        # Create database record
+        shared_file = SharedFile(
+            subject_id=subject_obj.id,
+            user_id=current_user.id,
+            filename=original_filename,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file.content_type,
+            description=description
+        )
+        
+        db.session.add(shared_file)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'File uploaded successfully',
+            'filename': original_filename,
+            'file_id': shared_file.id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error uploading file: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Failed to upload file'})
+
+
+@app.route('/api/shared_files/<subject_name>')
+@login_required
+def get_shared_files(subject_name):
+    """Get all shared files for a subject"""
+    try:
+        # Find subject
+        subject_obj = Subject.query.filter_by(name=subject_name).first()
+        if not subject_obj:
+            return jsonify({'status': 'error', 'message': 'Subject not found'})
+        
+        # Check if user has access
+        if not current_user.is_member_of_subject(subject_obj.id):
+            return jsonify({'status': 'error', 'message': 'Access denied'})
+        
+        user_role = current_user.get_role_in_subject(subject_obj.id)
+        
+        # Get all active shared files
+        shared_files = SharedFile.query.filter_by(
+            subject_id=subject_obj.id,
+            is_active=True
+        ).order_by(SharedFile.created_at.desc()).all()
+        
+        files_data = []
+        for file in shared_files:
+            files_data.append({
+                'id': file.id,
+                'filename': file.filename,
+                'file_size': file.get_display_size(),
+                'file_type': file.file_type,
+                'description': file.description,
+                'extension': file.get_file_extension(),
+                'download_count': file.download_count,
+                'created_at': file.created_at.strftime('%Y-%m-%d %H:%M'),
+                'uploader': file.uploader.username,
+                'can_delete': (user_role == 'owner' or file.user_id == current_user.id)
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'files': files_data,
+            'total_files': len(files_data)
+        })
+        
+    except Exception as e:
+        print(f"Error getting shared files: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Failed to load files'})
+
+
+@app.route('/download_shared_file/<int:file_id>')
+@login_required
+def download_shared_file(file_id):
+    """Download a shared file"""
+    try:
+        # Find file
+        shared_file = SharedFile.query.get_or_404(file_id)
+        
+        # Check if user can download
+        if not shared_file.is_downloadable_by_user(current_user.id):
+            abort(403)
+        
+        # Check if file exists
+        if not os.path.exists(shared_file.file_path):
+            abort(404)
+        
+        # Increment download count
+        shared_file.download_count += 1
+        db.session.commit()
+        
+        # Send file
+        return send_file(
+            shared_file.file_path,
+            as_attachment=True,
+            download_name=shared_file.filename
+        )
+        
+    except Exception as e:
+        print(f"Error downloading file: {str(e)}")
+        abort(500)
+
+
+@app.route('/delete_shared_file', methods=['POST'])
+@login_required
+def delete_shared_file():
+    """Delete a shared file"""
+    try:
+        data = request.get_json()
+        file_id = data.get('file_id')
+        
+        if not file_id:
+            return jsonify({'status': 'error', 'message': 'File ID is required'})
+        
+        # Find file
+        shared_file = SharedFile.query.get(file_id)
+        if not shared_file:
+            return jsonify({'status': 'error', 'message': 'File not found'})
+        
+        # Check permissions (only owner of subject or uploader can delete)
+        user_role = current_user.get_role_in_subject(shared_file.subject_id)
+        if user_role != 'owner' and shared_file.user_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Permission denied'})
+        
+        # Mark as inactive instead of deleting
+        shared_file.is_active = False
+        db.session.commit()
+        
+        # Optional: Delete physical file
+        try:
+            if os.path.exists(shared_file.file_path):
+                os.remove(shared_file.file_path)
+        except:
+            pass  # Don't fail if file removal fails
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'File deleted successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting file: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Failed to delete file'})
+
+
+@app.route('/api/shared_files/<int:subject_id>/stats')
+@login_required
+def get_file_stats(subject_id):
+    """Get file statistics for a subject (only for owners)"""
+    try:
+        # Find subject
+        subject_obj = Subject.query.get_or_404(subject_id)
+        
+        # Check if user is owner
+        user_role = current_user.get_role_in_subject(subject_obj.id)
+        if user_role != 'owner':
+            return jsonify({'status': 'error', 'message': 'Access denied'})
+        
+        # Get statistics
+        shared_files = SharedFile.query.filter_by(
+            subject_id=subject_obj.id,
+            is_active=True
+        ).all()
+        
+        total_files = len(shared_files)
+        total_downloads = sum(file.download_count for file in shared_files)
+        
+        return jsonify({
+            'status': 'success',
+            'total_files': total_files,
+            'total_downloads': total_downloads
+        })
+        
+    except Exception as e:
+        print(f"Error getting file stats: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Failed to load stats'})
+
 
 @app.route('/subject/<subject_name>')
 @login_required
@@ -4070,3 +4383,5 @@ if __name__ == '__main__':
     migrate_database()
     app.run(debug=True)
     cleanup_on_startup()
+    create_shared_files_table()
+    ensure_upload_directories()
