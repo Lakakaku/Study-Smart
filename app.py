@@ -3289,36 +3289,40 @@ def get_due_flashcards_today():
 @login_required
 def delete_quiz(subject_name, quiz_index):
     try:
-        # Hitta subject först
+        # Hämta subject
         subject_obj = Subject.query.filter_by(name=subject_name).first()
-        
         if not subject_obj:
             flash("Subject not found.", "error")
             return redirect(url_for('index'))
-        
-        # Kontrollera om användaren har tillgång till detta subject
-        if not current_user.is_member_of_subject(subject_obj.id):
-            flash('You do not have access to this subject', 'error')
+
+        # Kolla att användaren är medlem eller ägare
+        if not current_user.is_member_of_subject(subject_obj.id) and current_user.id != subject_obj.creator_id:
+            flash('Du har inte tillgång till detta ämne', 'error')
             return redirect(url_for('index'))
-        
-        # Hitta quiz baserat på subject_id och index
-        quiz_to_delete = Quiz.query.filter_by(
-            subject_id=subject_obj.id
-        ).offset(quiz_index).first()
-        
-        if quiz_to_delete:
-            quiz_title = quiz_to_delete.title
-            db.session.delete(quiz_to_delete)
-            db.session.commit()
-            flash(f"Deleted quiz: {quiz_title}", "success")
-        else:
+
+        # Hämta quiz via subject och offset
+        quiz_to_delete = Quiz.query.filter_by(subject_id=subject_obj.id).offset(quiz_index).first()
+
+        if not quiz_to_delete:
             flash("Quiz not found.", "error")
-        
+            return redirect(url_for('subject', subject_name=subject_name))
+
+        # Säkerhetskontroll: Är användaren skapare?
+        if quiz_to_delete.user_id != current_user.id:
+            flash("Du kan bara ta bort dina egna quiz.", "error")
+            return redirect(url_for('subject', subject_name=subject_name))
+
+        # OK – ta bort
+        quiz_title = quiz_to_delete.title
+        db.session.delete(quiz_to_delete)
+        db.session.commit()
+        flash(f"Quiz '{quiz_title}' borttaget.", "success")
+
     except Exception as e:
         print(f"[ERROR] Failed to delete quiz: {e}")
-        flash("Error deleting quiz.", "error")
+        flash("Ett fel uppstod vid borttagning.", "error")
         db.session.rollback()
-    
+
     return redirect(url_for('subject', subject_name=subject_name))
 
 
