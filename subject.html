@@ -1070,21 +1070,21 @@
               </form>
 
               <!-- Delete-formen du redan har -->
-              {% if user_role in ['owner', 'admin'] %}
+              {% if quiz.user_id == current_user.id %}
               <form method="POST"
                     action="{{ url_for('delete_quiz',
                                       subject_name=subject_name,
                                       quiz_index=loop.index0) }}"
                     class="delete-form"
                     onsubmit="return confirm('Är du säker på att du vill ta bort detta quiz?');">
-                <button type="submit" class="delete-button">Delete</button>
+                  <button type="submit" class="delete-button">Delete</button>
               </form>
               {% endif %}
             </div>
           {% endfor %}
 
         </div>
-      {% else %}
+        {% else %}
         <p>No quizzes available for this subject yet.</p>
       {% endif %}
     </div>
