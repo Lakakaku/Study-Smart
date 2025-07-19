@@ -1578,8 +1578,9 @@ def subject(subject_name):
         ).all()
         all_quizzes = shared_quizzes + personal_quizzes
     
-    # Hämta krav dokument
-    krav_docs = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
+    # Hämta krav dokument OCH konvertera till dictionaries
+    krav_docs_objects = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
+    krav_docs = [doc.to_dict() for doc in krav_docs_objects]  # Konvertera till dict
     
     # Konvertera quiz-objekt till dictionaries för JSON-serialisering
     quizzes_dict = [quiz.to_dict() for quiz in all_quizzes]
@@ -1593,7 +1594,7 @@ def subject(subject_name):
         'quizzes': quizzes_dict,  # Använd dict-versionen för JSON
         'shared_quizzes': shared_quizzes_dict,
         'personal_quizzes': personal_quizzes_dict,
-        'krav_docs': krav_docs,  # Lägg till krav dokument
+        'krav_docs': krav_docs,  # Nu är detta en lista med dictionaries
         'user_role': user_role,
         'can_create_shared': user_role in ['owner', 'admin'],
         'can_create_personal': True  # Alla kan skapa personliga quizzes
@@ -1603,9 +1604,25 @@ def subject(subject_name):
 
 
 
+def extract_text_from_pdf(file_path):
+    """Extrahera text från PDF med fallback till OCR"""
+    try:
+        text = ''
+        with fitz.open(file_path) as doc:
+            for page in doc:
+                text += page.get_text()
+        
+        # Om ingen text hittades, använd OCR
+        if not text.strip():
+            images = convert_from_path(file_path)
+            for image in images:
+                text += pytesseract.image_to_string(image)
+        
+        return text.strip()
+    except Exception as e:
+        print(f"[ERROR] Failed to extract text from {file_path}: {e}")
+        return ""
 
-
-# 3. Uppdatera create_quiz funktionen för att sätta is_personal korrekt
 @app.route('/create-quiz', methods=['GET', 'POST'])
 @login_required
 def create_quiz():
@@ -1627,7 +1644,7 @@ def create_quiz():
         user_role = current_user.get_role_in_subject(subject_obj.id)
         is_personal = user_role not in ['admin', 'owner']  # Medlemmar skapar personliga quiz
         
-        # Resten av din befintliga create_quiz logik...
+        # Hämta form data
         uploaded_files = request.files.getlist('data1')
         user_title = request.form.get('quiz_title', '').strip()
         quiz_type = request.form.get('quiz-drop')
@@ -1666,14 +1683,7 @@ def create_quiz():
             ext = os.path.splitext(filename)[1].lower()
             try:
                 if ext == '.pdf':
-                    text = ''
-                    with fitz.open(filepath) as doc:
-                        for page in doc:
-                            text += page.get_text()
-                    if not text.strip():
-                        images = convert_from_path(filepath)
-                        for image in images:
-                            text += pytesseract.image_to_string(image)
+                    text = extract_text_from_pdf(filepath)
                     file_contents.append(text)
                 elif ext in ['.txt', '.doc', '.docx']:
                     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -1683,18 +1693,76 @@ def create_quiz():
 
         combined_text = "\n\n".join(file_contents) if file_contents else ''
 
+        # **NYA DELEN: Lägg till krav-dokument om use_documents är aktiverat**
+        krav_content = ""
+        if use_docs:
+            # Hämta alla krav-dokument för detta subject
+            krav_documents = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
+            
+            krav_texts = {}
+            for doc in krav_documents:
+                if os.path.exists(doc.file_path):
+                    try:
+                        text_content = extract_text_from_pdf(doc.file_path)
+                        if text_content:
+                            krav_texts[doc.doc_type] = text_content
+                            print(f"[INFO] Loaded {doc.doc_type}: {len(text_content)} characters")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to process krav document {doc.filename}: {e}")
+            
+            # Bygg krav-content strängen
+            if krav_texts:
+                krav_parts = []
+                
+                if 'kunskapsmal' in krav_texts:
+                    krav_parts.append(f"=== KUNSKAPSMÅL ===\n{krav_texts['kunskapsmal']}")
+                
+                if 'kunskapskrav' in krav_texts:
+                    krav_parts.append(f"=== KUNSKAPSKRAV ===\n{krav_texts['kunskapskrav']}")
+                
+                if 'begrippslista' in krav_texts:
+                    krav_parts.append(f"=== BEGRIPPSLISTA ===\n{krav_texts['begrippslista']}")
+                
+                krav_content = "\n\n".join(krav_parts)
+                print(f"[INFO] Combined krav content: {len(krav_content)} characters")
+
+        # Build AI prompt med krav-dokument
+        prompt_parts = []
         
-        # Build AI prompt
-        prompt = f"You're an AI quiz generator – create"
+        # Grundläggande instruktion
         if desired_count:
-            prompt += f" a {desired_count}-question"
+            prompt_parts.append(f"You're an AI quiz generator – create a {desired_count}-question {quiz_type.replace('-', ' ')} quiz.")
         else:
-            prompt += " an appropriate"
-        prompt += f" {quiz_type.replace('-', ' ')} quiz. Use the following materials to craft questions testing understanding:\n\n"
-        prompt += f"Description: {description}\n\n"
+            prompt_parts.append(f"You're an AI quiz generator – create an appropriate {quiz_type.replace('-', ' ')} quiz.")
+        
+        # Lägg till beskrivning om den finns
+        if description:
+            prompt_parts.append(f"Quiz description: {description}")
+        
+        # Lägg till krav-dokument först (viktigast för att forma quizzen)
+        if krav_content:
+            prompt_parts.append("=== CURRICULUM REQUIREMENTS ===")
+            prompt_parts.append("Use these curriculum documents as the PRIMARY foundation for your quiz questions:")
+            prompt_parts.append(krav_content)
+            prompt_parts.append("Questions MUST align with the knowledge goals (kunskapsmål), assessment criteria (kunskapskrav), and include relevant terminology from the concept list (begrippslista).")
+        
+        # Lägg till uppladdade material som sekundärt
         if combined_text:
-            prompt += f"Material:\n{combined_text}\n\n"
-        prompt += "Format as Q: [Question]\nA: [Answer]"
+            prompt_parts.append("=== ADDITIONAL STUDY MATERIALS ===")
+            prompt_parts.append("Use these materials as supporting content:")
+            prompt_parts.append(combined_text)
+        
+        # Slutlig formatering
+        if krav_content and combined_text:
+            prompt_parts.append("Create questions that integrate both the curriculum requirements and the study materials. Prioritize alignment with the curriculum goals while using the study materials for context and examples.")
+        elif krav_content:
+            prompt_parts.append("Focus questions on testing the specific knowledge goals and assessment criteria outlined in the curriculum documents.")
+        elif combined_text:
+            prompt_parts.append("Use the study materials to craft questions testing understanding.")
+        
+        prompt_parts.append("\nFormat as Q: [Question]\nA: [Answer]")
+        
+        prompt = "\n\n".join(prompt_parts)
 
         # Call AI
         try:
@@ -1706,6 +1774,7 @@ def create_quiz():
             response.raise_for_status()
             raw = response.json().get("choices", [])[0].get("message", {}).get("content", "")
         except Exception as e:
+            print(f"[ERROR] AI API call failed: {e}")
             raw = ""
 
         # Parse AI output
@@ -1720,7 +1789,7 @@ def create_quiz():
                 q = None
 
         if not questions:
-            questions = [{'question': '[Error]', 'answer': 'Could not generate questions.'}]
+            questions = [{'question': '[Error]', 'answer': 'Could not generate questions. Please try again.'}]
 
         # Truncate to desired count
         if desired_count and len(questions) > desired_count:
@@ -1737,7 +1806,7 @@ def create_quiz():
             subject_name=subject_name,
             subject_id=subject_obj.id,
             user_id=current_user.id,
-            is_personal=is_personal  # LÄGG TILL DENNA RAD
+            is_personal=is_personal
         )
         
         db.session.add(new_quiz)
@@ -1753,14 +1822,20 @@ def create_quiz():
                 create_flashcards_for_all_members(new_quiz, subject_obj)
         
         quiz_type_text = "personal quiz" if is_personal else "shared quiz"
-        flash(f'{quiz_type_text.capitalize()} "{quiz_title}" created successfully', 'success')
+        success_msg = f'{quiz_type_text.capitalize()} "{quiz_title}" created successfully'
+        
+        # Lägg till information om krav-dokument om de användes
+        if use_docs and krav_content:
+            krav_count = len([doc for doc in KravDocument.query.filter_by(subject_id=subject_obj.id).all()])
+            success_msg += f" (using {krav_count} curriculum document{'s' if krav_count != 1 else ''})"
+        
+        flash(success_msg, 'success')
         return redirect(url_for('subject', subject_name=subject_name))
 
     # GET - visa create quiz form
     events = Event.query.filter_by(user_id=current_user.id).all()
     events_data = [event.to_dict() for event in events]
     return render_template('create-quiz.html', subjects=subject_names, events=events_data)
-
 
 def serialize_for_template(obj):
     """Hjälpfunktion för att serialisera objekt för templates"""
@@ -2933,23 +3008,6 @@ def create_flashcards_for_user(quiz, user_id, subject_obj=None):
         db.session.rollback()
         return 0
 
-# Uppdaterad create_flashcards_for_all_members funktion
-def create_flashcards_for_all_members(quiz, subject_obj):
-    """Skapa flashcards för alla medlemmar i ett subject (endast för shared quizzes)"""
-    if not quiz.questions:
-        return
-        
-    # Hämta alla medlemmar (inklusive ägaren)
-    members = db.session.query(SubjectMember.user_id).filter_by(subject_id=subject_obj.id).all()
-    member_ids = [member.user_id for member in members]
-    
-    # Lägg till ägaren om den inte redan finns
-    if subject_obj.user_id not in member_ids:
-        member_ids.append(subject_obj.user_id)
-    
-    # Skapa flashcards för varje medlem
-    for user_id in member_ids:
-        create_flashcards_for_user(quiz, user_id)
 
 # Uppdaterad add_user_quiz funktion
 def add_user_quiz(subject_name, quiz_data):
