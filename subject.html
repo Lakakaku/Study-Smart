@@ -1163,12 +1163,12 @@
           <h2 id="lesson-player-title"></h2>
           <button class="lesson-modal-close" onclick="closeLessonPlayer()">&times;</button>
         </div>
-    
+
         <div class="lesson-modal-body">
           <div id="lesson-player-container">
             <!-- Video/Audio player will be inserted here -->
           </div>
-      
+  
           <div class="lesson-info">
             <div id="lesson-player-description"></div>
             <div class="lesson-meta">
@@ -1177,7 +1177,21 @@
               <span id="lesson-player-size"></span>
             </div>
           </div>
-      
+
+          <!-- NY: Transkriptions-sektion -->
+          <div class="lesson-transcription-section">
+            <div class="transcription-header">
+              <h3>📝 Transkription</h3>
+              <span id="transcription-status" class="transcription-status"></span>
+            </div>
+            <div id="transcription-content" class="transcription-content">
+              <div class="transcription-loading">Laddar transkription...</div>
+            </div>
+            <button id="retry-transcription-btn" class="retry-transcription-btn" style="display: none;" onclick="retryTranscription()">
+              Försök igen
+            </button>
+          </div>
+  
           <div class="lesson-actions">
             <a id="lesson-download-link" class="lesson-action-btn download">Ladda ner</a>
             <button id="lesson-delete-btn" class="lesson-action-btn delete" style="display: none;" onclick="deleteCurrentLesson()">Ta bort</button>
@@ -1891,9 +1905,70 @@
     }
 
 
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // Stäng modal vid klick utanför innehållet
+      const modal = document.getElementById('lesson-player-modal');
+      if (modal) {
+        modal.addEventListener('click', function(e) {
+          if (e.target === modal) {
+            closeLessonPlayer();
+          }
+        });
+      }
+  
+      // Stäng modal med Escape-tangent
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal && modal.style.display === 'flex') {
+          closeLessonPlayer();
+        }
+      });
+    });
+
+
+
+
+
+    let transcriptionCheckInterval = null;
+
+    function startTranscriptionCheck(lessonId) {  
+      if (transcriptionCheckInterval) {
+        clearInterval(transcriptionCheckInterval);
+      }
+  
+      transcriptionCheckInterval = setInterval(async () => {
+        if (currentLesson && currentLesson.id === lessonId) {
+          await loadTranscription(lessonId);
+      
+          // Stoppa intervallet om transkriptionen är klar eller misslyckades
+          const statusSpan = document.getElementById('transcription-status');
+          if (statusSpan) {
+            const status = statusSpan.className;
+            if (status.includes('completed') || status.includes('failed')) {
+              clearInterval(transcriptionCheckInterval);
+              transcriptionCheckInterval = null;
+            }
+          }
+        } else {
+          // Stoppa intervallet om lektionen inte längre är aktiv
+          clearInterval(transcriptionCheckInterval);
+          transcriptionCheckInterval = null;
+        }
+      }, 10000); // Kolla var 10:e sekund
+    }
+
+
+
+
+
+
+
+
+
     function renderLessons(lessonsData) {
       const timeline = document.getElementById('lesson-timeline');
-  
+
       if (!lessonsData || lessonsData.length === 0) {
         timeline.innerHTML = `
           <div class="no-lessons-message">
@@ -1902,22 +1977,33 @@
         `;
         return;
       }
-  
+
       const lessonsHtml = lessonsData.map(lesson => {
         const isVideo = lesson.file_type && lesson.file_type.startsWith('video/');
         const isAudio = lesson.file_type && lesson.file_type.startsWith('audio/');
         const iconClass = isVideo ? 'video' : isAudio ? 'audio' : '';
         const icon = isVideo ? '🎥' : isAudio ? '🎵' : '📁';
-    
+
         const formattedDate = new Date(lesson.lesson_date).toLocaleDateString('sv-SE', {
           day: 'numeric',
           month: 'short'
         });
-    
+
+        // Transkriptionsstatus-indikator
+        let transcriptionIndicator = '';
+        if (lesson.transcription_status === 'completed') {
+          transcriptionIndicator = '<div class="lesson-transcription-indicator completed">📝 Transkriberad</div>';
+        } else if (lesson.transcription_status === 'processing') {
+          transcriptionIndicator = '<div class="lesson-transcription-indicator processing">⏳ Transkriberar...</div>';
+        } else if (lesson.transcription_status === 'failed') {
+          transcriptionIndicator = '<div class="lesson-transcription-indicator failed">❌ Transkription misslyckades</div>';
+        }
+
         return `
           <div class="lesson-item" onclick="openLessonPlayer(${lesson.id})">
             <div class="lesson-date-badge">${formattedDate}</div>
             <div class="lesson-type-icon ${iconClass}">${icon}</div>
+            ${transcriptionIndicator}
             <div class="lesson-content">
               <div class="lesson-title">${escapeHtml(lesson.title)}</div>
               <div class="lesson-meta">
@@ -1936,9 +2022,14 @@
           </div>
         `;
       }).join('');
-  
+
       timeline.innerHTML = lessonsHtml;
     }
+
+
+
+
+
 
     async function openLessonPlayer(lessonId) {
       try {
@@ -1947,29 +2038,29 @@
           showAlert('Lektion hittades inte', 'error');
           return;
         }
-    
+
         currentLesson = lesson;
-    
+
         // Update modal content
         document.getElementById('lesson-player-title').textContent = lesson.title;
         document.getElementById('lesson-player-description').textContent = lesson.description || '';
-    
+
         const formattedDate = new Date(lesson.lesson_date).toLocaleDateString('sv-SE', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
           day: 'numeric'
         });
-    
+
         document.getElementById('lesson-player-date').textContent = `📅 ${formattedDate}`;
         document.getElementById('lesson-player-views').textContent = `👁 ${lesson.view_count} visningar`;
         document.getElementById('lesson-player-size').textContent = `📁 ${lesson.display_size}`;
-    
+
         // Create player
         const playerContainer = document.getElementById('lesson-player-container');
         const isVideo = lesson.file_type && lesson.file_type.startsWith('video/');
         const streamUrl = `/stream_lesson/${lesson.id}`;
-    
+
         if (isVideo) {
           playerContainer.innerHTML = `
             <video controls preload="metadata">
@@ -1982,15 +2073,15 @@
             <audio controls preload="metadata">
               <source src="${streamUrl}" type="${lesson.file_type}">
               Din webbläsare stöder inte ljud.
-            /audio>
+            </audio>
           `;
         }
-    
+
         // Setup download link
         const downloadLink = document.getElementById('lesson-download-link');
         downloadLink.href = `/download_lesson/${lesson.id}`;
         downloadLink.download = lesson.filename;
-    
+
         // Show/hide delete button
         const deleteBtn = document.getElementById('lesson-delete-btn');
         if (lesson.can_edit) {
@@ -1998,15 +2089,108 @@
         } else {
           deleteBtn.style.display = 'none';
         }
-    
+
+        // Ladda transkription
+        await loadTranscriptionWithAutoRefresh(lesson.id);
         // Show modal
         document.getElementById('lesson-player-modal').style.display = 'flex';
-    
+
       } catch (error) {
         console.error('Error opening lesson player:', error);
         showAlert('Kunde inte öppna lektion: ' + error.message, 'error');
       }
+
+
     }
+
+
+
+
+
+
+
+
+    function addTranscriptionSearch() {
+      const transcriptionSection = document.querySelector('.lesson-transcription-section');
+      if (!transcriptionSection) return;
+  
+      const searchHtml = `
+        <div class="transcription-search" style="margin-bottom: 10px;">
+          <input type="text" id="transcription-search-input" placeholder="Sök i transkription..." 
+                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+      `;
+  
+      const header = transcriptionSection.querySelector('.transcription-header');
+      if (header) {
+        header.insertAdjacentHTML('afterend', searchHtml);
+    
+        // Lägg till sök-funktionalitet
+        const searchInput = document.getElementById('transcription-search-input');
+        if (searchInput) {
+          searchInput.addEventListener('input', function() {
+            highlightTranscriptionText(this.value);
+          });
+        }
+      }
+    }
+
+    function highlightTranscriptionText(searchTerm) {
+      const transcriptionText = document.querySelector('.transcription-text');
+      if (!transcriptionText || !searchTerm) return;
+  
+      const originalText = transcriptionText.textContent || transcriptionText.innerText;
+      if (!originalText) return;
+  
+      if (searchTerm.trim() === '') {
+        transcriptionText.innerHTML = escapeHtml(originalText);
+        return;
+      }
+  
+      const regex = new RegExp(`(${escapeRegExp(searchTerm)})`, 'gi');
+      const highlightedText = escapeHtml(originalText).replace(regex, '<mark>$1</mark>');
+      transcriptionText.innerHTML = highlightedText;
+    }
+
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Export functions if using modules (optional)
+    if (typeof module !== 'undefined' && module.exports) {
+      module.exports = {
+        loadTranscription,
+        retryTranscription,
+        openLessonPlayer,
+        closeLessonPlayer,
+        deleteCurrentLesson,
+        deleteLesson,
+        renderLessons,
+        getTranscriptionStatusText
+      };
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+    function formatTranscriptionText(text) {
+      if (!text) return '';
+  
+      // Grundläggande formatering
+      return text
+        .replace(/\n/g, '<br>')
+        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+        .trim();
+    }
+
 
     function closeLessonPlayer() {
       const modal = document.getElementById('lesson-player-modal');
@@ -2066,11 +2250,82 @@
       }
     }
 
-    function deleteCurrentLesson() {
-      if (currentLesson) {
-        deleteLesson(currentLesson.id);
+    async function deleteCurrentLesson() {
+      if (!currentLesson) return;
+  
+      const confirmDelete = confirm(`Är du säker på att du vill ta bort lektionen "${currentLesson.title}"?`);
+      if (!confirmDelete) return;
+  
+      try {
+        const response = await fetch('/delete_lesson', {
+        method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            lesson_id: currentLesson.id
+          })
+        });
+    
+        const data = await response.json();
+    
+        if (data.status === 'success') {
+          showAlert('Lektion borttagen', 'success');
+          closeLessonPlayer();
+          loadLessons(); // Ladda om lektionslistan
+        } else {
+          showAlert('Kunde inte ta bort lektion: ' + data.message, 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting lesson:', error);
+        showAlert('Fel vid borttagning av lektion', 'error');
       }
     }
+
+
+    // Funktion för att ta bort lektion från listan (utan att öppna player)
+    async function deleteLesson(lessonId, event) {
+      if (event) {
+        event.stopPropagation();
+      }
+  
+      const lesson = lessons.find(l => l.id === lessonId);
+      if (!lesson) {
+        showAlert('Lektion hittades inte', 'error');
+        return;
+      }
+  
+      const confirmDelete = confirm(`Är du säker på att du vill ta bort lektionen "${lesson.title}"?`);
+      if (!confirmDelete) return;
+  
+      try {
+        const response = await fetch('/delete_lesson', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            lesson_id: lessonId
+          })
+        });
+    
+        const data = await response.json();
+    
+        if (data.status === 'success') {
+          showAlert('Lektion borttagen', 'success');
+          loadLessons(); // Ladda om lektionslistan
+        } else {
+          showAlert('Kunde inte ta bort lektion: ' + data.message, 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting lesson:', error);
+        showAlert('Fel vid borttagning av lektion', 'error');
+      }
+    }
+
+
+
+
 
     async function loadLessonStats() {
       if (userRole !== 'owner') return;
@@ -2098,6 +2353,152 @@
         console.error('Error loading lesson stats:', error);
       }
     }
+
+
+
+
+    // NY: Funktion för att ladda transkription
+    async function loadTranscription(lessonId) {
+      const statusSpan = document.getElementById('transcription-status');
+      const contentDiv = document.getElementById('transcription-content');
+      const retryBtn = document.getElementById('retry-transcription-btn');
+
+      try {
+        const response = await fetch(`/api/lesson/${lessonId}/transcription`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          // Uppdatera status
+          statusSpan.textContent = getTranscriptionStatusText(data.transcription_status);
+          statusSpan.className = `transcription-status ${data.transcription_status}`;
+
+          // Uppdatera innehåll
+          if (data.transcription_status === 'completed' && data.transcription) {
+            contentDiv.innerHTML = `<div class="transcription-text">${escapeHtml(data.transcription)}</div>`;
+            retryBtn.style.display = 'none';
+          } else if (data.transcription_status === 'processing') {
+            contentDiv.innerHTML = '<div class="transcription-loading">⏳ Transkribering pågår...</div>';
+            retryBtn.style.display = 'none';
+            // Kolla status igen om 10 sekunder
+            setTimeout(() => loadTranscription(lessonId), 10000);
+          } else if (data.transcription_status === 'failed') {
+            contentDiv.innerHTML = '<div class="transcription-empty">❌ Transkribering misslyckades</div>';
+            retryBtn.style.display = currentLesson && currentLesson.can_edit ? 'block' : 'none';
+          } else if (data.transcription_status === 'pending') {
+            contentDiv.innerHTML = '<div class="transcription-loading">⏳ Transkribering är schemalagd...</div>';
+            retryBtn.style.display = 'none';
+            // Kolla status igen om 5 sekunder
+            setTimeout(() => loadTranscription(lessonId), 5000);
+          } else {
+            contentDiv.innerHTML = '<div class="transcription-empty">Ingen transkription tillgänglig</div>';
+            retryBtn.style.display = 'none';
+          }
+        } else {
+          contentDiv.innerHTML = '<div class="transcription-empty">Kunde inte ladda transkription</div>';
+          retryBtn.style.display = 'none';
+        }
+
+      } catch (error) {
+        console.error('Error loading transcription:', error);
+        contentDiv.innerHTML = '<div class="transcription-empty">Fel vid laddning av transkription</div>';
+        retryBtn.style.display = 'none';
+      }
+    }
+
+    // NY: Funktion för att försöka transkribera igen
+    async function retryTranscription() {
+      if (!currentLesson) return;
+
+      const retryBtn = document.getElementById('retry-transcription-btn');
+      const statusSpan = document.getElementById('transcription-status');
+      const contentDiv = document.getElementById('transcription-content');
+
+      try {
+        retryBtn.disabled = true;
+        retryBtn.textContent = 'Startar...';
+
+        const response = await fetch(`/api/lesson/${currentLesson.id}/retranscribe`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          showAlert('Transkribering startad om', 'success');
+          statusSpan.textContent = 'Bearbetar...';
+          statusSpan.className = 'transcription-status processing';
+          contentDiv.innerHTML = '<div class="transcription-loading">⏳ Transkribering pågår...</div>';
+          retryBtn.style.display = 'none';
+      
+          // Ladda om lektioner för att uppdatera status
+          loadLessons();
+      
+          // Kolla status igen om 10 sekunder
+          setTimeout(() => loadTranscription(currentLesson.id), 10000);
+        } else {
+          showAlert('Kunde inte starta transkribering: ' + data.message, 'error');
+        }
+
+      } catch (error) {
+        console.error('Error retrying transcription:', error);
+        showAlert('Fel vid omstart av transkribering', 'error');
+      } finally {
+        retryBtn.disabled = false;
+        retryBtn.textContent = 'Försök igen';
+      }
+    }
+
+
+    // Hjälpfunktion för att få statustext
+    function getTranscriptionStatusText(status) {
+      switch (status) {
+        case 'pending': return 'Väntar';
+        case 'processing': return 'Bearbetar';
+        case 'completed': return 'Klar';
+        case 'failed': return 'Misslyckades';
+        default: return 'Okänd';
+      }
+    }
+
+    // Funktion för att stänga lesson player
+    function closeLessonPlayer() {
+      const modal = document.getElementById('lesson-player-modal');
+      modal.style.display = 'none';
+  
+      // Stoppa video/audio
+      const playerContainer = document.getElementById('lesson-player-container');
+      const video = playerContainer.querySelector('video');
+      const audio = playerContainer.querySelector('audio');
+  
+      if (video) {
+        video.pause();
+        video.currentTime = 0;
+      }
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+  
+      currentLesson = null;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2146,6 +2547,7 @@
 
     // Utility function to escape HTML
     function escapeHtml(text) {
+      if (!text) return '';
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
@@ -2193,13 +2595,6 @@
 
 
     
-
-
-
-
-
-
-
 
 
 
