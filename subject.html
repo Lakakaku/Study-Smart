@@ -940,6 +940,11 @@
       background: #f8d7da;
       color: #721c24;
     }
+
+
+
+
+
   </style>
 </head>
 
@@ -1088,6 +1093,134 @@
         <p>No quizzes available for this subject yet.</p>
       {% endif %}
     </div>
+
+
+
+
+
+
+
+
+
+    <!-- Lessons Section -->
+    <div class="lessons-section">
+      <div class="lessons-section-title">
+        🎥 Lektioner
+        <span id="lesson-stats"></span>
+      </div>
+
+      <!-- Lesson Upload Area - Only for owners -->
+      {% if user_role == 'owner' %}
+      <div class="lesson-upload-area" id="lesson-upload-area">
+        <div class="lesson-upload-form">
+          <div class="form-row">
+            <input type="text" id="lesson-title" class="lesson-title-input" placeholder="Lektionstitel *" required>
+            <input type="date" id="lesson-date" class="lesson-date-input" required>
+          </div>
+      
+          <textarea id="lesson-description" class="lesson-description-input" placeholder="Beskrivning av lektionen (valfritt)..."></textarea>
+      
+          <input type="file" id="lesson-upload-input" class="lesson-upload-input" accept="video/*,audio/*">
+          <label for="lesson-upload-input" class="lesson-upload-label">
+            Välj Video/Ljudfil eller Drag & Drop
+          </label>
+      
+          <div style="margin-top: 10px; color: #6c757d;">
+            Video: MP4, AVI, MOV, WMV, WebM | Audio: MP3, WAV, AAC, OGG (Max 500MB)
+          </div>
+      
+          <button id="upload-lesson-btn" class="upload-lesson-button" disabled>
+            Ladda upp Lektion
+          </button>
+      
+          <div id="lesson-upload-progress" class="upload-progress" style="display: none;">
+            <div class="upload-progress-bar" id="lesson-progress-bar"></div>
+          </div>
+      
+          <div id="lesson-upload-status" class="upload-status" style="display: none;"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Lesson Timeline -->
+      <div class="lesson-timeline" id="lesson-timeline">
+        <div class="no-lessons-message" id="no-lessons-message">
+          Loading lessons...
+        </div>
+      </div>
+
+      <!-- Lesson Statistics for owners -->
+      {% if user_role == 'owner' %}
+      <div class="lesson-stats" id="lesson-stats-details" style="display: none;">
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Lesson Player Modal -->
+    <div id="lesson-player-modal" class="lesson-modal" style="display: none;">
+      <div class="lesson-modal-content">
+        <div class="lesson-modal-header">
+          <h2 id="lesson-player-title"></h2>
+          <button class="lesson-modal-close" onclick="closeLessonPlayer()">&times;</button>
+        </div>
+    
+        <div class="lesson-modal-body">
+          <div id="lesson-player-container">
+            <!-- Video/Audio player will be inserted here -->
+          </div>
+      
+          <div class="lesson-info">
+            <div id="lesson-player-description"></div>
+            <div class="lesson-meta">
+              <span id="lesson-player-date"></span>
+              <span id="lesson-player-views"></span>
+              <span id="lesson-player-size"></span>
+            </div>
+          </div>
+      
+          <div class="lesson-actions">
+            <a id="lesson-download-link" class="lesson-action-btn download">Ladda ner</a>
+            <button id="lesson-delete-btn" class="lesson-action-btn delete" style="display: none;" onclick="deleteCurrentLesson()">Ta bort</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     <!-- Documents Section - Only show for owners and admins -->
     {% if user_role in ['owner', 'admin'] %}
@@ -1490,6 +1623,487 @@
     
     // Load shared files when page loads
     loadSharedFiles();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Lesson management variables
+    let currentLesson = null;
+    let lessons = [];
+
+    // Initialize lesson functionality
+    document.addEventListener('DOMContentLoaded', function() {
+      if (userRole === 'owner') {
+        initializeLessonUpload();
+        loadLessonStats();
+      }
+      loadLessons();
+    });
+
+    function initializeLessonUpload() {
+      const titleInput = document.getElementById('lesson-title');
+      const dateInput = document.getElementById('lesson-date');
+      const fileInput = document.getElementById('lesson-upload-input');
+      const uploadBtn = document.getElementById('upload-lesson-btn');
+      const uploadArea = document.getElementById('lesson-upload-area');
+  
+      // Set default date to today
+      dateInput.valueAsDate = new Date();
+  
+      // Enable upload button when all required fields are filled
+      function checkFormValidity() {
+        const title = titleInput.value.trim();
+        const date = dateInput.value;
+        const file = fileInput.files[0];
+    
+        uploadBtn.disabled = !(title && date && file);
+      }
+  
+      titleInput.addEventListener('input', checkFormValidity);
+      dateInput.addEventListener('change', checkFormValidity);
+      fileInput.addEventListener('change', checkFormValidity);
+  
+      // Drag and drop functionality
+      uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('drag-over');
+      });
+  
+      uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('drag-over');
+      });
+  
+      uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+    
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+          fileInput.files = e.dataTransfer.files;
+          checkFormValidity();
+        }
+      });
+  
+      // Upload button click handler
+      uploadBtn.addEventListener('click', uploadLesson);
+    }
+
+    async function uploadLesson() {
+      const titleInput = document.getElementById('lesson-title');
+      const dateInput = document.getElementById('lesson-date');
+      const descriptionInput = document.getElementById('lesson-description');
+      const fileInput = document.getElementById('lesson-upload-input');
+      const uploadBtn = document.getElementById('upload-lesson-btn');
+      const progressDiv = document.getElementById('lesson-upload-progress');
+      const progressBar = document.getElementById('lesson-progress-bar');
+      const statusDiv = document.getElementById('lesson-upload-status');
+  
+      const title = titleInput.value.trim();
+      const date = dateInput.value;
+      const description = descriptionInput.value.trim();
+      const file = fileInput.files[0];
+  
+      if (!title || !date || !file) {
+        showAlert('Vänligen fyll i alla obligatoriska fält', 'error');
+        return;
+      }
+  
+      // File size check (500MB limit)
+      if (file.size > 500 * 1024 * 1024) {
+        showAlert('Filen är för stor. Max storlek är 500MB.', 'error');
+        return;
+      }
+  
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('subject_id', subjectId);
+      formData.append('title', title);
+      formData.append('lesson_date', date);
+      if (description) {
+        formData.append('description', description);
+      }
+  
+      // Show progress
+      uploadBtn.disabled = true;
+      progressDiv.style.display = 'block';
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = 'Laddar upp...';
+      statusDiv.className = 'upload-status';
+  
+      try {
+        const xhr = new XMLHttpRequest();
+    
+        // Upload progress
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            progressBar.style.width = percentComplete + '%';
+            statusDiv.textContent = `Laddar upp... ${Math.round(percentComplete)}%`;
+          }
+        });
+    
+        // Handle response
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            if (response.status === 'success') {
+              statusDiv.textContent = 'Uppladdning slutförd!';
+              statusDiv.className = 'upload-status success';
+          
+              // Reset form
+              titleInput.value = '';
+              descriptionInput.value = '';
+              fileInput.value = '';
+              dateInput.valueAsDate = new Date();
+          
+              // Reload lessons
+              loadLessons();
+              if (userRole === 'owner') {
+                loadLessonStats();
+              }
+          
+              showAlert('Lektion uppladdad!', 'success');
+            } else {
+              throw new Error(response.message || 'Uppladdning misslyckades');
+            }
+          } else {
+            throw new Error('Uppladdning misslyckades');
+          }
+        });
+    
+        xhr.addEventListener('error', () => {
+          throw new Error('Nätverksfel vid uppladdning');
+        });
+    
+        xhr.open('POST', '/upload_lesson');
+        xhr.send(formData);
+    
+      } catch (error) {
+        console.error('Upload error:', error);
+        statusDiv.textContent = 'Fel vid uppladdning: ' + error.message;
+        statusDiv.className = 'upload-status error';
+        showAlert('Fel vid uppladdning: ' + error.message, 'error');
+      } finally {
+        // Hide progress after a delay
+        setTimeout(() => {
+          progressDiv.style.display = 'none';
+          statusDiv.style.display = 'none';
+          uploadBtn.disabled = false;
+          progressBar.style.width = '0%';
+        }, 3000);
+      }
+    }
+
+    async function loadLessons() {
+      try {
+        const response = await fetch(`/api/lessons/${subjectId}`);
+        const data = await response.json();
+    
+        if (data.status === 'success') {
+          lessons = data.lessons;
+          renderLessons(lessons);
+        } else {
+          throw new Error(data.message || 'Kunde inte ladda lektioner');
+        }
+      } catch (error) {
+        console.error('Error loading lessons:', error);
+        const timeline = document.getElementById('lesson-timeline');
+        timeline.innerHTML = `
+          <div class="no-lessons-message">
+            Fel vid laddning av lektioner: ${error.message}
+          </div>
+        `;
+      }
+    }
+
+    function renderLessons(lessonsData) {
+      const timeline = document.getElementById('lesson-timeline');
+  
+      if (!lessonsData || lessonsData.length === 0) {
+        timeline.innerHTML = `
+          <div class="no-lessons-message">
+            Inga lektioner har lagts till än.
+          </div>
+        `;
+        return;
+      }
+  
+      const lessonsHtml = lessonsData.map(lesson => {
+        const isVideo = lesson.file_type && lesson.file_type.startsWith('video/');
+        const isAudio = lesson.file_type && lesson.file_type.startsWith('audio/');
+        const iconClass = isVideo ? 'video' : isAudio ? 'audio' : '';
+        const icon = isVideo ? '🎥' : isAudio ? '🎵' : '📁';
+    
+        const formattedDate = new Date(lesson.lesson_date).toLocaleDateString('sv-SE', {
+          day: 'numeric',
+          month: 'short'
+        });
+    
+        return `
+          <div class="lesson-item" onclick="openLessonPlayer(${lesson.id})">
+            <div class="lesson-date-badge">${formattedDate}</div>
+            <div class="lesson-type-icon ${iconClass}">${icon}</div>
+            <div class="lesson-content">
+              <div class="lesson-title">${escapeHtml(lesson.title)}</div>
+              <div class="lesson-meta">
+                <span>👁 ${lesson.view_count} visningar</span>
+                <span>📁 ${lesson.display_size}</span>
+                ${lesson.duration_display ? `<span>⏱ ${lesson.duration_display}</span>` : ''}
+              </div>
+            </div>
+            ${lesson.can_edit ? `
+              <div class="lesson-actions" onclick="event.stopPropagation()">
+                <button class="lesson-action-btn delete" onclick="deleteLesson(${lesson.id})">
+                  Ta bort
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+  
+      timeline.innerHTML = lessonsHtml;
+    }
+
+    async function openLessonPlayer(lessonId) {
+      try {
+        const lesson = lessons.find(l => l.id === lessonId);
+        if (!lesson) {
+          showAlert('Lektion hittades inte', 'error');
+          return;
+        }
+    
+        currentLesson = lesson;
+    
+        // Update modal content
+        document.getElementById('lesson-player-title').textContent = lesson.title;
+        document.getElementById('lesson-player-description').textContent = lesson.description || '';
+    
+        const formattedDate = new Date(lesson.lesson_date).toLocaleDateString('sv-SE', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+    
+        document.getElementById('lesson-player-date').textContent = `📅 ${formattedDate}`;
+        document.getElementById('lesson-player-views').textContent = `👁 ${lesson.view_count} visningar`;
+        document.getElementById('lesson-player-size').textContent = `📁 ${lesson.display_size}`;
+    
+        // Create player
+        const playerContainer = document.getElementById('lesson-player-container');
+        const isVideo = lesson.file_type && lesson.file_type.startsWith('video/');
+        const streamUrl = `/stream_lesson/${lesson.id}`;
+    
+        if (isVideo) {
+          playerContainer.innerHTML = `
+            <video controls preload="metadata">
+              <source src="${streamUrl}" type="${lesson.file_type}">
+              Din webbläsare stöder inte video.
+            </video>
+          `;
+        } else {
+          playerContainer.innerHTML = `
+            <audio controls preload="metadata">
+              <source src="${streamUrl}" type="${lesson.file_type}">
+              Din webbläsare stöder inte ljud.
+            /audio>
+          `;
+        }
+    
+        // Setup download link
+        const downloadLink = document.getElementById('lesson-download-link');
+        downloadLink.href = `/download_lesson/${lesson.id}`;
+        downloadLink.download = lesson.filename;
+    
+        // Show/hide delete button
+        const deleteBtn = document.getElementById('lesson-delete-btn');
+        if (lesson.can_edit) {
+          deleteBtn.style.display = 'inline-block';
+        } else {
+          deleteBtn.style.display = 'none';
+        }
+    
+        // Show modal
+        document.getElementById('lesson-player-modal').style.display = 'flex';
+    
+      } catch (error) {
+        console.error('Error opening lesson player:', error);
+        showAlert('Kunde inte öppna lektion: ' + error.message, 'error');
+      }
+    }
+
+    function closeLessonPlayer() {
+      const modal = document.getElementById('lesson-player-modal');
+      const playerContainer = document.getElementById('lesson-player-container');
+  
+      // Stop any playing media
+      const media = playerContainer.querySelector('video, audio');
+      if (media) {
+        media.pause();
+        media.currentTime = 0;
+      }
+  
+      // Clear player
+      playerContainer.innerHTML = '';
+  
+      // Hide modal
+      modal.style.display = 'none';
+      currentLesson = null;
+    }
+
+    async function deleteLesson(lessonId) {
+      if (!confirm('Är du säker på att du vill ta bort denna lektion?')) {
+        return;
+      }
+  
+      try {
+        const response = await fetch('/delete_lesson', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            lesson_id: lessonId
+          })
+        });
+    
+        const data = await response.json();
+    
+        if (data.status === 'success') {
+          showAlert('Lektion borttagen', 'success');
+          loadLessons();
+          if (userRole === 'owner') {
+            loadLessonStats();
+          }
+      
+          // Close modal if this lesson is currently open
+          if (currentLesson && currentLesson.id === lessonId) {
+            closeLessonPlayer();
+          }
+        } else {
+          throw new Error(data.message || 'Kunde inte ta bort lektion');
+        }
+    
+      } catch (error) {
+        console.error('Error deleting lesson:', error);
+        showAlert('Fel vid borttagning: ' + error.message, 'error');
+      }
+    }
+
+    function deleteCurrentLesson() {
+      if (currentLesson) {
+        deleteLesson(currentLesson.id);
+      }
+    }
+
+    async function loadLessonStats() {
+      if (userRole !== 'owner') return;
+  
+      try {
+        const response = await fetch(`/api/lessons/${subjectId}/stats`);
+        const data = await response.json();
+    
+        if (data.status === 'success') {
+          const statsText = `(${data.total_lessons} lektioner, ${data.total_views} visningar)`;
+          document.getElementById('lesson-stats').textContent = statsText;
+      
+          const statsDetails = document.getElementById('lesson-stats-details');
+          if (data.total_lessons > 0) {
+            statsDetails.innerHTML = `
+              <strong>Statistik:</strong><br>
+              📊 Totalt ${data.total_lessons} lektioner<br>
+              👁 ${data.total_views} totala visningar<br>
+              ⏱ ${data.total_duration_display} total längd
+            `;
+            statsDetails.style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading lesson stats:', error);
+      }
+    }
+
+    // Utility function to escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', function(e) {
+      const modal = document.getElementById('lesson-player-modal');
+      if (e.target === modal) {
+        closeLessonPlayer();
+      }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('lesson-player-modal');
+        if (modal.style.display === 'flex') {
+          closeLessonPlayer();
+        }
+      }
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
   </script>
 
 </body>
