@@ -650,6 +650,56 @@ class KravDocument(db.Model):
     def __repr__(self):
         return f"KravDocument('{self.doc_type}', '{self.filename}')"
 
+
+
+def create_tables():
+    """Skapa alla databastabeller"""
+    with app.app_context():
+        db.create_all()
+        print("Database tables created successfully!")
+
+def update_database():
+    """Uppdatera databasen med nya tabeller"""
+    try:
+        # Skapa Lesson-tabellen om den inte finns
+        db.engine.execute("""
+            CREATE TABLE IF NOT EXISTS lessons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                description TEXT,
+                filename VARCHAR(255) NOT NULL,
+                file_path VARCHAR(500) NOT NULL,
+                file_size INTEGER,
+                file_type VARCHAR(100),
+                duration INTEGER,
+                lesson_date DATE NOT NULL,
+                is_active BOOLEAN DEFAULT 1,
+                view_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (subject_id) REFERENCES subject (id),
+                FOREIGN KEY (user_id) REFERENCES user (id)
+            )
+        """)
+        
+        # Skapa index
+        db.engine.execute("CREATE INDEX IF NOT EXISTS idx_lessons_subject_id ON lessons(subject_id)")
+        db.engine.execute("CREATE INDEX IF NOT EXISTS idx_lessons_user_id ON lessons(user_id)")
+        db.engine.execute("CREATE INDEX IF NOT EXISTS idx_lessons_lesson_date ON lessons(lesson_date)")
+        db.engine.execute("CREATE INDEX IF NOT EXISTS idx_lessons_active ON lessons(is_active)")
+        
+        db.session.commit()
+        print("Database updated successfully!")
+        
+    except Exception as e:
+        print(f"Error updating database: {e}")
+        db.session.rollback()
+
+
+
+
 def create_shared_files_table():
     """Create the shared_files table if it doesn't exist"""
     try:
@@ -997,42 +1047,13 @@ def allowed_lesson_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_LESSON_EXTENSIONS
 
-@app.route('/api/lessons/<int:subject_id>')
-@login_required
-def get_lessons(subject_id):
-    """Hämta alla lektioner för ett ämne"""
-    try:
-        # Kontrollera att användaren har tillgång till ämnet
-        if not current_user.is_member_of_subject(subject_id):
-            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
-        
-        # Hämta alla aktiva lektioner, sorterade efter lesson_date
-        lessons = Lesson.query.filter_by(
-            subject_id=subject_id,
-            is_active=True
-        ).order_by(Lesson.lesson_date.asc()).all()
-        
-        lessons_data = []
-        for lesson in lessons:
-            lesson_dict = lesson.to_dict()
-            # Lägg till om användaren kan redigera
-            lesson_dict['can_edit'] = lesson.user_id == current_user.id
-            lessons_data.append(lesson_dict)
-        
-        return jsonify({
-            'status': 'success',
-            'lessons': lessons_data,
-            'total_lessons': len(lessons_data)
-        })
-        
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
 @app.route('/upload_lesson', methods=['POST'])
 @login_required
 def upload_lesson():
     """Ladda upp en ny lektion"""
     try:
+        print("Upload lesson route called")  # Debug
+        
         if 'file' not in request.files:
             return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
         
@@ -1046,6 +1067,8 @@ def upload_lesson():
         description = request.form.get('description', '').strip()
         lesson_date = request.form.get('lesson_date')
         
+        print(f"Form data: subject_id={subject_id}, title={title}, lesson_date={lesson_date}")  # Debug
+        
         # Validera data
         if not subject_id:
             return jsonify({'status': 'error', 'message': 'Subject ID required'}), 400
@@ -1056,7 +1079,10 @@ def upload_lesson():
         if not lesson_date:
             return jsonify({'status': 'error', 'message': 'Lesson date required'}), 400
         
-        subject_id = int(subject_id)
+        try:
+            subject_id = int(subject_id)
+        except ValueError:
+            return jsonify({'status': 'error', 'message': 'Invalid subject ID'}), 400
         
         # Kontrollera att användaren äger ämnet
         subject = Subject.query.get_or_404(subject_id)
@@ -1095,12 +1121,16 @@ def upload_lesson():
         unique_filename = f"{timestamp}_{name}{ext}"
         file_path = os.path.join(lesson_dir, unique_filename)
         
+        print(f"Saving file to: {file_path}")  # Debug
+        
         # Spara fil
         file.save(file_path)
         
         # Hämta filinfo
         file_size = os.path.getsize(file_path)
         file_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+        
+        print(f"File saved: size={file_size}, type={file_type}")  # Debug
         
         # Skapa Lesson-post
         lesson = Lesson(
@@ -1118,6 +1148,8 @@ def upload_lesson():
         db.session.add(lesson)
         db.session.commit()
         
+        print(f"Lesson created with ID: {lesson.id}")  # Debug
+        
         return jsonify({
             'status': 'success',
             'message': 'Lesson uploaded successfully',
@@ -1125,7 +1157,44 @@ def upload_lesson():
         })
         
     except Exception as e:
+        print(f"Error in upload_lesson: {str(e)}")  # Debug
         db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/lessons/<int:subject_id>')
+@login_required
+def get_lessons(subject_id):
+    """Hämta alla lektioner för ett ämne"""
+    try:
+        print(f"Getting lessons for subject {subject_id}")  # Debug
+        
+        # Kontrollera att användaren har tillgång till ämnet
+        if not current_user.is_member_of_subject(subject_id):
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Hämta alla aktiva lektioner, sorterade efter lesson_date
+        lessons = Lesson.query.filter_by(
+            subject_id=subject_id,
+            is_active=True
+        ).order_by(Lesson.lesson_date.asc()).all()
+        
+        print(f"Found {len(lessons)} lessons")  # Debug
+        
+        lessons_data = []
+        for lesson in lessons:
+            lesson_dict = lesson.to_dict()
+            # Lägg till om användaren kan redigera
+            lesson_dict['can_edit'] = lesson.user_id == current_user.id
+            lessons_data.append(lesson_dict)
+        
+        return jsonify({
+            'status': 'success',
+            'lessons': lessons_data,
+            'total_lessons': len(lessons_data)
+        })
+        
+    except Exception as e:
+        print(f"Error in get_lessons: {str(e)}")  # Debug
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/stream_lesson/<int:lesson_id>')
@@ -1147,6 +1216,7 @@ def stream_lesson(lesson_id):
         return send_file(lesson.file_path, as_attachment=False)
         
     except Exception as e:
+        print(f"Error in stream_lesson: {str(e)}")  # Debug
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/download_lesson/<int:lesson_id>')
@@ -1169,6 +1239,7 @@ def download_lesson(lesson_id):
                         download_name=lesson.filename)
         
     except Exception as e:
+        print(f"Error in download_lesson: {str(e)}")  # Debug
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/delete_lesson', methods=['POST'])
@@ -1198,6 +1269,7 @@ def delete_lesson():
         })
         
     except Exception as e:
+        print(f"Error in delete_lesson: {str(e)}")  # Debug
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -1227,9 +1299,15 @@ def get_lesson_stats(subject_id):
         })
         
     except Exception as e:
+        print(f"Error in get_lesson_stats: {str(e)}")  # Debug
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+# Kontrollera att UPLOAD_FOLDER är konfigurerad
+if not hasattr(app.config, 'UPLOAD_FOLDER'):
+    app.config['UPLOAD_FOLDER'] = 'uploads'
 
+# Skapa upload-mappen om den inte finns
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 
 
@@ -4681,7 +4759,9 @@ def daily_quiz_all(date):
 
 
 if __name__ == '__main__':
+    
     migrate_database()
+    
     app.run(debug=True)
     cleanup_on_startup()
     create_shared_files_table()
