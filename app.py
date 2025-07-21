@@ -3270,7 +3270,26 @@ def delete_quiz(subject_name, quiz_index):
             flash("Du kan bara ta bort dina egna quiz.", "error")
             return redirect(url_for('subject', subject_name=subject_name))
 
-        # OK – ta bort
+        # Ta bort associerade flashcards INNAN vi tar bort quiz
+        delete_flashcards_for_quiz(quiz_to_delete)
+
+        # Ta bort associerade filer om de finns
+        files = quiz_to_delete.files
+        if isinstance(files, str):
+            try:
+                files = json.loads(files)
+            except:
+                files = []
+        
+        if files:
+            for file_path in files:
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"Warning: Could not delete file {file_path}: {e}")
+
+        # OK – ta bort quiz
         quiz_title = quiz_to_delete.title
         db.session.delete(quiz_to_delete)
         db.session.commit()
@@ -3282,6 +3301,7 @@ def delete_quiz(subject_name, quiz_index):
         db.session.rollback()
 
     return redirect(url_for('subject', subject_name=subject_name))
+
 
 
 
@@ -3840,6 +3860,9 @@ def delete_quiz_api(quiz_id):
         if not quiz:
             return jsonify({'status': 'error', 'message': 'Quiz not found'}), 404
         
+        # Ta bort associerade flashcards INNAN vi tar bort quiz
+        delete_flashcards_for_quiz(quiz)
+        
         # Ta bort associerade filer om de finns
         files = quiz.files
         if isinstance(files, str):
@@ -3870,7 +3893,80 @@ def delete_quiz_api(quiz_id):
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-
+def delete_flashcards_for_quiz(quiz):
+    """Ta bort alla flashcards som skapats från ett specifikt quiz"""
+    try:
+        if not quiz.questions:
+            return 0
+        
+        deleted_count = 0
+        
+        # Om det är ett personligt quiz - ta bara bort för skaparen
+        if quiz.is_personal:
+            for q_data in quiz.questions:
+                # Hantera både dict-format och sträng-format
+                if isinstance(q_data, dict):
+                    question_text = q_data.get('question', '')
+                elif isinstance(q_data, str) and '|' in q_data:
+                    question_text = q_data.split('|', 1)[0].strip()
+                else:
+                    continue
+                
+                if question_text:
+                    # Ta bort flashcard för quiz-skaparen
+                    flashcards_to_delete = Flashcard.query.filter(
+                        Flashcard.user_id == quiz.user_id,
+                        Flashcard.question == question_text,
+                        Flashcard.subject_id == quiz.subject_id,
+                        Flashcard.topic == quiz.title
+                    ).all()
+                    
+                    for flashcard in flashcards_to_delete:
+                        db.session.delete(flashcard)
+                        deleted_count += 1
+        
+        # Om det är ett delat quiz - ta bort för alla medlemmar
+        else:
+            subject_obj = Subject.query.get(quiz.subject_id)
+            if subject_obj:
+                # Hämta alla medlemmar
+                members = db.session.query(SubjectMember.user_id).filter_by(subject_id=subject_obj.id).all()
+                member_ids = [member.user_id for member in members]
+                
+                # Lägg till ägaren om den inte redan finns
+                if subject_obj.user_id not in member_ids:
+                    member_ids.append(subject_obj.user_id)
+                
+                # Ta bort flashcards för alla medlemmar
+                for user_id in member_ids:
+                    for q_data in quiz.questions:
+                        # Hantera både dict-format och sträng-format
+                        if isinstance(q_data, dict):
+                            question_text = q_data.get('question', '')
+                        elif isinstance(q_data, str) and '|' in q_data:
+                            question_text = q_data.split('|', 1)[0].strip()
+                        else:
+                            continue
+                        
+                        if question_text:
+                            flashcards_to_delete = Flashcard.query.filter(
+                                Flashcard.user_id == user_id,
+                                Flashcard.question == question_text,
+                                Flashcard.subject_id == quiz.subject_id,
+                                Flashcard.topic == quiz.title
+                            ).all()
+                            
+                            for flashcard in flashcards_to_delete:
+                                db.session.delete(flashcard)
+                                deleted_count += 1
+        
+        print(f"[INFO] Deleted {deleted_count} flashcards for quiz '{quiz.title}'")
+        return deleted_count
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to delete flashcards for quiz: {e}")
+        db.session.rollback()
+        raise e
 
 @app.route('/api/subjects')
 @login_required  
