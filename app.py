@@ -55,7 +55,7 @@ class SharedFile(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Upladdaren
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Uppladdaren
     filename = db.Column(db.String(255), nullable=False)  # Ursprungligt filnamn
     file_path = db.Column(db.String(500), nullable=False)  # Sökväg på servern
     file_size = db.Column(db.Integer)  # Storlek i bytes
@@ -66,12 +66,14 @@ class SharedFile(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
-    subject = db.relationship('Subject', backref='shared_files')
-    uploader = db.relationship('User', backref='uploaded_files')
+    # Relationships - ta bort backref eftersom de redan hanteras från Subject och User modellerna
+    # subject = db.relationship('Subject') - hanteras från Subject-sidan
+    # uploader = db.relationship('User') - hanteras från User-sidan
     
     def __repr__(self):
-        return f"SharedFile('{self.filename}', subject='{self.subject.name if self.subject else 'Unknown'}')"
+        # Hämta subject för att undvika lazy loading issues
+        subject_obj = Subject.query.get(self.subject_id)
+        return f"SharedFile('{self.filename}', subject='{subject_obj.name if subject_obj else 'Unknown'}')"
     
     def get_file_extension(self):
         """Hämta filens extension"""
@@ -123,16 +125,15 @@ class SharedFile(db.Model):
 
 
 # Uppdatera Subject model
+# Uppdatera Subject model
 class Subject(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    #owner = db.relationship('User', backref='owned_subjects', lazy=True)
-
 
     # Kolumner som kommer att läggas till via migration
-    share_code = db.Column(db.String(8), unique=True, nullable=True)  # Gör nullable först
+    share_code = db.Column(db.String(8), unique=True, nullable=True)
     is_shared = db.Column(db.Boolean, default=False)
     
     # Relationships
@@ -140,8 +141,11 @@ class Subject(db.Model):
                              foreign_keys='Quiz.subject_id')
     flashcards = db.relationship('Flashcard', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
                                 foreign_keys='Flashcard.subject_id')
-
     members = db.relationship('SubjectMember', backref='subject', lazy=True, cascade='all, delete-orphan')
+    
+    # Lägg till relationship för krav_documents och shared_files
+    krav_documents = db.relationship('KravDocument', backref='subject', lazy=True, cascade='all, delete-orphan')
+    shared_files = db.relationship('SharedFile', backref='subject', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f"Subject('{self.name}', code='{self.share_code}')"
@@ -167,12 +171,6 @@ class Subject(db.Model):
         )
         subject.share_code = subject.generate_share_code()
         return subject
-    
-    def update_subject_model():
-            shared_files = db.relationship('SharedFile', backref='subject_ref', lazy=True, cascade='all, delete-orphan')
-    pass
-
-    
 
 
 # Ny model för att hålla reda på vilka användare som är medlemmar i vilket subject
@@ -191,6 +189,11 @@ class SubjectMember(db.Model):
     def __repr__(self):
         return f"SubjectMember(subject_id={self.subject_id}, user_id={self.user_id}, role='{self.role}')"
 # Uppdatera User model för att inkludera subject memberships
+
+
+
+# Uppdatera User model för att inkludera subject memberships
+# Uppdatera User model för att inkludera subject memberships
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), unique=True, nullable=False)
@@ -205,6 +208,10 @@ class User(db.Model, UserMixin):
     
     # Ny relationship för subject memberships
     subject_memberships = db.relationship('SubjectMember', backref='user', lazy=True, cascade='all, delete-orphan')
+    
+    # Relationship för krav documents och shared files
+    krav_documents = db.relationship('KravDocument', backref='user', lazy=True, cascade='all, delete-orphan')
+    shared_files = db.relationship('SharedFile', backref='uploader', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f"User('{self.username}')"
@@ -234,56 +241,11 @@ class User(db.Model, UserMixin):
         """Hämta användarens roll i ett subject"""
         # Kontrollera om användaren äger subject
         if Subject.query.filter_by(id=subject_id, user_id=self.id).first():
-            return 'admin'
-        
-        # Kontrollera membership
-        membership = SubjectMember.query.filter_by(subject_id=subject_id, user_id=self.id).first()
-        return membership.role if membership else None
-    def get_all_subjects(self):
-        """Hämta alla ämnen som användaren har tillgång till (äger eller är medlem i)"""
-        # Ämnen som användaren äger
-        owned_subjects = Subject.query.filter_by(user_id=self.id).all()
-        
-        # Ämnen som användaren är medlem i
-        member_subjects = db.session.query(Subject).join(SubjectMember).filter(
-            SubjectMember.user_id == self.id
-        ).all()
-        
-        # Kombinera och returnera unika ämnen
-        all_subjects = owned_subjects + member_subjects
-        return list(set(all_subjects))  # Ta bort duplicates
-    
-    def is_member_of_subject(self, subject_id):
-        """Kontrollera om användaren har tillgång till ett ämne"""
-        # Kontrollera om användaren äger ämnet
-        owned_subject = Subject.query.filter_by(id=subject_id, user_id=self.id).first()
-        if owned_subject:
-            return True
-        
-        # Kontrollera om användaren är medlem
-        membership = SubjectMember.query.filter_by(
-            subject_id=subject_id, 
-            user_id=self.id
-        ).first()
-        return membership is not None
-    
-    def get_role_in_subject(self, subject_id):
-        """Hämta användarens roll i ett ämne"""
-        # Kontrollera om användaren äger ämnet
-        owned_subject = Subject.query.filter_by(id=subject_id, user_id=self.id).first()
-        if owned_subject:
             return 'owner'
         
         # Kontrollera medlemskap
-        membership = SubjectMember.query.filter_by(
-            subject_id=subject_id, 
-            user_id=self.id
-        ).first()
-        
-        if membership:
-            return membership.role
-        
-        return None
+        membership = SubjectMember.query.filter_by(subject_id=subject_id, user_id=self.id).first()
+        return membership.role if membership else None
     
     def get_owned_subjects(self):
         """Hämta ämnen som användaren äger"""
@@ -294,7 +256,6 @@ class User(db.Model, UserMixin):
         return db.session.query(Subject).join(SubjectMember).filter(
             SubjectMember.user_id == self.id
         ).all()
-    
 
 def check_quiz_schema():
     """Kontrollera och uppdatera quiz-tabellens schema"""
@@ -560,25 +521,25 @@ class KravDocument(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
-    subject = db.relationship('Subject', backref='krav_documents')
-    user = db.relationship('User', backref='krav_documents')
+    # Relationships - ta bort backref eftersom de redan finns i Subject och User modellerna
+    # subject = db.relationship('Subject') - relationshipen hanteras från Subject-sidan
+    # user = db.relationship('User') - relationshipen hanteras från User-sidan
     
     def to_dict(self):
+        # Hämta subject-objektet för att få namnet
+        subject_obj = Subject.query.get(self.subject_id)
         return {
             'id': self.id,
             'subject_id': self.subject_id,
             'doc_type': self.doc_type,
             'filename': self.filename,
-            'file_url': f'/static/uploads/krav/{self.user_id}/{self.subject.name}/{self.doc_type}.pdf',
+            'file_url': f'/static/uploads/krav/{self.user_id}/{subject_obj.name if subject_obj else "unknown"}/{self.doc_type}.pdf',
             'file_size': self.file_size,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
     
     def __repr__(self):
         return f"KravDocument('{self.doc_type}', '{self.filename}')"
-
-
 
 def create_shared_files_table():
     """Create the shared_files table if it doesn't exist"""
@@ -2854,17 +2815,38 @@ def schedule_daily_cleanup():
 def delete_subject():
     subject_to_delete = request.form.get('subject')
     if subject_to_delete:
-        # Ta bort ämnet från databasen
+        # Hämta subject-objektet
         subject_obj = Subject.query.filter_by(user_id=current_user.id, name=subject_to_delete).first()
         if subject_obj:
-            db.session.delete(subject_obj)
-            db.session.commit()
+            try:
+                # Ta bort alla relaterade krav_documents först
+                KravDocument.query.filter_by(subject_id=subject_obj.id).delete()
+                
+                # Ta bort alla relaterade shared_files
+                SharedFile.query.filter_by(subject_id=subject_obj.id).delete()
+                
+                # Ta bort subject-medlemskap
+                SubjectMember.query.filter_by(subject_id=subject_obj.id).delete()
+                
+                # Nu kan vi säkert ta bort subject (quizzes och flashcards tas bort automatiskt via cascade)
+                db.session.delete(subject_obj)
+                db.session.commit()
+                
+                # Ta även bort fysiska filer om de finns
+                import os
+                krav_dir = f"static/uploads/krav/{current_user.id}/{subject_to_delete}"
+                if os.path.exists(krav_dir):
+                    import shutil
+                    shutil.rmtree(krav_dir)
+                
+                flash(f'Ämnet "{subject_to_delete}" har tagits bort.', 'success')
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Ett fel uppstod vid borttagning av ämnet: {str(e)}', 'error')
+                print(f"Error deleting subject: {e}")
+    
     return redirect(url_for('home'))
-
-# Add these routes to your Flask app to make flashcard quizzes work
-
-
-
 
 @app.route('/quiz/<subject_name>/<path:quiz_title>')
 @login_required
