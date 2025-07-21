@@ -48,6 +48,99 @@ import string
 
 
 # Lägg till dessa routes i din Flask app
+class Lesson(db.Model):
+    __tablename__ = 'lessons'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Skaparen
+    title = db.Column(db.String(200), nullable=False)  # Lektionstitel
+    description = db.Column(db.Text)  # Valfri beskrivning
+    filename = db.Column(db.String(255), nullable=False)  # Ursprungligt filnamn
+    file_path = db.Column(db.String(500), nullable=False)  # Sökväg på servern
+    file_size = db.Column(db.Integer)  # Storlek i bytes
+    file_type = db.Column(db.String(100))  # MIME-typ (video/mp4, audio/mp3 etc.)
+    duration = db.Column(db.Integer)  # Längd i sekunder (valfritt)
+    lesson_date = db.Column(db.Date, nullable=False)  # När lektionen är schemalagd
+    is_active = db.Column(db.Boolean, default=True)  # För att "ta bort" lektioner
+    view_count = db.Column(db.Integer, default=0)  # Statistik
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    subject = db.relationship('Subject', backref='lessons')
+    creator = db.relationship('User', backref='created_lessons')
+    
+    def __repr__(self):
+        return f"Lesson('{self.title}', date='{self.lesson_date}', subject_id={self.subject_id})"
+    
+    def get_file_extension(self):
+        """Hämta filens extension"""
+        return self.filename.split('.')[-1].lower() if '.' in self.filename else ''
+    
+    def get_display_size(self):
+        """Formatera filstorlek för visning"""
+        if not self.file_size:
+            return "Okänd storlek"
+        
+        size = self.file_size
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
+    
+    def get_duration_display(self):
+        """Formatera duration för visning"""
+        if not self.duration:
+            return "Okänd längd"
+        
+        minutes = self.duration // 60
+        seconds = self.duration % 60
+        
+        if minutes >= 60:
+            hours = minutes // 60
+            minutes = minutes % 60
+            return f"{hours}h {minutes}m {seconds}s"
+        else:
+            return f"{minutes}m {seconds}s"
+    
+    def is_accessible_by_user(self, user_id):
+        """Kontrollera om en användare kan komma åt lektionen"""
+        # Skaparen kan alltid komma åt
+        if self.user_id == user_id:
+            return True
+        
+        # Kontrollera om användaren har tillgång till ämnet
+        user = User.query.get(user_id)
+        if user and user.is_member_of_subject(self.subject_id):
+            return True
+        
+        return False
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'subject_id': self.subject_id,
+            'user_id': self.user_id,
+            'title': self.title,
+            'description': self.description,
+            'filename': self.filename,
+            'file_path': self.file_path,
+            'file_size': self.file_size,
+            'file_type': self.file_type,
+            'duration': self.duration,
+            'lesson_date': self.lesson_date.isoformat() if self.lesson_date else None,
+            'is_active': self.is_active,
+            'view_count': self.view_count,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'extension': self.get_file_extension(),
+            'display_size': self.get_display_size(),
+            'duration_display': self.get_duration_display()
+        }
+
 
 # Lägg till denna model i din models.py
 class SharedFile(db.Model):
@@ -315,6 +408,22 @@ def init_database():
                 ('files', 'JSON'),
                 ('questions', 'JSON'),
                 ('is_personal', 'BOOLEAN')
+            ],
+            'lessons': [
+                ('subject_id', 'INTEGER'),
+                ('user_id', 'INTEGER'),
+                ('title', 'VARCHAR(200)'),
+                ('description', 'TEXT'),
+                ('filename', 'VARCHAR(255)'),
+                ('file_path', 'VARCHAR(500)'),
+                ('file_size', 'INTEGER'),
+                ('file_type', 'VARCHAR(100)'),
+                ('duration', 'INTEGER'),
+                ('lesson_date', 'DATE'),
+                ('is_active', 'BOOLEAN'),
+                ('view_count', 'INTEGER'),
+                ('created_at', 'DATETIME'),
+                ('updated_at', 'DATETIME')
             ],
             'flashcard': [
                 ('subject', 'VARCHAR(100)'),
@@ -860,6 +969,283 @@ def get_krav_documents(subject_name):
     except Exception as e:
         print(f"Error getting krav documents: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to load documents'}), 500
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Konfiguration för lektioner
+ALLOWED_LESSON_EXTENSIONS = {
+    'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv',  # Video
+    'mp3', 'wav', 'aac', 'ogg', 'flac', 'm4a'         # Audio
+}
+
+def allowed_lesson_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_LESSON_EXTENSIONS
+
+@app.route('/api/lessons/<int:subject_id>')
+@login_required
+def get_lessons(subject_id):
+    """Hämta alla lektioner för ett ämne"""
+    try:
+        # Kontrollera att användaren har tillgång till ämnet
+        if not current_user.is_member_of_subject(subject_id):
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Hämta alla aktiva lektioner, sorterade efter lesson_date
+        lessons = Lesson.query.filter_by(
+            subject_id=subject_id,
+            is_active=True
+        ).order_by(Lesson.lesson_date.asc()).all()
+        
+        lessons_data = []
+        for lesson in lessons:
+            lesson_dict = lesson.to_dict()
+            # Lägg till om användaren kan redigera
+            lesson_dict['can_edit'] = lesson.user_id == current_user.id
+            lessons_data.append(lesson_dict)
+        
+        return jsonify({
+            'status': 'success',
+            'lessons': lessons_data,
+            'total_lessons': len(lessons_data)
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/upload_lesson', methods=['POST'])
+@login_required
+def upload_lesson():
+    """Ladda upp en ny lektion"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'status': 'error', 'message': 'No file selected'}), 400
+        
+        # Hämta formulärdata
+        subject_id = request.form.get('subject_id')
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        lesson_date = request.form.get('lesson_date')
+        
+        # Validera data
+        if not subject_id:
+            return jsonify({'status': 'error', 'message': 'Subject ID required'}), 400
+        
+        if not title:
+            return jsonify({'status': 'error', 'message': 'Lesson title required'}), 400
+        
+        if not lesson_date:
+            return jsonify({'status': 'error', 'message': 'Lesson date required'}), 400
+        
+        subject_id = int(subject_id)
+        
+        # Kontrollera att användaren äger ämnet
+        subject = Subject.query.get_or_404(subject_id)
+        if subject.user_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Kontrollera filtyp
+        if not allowed_lesson_file(file.filename):
+            return jsonify({
+                'status': 'error', 
+                'message': 'Invalid file type. Only video and audio files are allowed.'
+            }), 400
+        
+        # Konvertera datum
+        try:
+            lesson_date_obj = datetime.strptime(lesson_date, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'status': 'error', 'message': 'Invalid date format'}), 400
+        
+        # Säker filnamn
+        filename = secure_filename(file.filename)
+        
+        # Skapa mappstruktur: uploads/lessons/user_id/subject_name/
+        subject_name_safe = secure_filename(subject.name)
+        lesson_dir = os.path.join(
+            app.config['UPLOAD_FOLDER'], 
+            'lessons', 
+            str(current_user.id), 
+            subject_name_safe
+        )
+        os.makedirs(lesson_dir, exist_ok=True)
+        
+        # Unik filnamn för att undvika konflikter
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        name, ext = os.path.splitext(filename)
+        unique_filename = f"{timestamp}_{name}{ext}"
+        file_path = os.path.join(lesson_dir, unique_filename)
+        
+        # Spara fil
+        file.save(file_path)
+        
+        # Hämta filinfo
+        file_size = os.path.getsize(file_path)
+        file_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+        
+        # Skapa Lesson-post
+        lesson = Lesson(
+            subject_id=subject_id,
+            user_id=current_user.id,
+            title=title,
+            description=description if description else None,
+            filename=filename,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file_type,
+            lesson_date=lesson_date_obj
+        )
+        
+        db.session.add(lesson)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Lesson uploaded successfully',
+            'lesson': lesson.to_dict()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/stream_lesson/<int:lesson_id>')
+@login_required
+def stream_lesson(lesson_id):
+    """Strömma en lektion (video/audio)"""
+    try:
+        lesson = Lesson.query.get_or_404(lesson_id)
+        
+        # Kontrollera tillgång
+        if not lesson.is_accessible_by_user(current_user.id):
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Öka view count
+        lesson.view_count += 1
+        db.session.commit()
+        
+        # Returnera filen för streaming
+        return send_file(lesson.file_path, as_attachment=False)
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/download_lesson/<int:lesson_id>')
+@login_required
+def download_lesson(lesson_id):
+    """Ladda ner en lektion"""
+    try:
+        lesson = Lesson.query.get_or_404(lesson_id)
+        
+        # Kontrollera tillgång
+        if not lesson.is_accessible_by_user(current_user.id):
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Öka view count
+        lesson.view_count += 1
+        db.session.commit()
+        
+        # Returnera filen för nedladdning
+        return send_file(lesson.file_path, as_attachment=True, 
+                        download_name=lesson.filename)
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/delete_lesson', methods=['POST'])
+@login_required
+def delete_lesson():
+    """Ta bort en lektion"""
+    try:
+        data = request.get_json()
+        lesson_id = data.get('lesson_id')
+        
+        if not lesson_id:
+            return jsonify({'status': 'error', 'message': 'Lesson ID required'}), 400
+        
+        lesson = Lesson.query.get_or_404(lesson_id)
+        
+        # Kontrollera att användaren äger lektionen
+        if lesson.user_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Markera som inaktiv istället för att ta bort
+        lesson.is_active = False
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Lesson deleted successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/lessons/<int:subject_id>/stats')
+@login_required
+def get_lesson_stats(subject_id):
+    """Hämta statistik för lektioner (endast för ägare)"""
+    try:
+        subject = Subject.query.get_or_404(subject_id)
+        
+        # Kontrollera att användaren äger ämnet
+        if subject.user_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Hämta statistik
+        lessons = Lesson.query.filter_by(subject_id=subject_id, is_active=True).all()
+        total_lessons = len(lessons)
+        total_views = sum(lesson.view_count for lesson in lessons)
+        total_duration = sum(lesson.duration for lesson in lessons if lesson.duration)
+        
+        return jsonify({
+            'status': 'success',
+            'total_lessons': total_lessons,
+            'total_views': total_views,
+            'total_duration': total_duration,
+            'total_duration_display': f"{total_duration // 3600}h {(total_duration % 3600) // 60}m" if total_duration else "N/A"
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
