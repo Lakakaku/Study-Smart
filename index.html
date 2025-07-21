@@ -502,6 +502,92 @@
       });
     }
 
+
+    // Lägg till denna funktion i din index_script.js för att uppdatera kalendern
+function refreshCalendarData() {
+    // Hämta aktuellt datum från kalendern
+    const currentDateElement = document.getElementById('current-date');
+    if (!currentDateElement) return;
+    
+    // Uppdatera quiz-data för kalender
+    loadQuizzesForDate(getCurrentSelectedDate());
+}
+
+// Funktion för att ta bort quiz och uppdatera kalender
+function deleteQuizAndRefresh(quizId, subjectName) {
+    if (!confirm('Är du säker på att du vill ta bort detta quiz?')) {
+        return;
+    }
+    
+    fetch(`/api/quiz/${quizId}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            // Visa framgång
+            alert(data.message);
+            
+            // Uppdatera kalendern
+            refreshCalendarData();
+            
+            // Uppdatera aktuell sida om vi är på subject-sidan
+            if (window.location.pathname.includes('/subject/')) {
+                location.reload();
+            }
+        } else {
+            alert('Fel vid borttagning: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Ett fel uppstod vid borttagning av quiz');
+    });
+}
+
+// Uppdatera funktionen som laddar quiz för kalender
+function loadQuizzesForDate(date) {
+    fetch(`/api/quizzes/${date}`)
+        .then(response => response.json())
+        .then(data => {
+            updateQuizzesList(data.quizzes);
+        })
+        .catch(error => {
+            console.error('Error loading quizzes:', error);
+        });
+}
+
+function updateQuizzesList(quizzes) {
+    const container = document.getElementById('quizzes-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (quizzes.length === 0) {
+        container.innerHTML = '<p class="no-quizzes">Inga quiz för detta datum</p>';
+        return;
+    }
+    
+    quizzes.forEach(quiz => {
+        const quizElement = document.createElement('div');
+        quizElement.className = 'quiz-item';
+        quizElement.innerHTML = `
+            <div class="quiz-header">
+                <h4>${quiz.title}</h4>
+                <span class="quiz-subject">${quiz.subject_name}</span>
+            </div>
+            <div class="quiz-actions">
+                <a href="/quiz/${quiz.id}" class="btn-primary">Ta Quiz</a>
+                ${quiz.can_delete ? `<button onclick="deleteQuizAndRefresh(${quiz.id}, '${quiz.subject_name}')" class="btn-delete">Ta bort</button>` : ''}
+            </div>
+        `;
+        container.appendChild(quizElement);
+    });
+}
+
     function showShareCode(code) {
       document.getElementById('share-code-text').value = code;
       document.getElementById('share-code-modal').style.display = 'block';
@@ -537,6 +623,8 @@
         });
       }
     }
+
+
 
     // Prevent event bubbling on delete/leave buttons
     document.addEventListener('DOMContentLoaded', function() {
