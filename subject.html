@@ -1708,133 +1708,188 @@
       uploadBtn.addEventListener('click', uploadLesson);
     }
 
+    // Uppdaterad uploadLesson-funktion
     async function uploadLesson() {
-      const titleInput = document.getElementById('lesson-title');
-      const dateInput = document.getElementById('lesson-date');
-      const descriptionInput = document.getElementById('lesson-description');
-      const fileInput = document.getElementById('lesson-upload-input');
-      const uploadBtn = document.getElementById('upload-lesson-btn');
-      const progressDiv = document.getElementById('lesson-upload-progress');
-      const progressBar = document.getElementById('lesson-progress-bar');
-      const statusDiv = document.getElementById('lesson-upload-status');
-  
-      const title = titleInput.value.trim();
-      const date = dateInput.value;
-      const description = descriptionInput.value.trim();
-      const file = fileInput.files[0];
-  
-      if (!title || !date || !file) {
-        showAlert('Vänligen fyll i alla obligatoriska fält', 'error');
-        return;
-      }
-  
-      // File size check (500MB limit)
-      if (file.size > 500 * 1024 * 1024) {
-        showAlert('Filen är för stor. Max storlek är 500MB.', 'error');
-        return;
-      }
-  
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('subject_id', subjectId);
-      formData.append('title', title);
-      formData.append('lesson_date', date);
-      if (description) {
-        formData.append('description', description);
-      }
-  
-      // Show progress
-      uploadBtn.disabled = true;
-      progressDiv.style.display = 'block';
-      statusDiv.style.display = 'block';
-      statusDiv.textContent = 'Laddar upp...';
-      statusDiv.className = 'upload-status';
-  
-      try {
-        const xhr = new XMLHttpRequest();
-    
-        // Upload progress
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const percentComplete = (e.loaded / e.total) * 100;
-            progressBar.style.width = percentComplete + '%';
-            statusDiv.textContent = `Laddar upp... ${Math.round(percentComplete)}%`;
-          }
-        });
-    
-        // Handle response
-        xhr.addEventListener('load', () => {
-          if (xhr.status === 200) {
-            const response = JSON.parse(xhr.responseText);
-            if (response.status === 'success') {
-              statusDiv.textContent = 'Uppladdning slutförd!';
-              statusDiv.className = 'upload-status success';
-          
-              // Reset form
-              titleInput.value = '';
-              descriptionInput.value = '';
-              fileInput.value = '';
-              dateInput.valueAsDate = new Date();
-          
-              // Reload lessons
-              loadLessons();
-              if (userRole === 'owner') {
-                loadLessonStats();
-              }
-          
-              showAlert('Lektion uppladdad!', 'success');
-            } else {
-              throw new Error(response.message || 'Uppladdning misslyckades');
-            }
-          } else {
-            throw new Error('Uppladdning misslyckades');
-          }
-        });
-    
-        xhr.addEventListener('error', () => {
-          throw new Error('Nätverksfel vid uppladdning');
-        });
-    
-        xhr.open('POST', '/upload_lesson');
-        xhr.send(formData);
-    
-      } catch (error) {
-        console.error('Upload error:', error);
-        statusDiv.textContent = 'Fel vid uppladdning: ' + error.message;
-        statusDiv.className = 'upload-status error';
-        showAlert('Fel vid uppladdning: ' + error.message, 'error');
-      } finally {
-        // Hide progress after a delay
-        setTimeout(() => {
-          progressDiv.style.display = 'none';
-          statusDiv.style.display = 'none';
-          uploadBtn.disabled = false;
-          progressBar.style.width = '0%';
-        }, 3000);
-      }
+        const titleInput = document.getElementById('lesson-title');
+        const dateInput = document.getElementById('lesson-date');
+        const descriptionInput = document.getElementById('lesson-description');
+        const fileInput = document.getElementById('lesson-upload-input');
+        const uploadBtn = document.getElementById('upload-lesson-btn');
+        const progressDiv = document.getElementById('lesson-upload-progress');
+        const progressBar = document.getElementById('lesson-progress-bar');
+        const statusDiv = document.getElementById('lesson-upload-status');
+
+        const title = titleInput.value.trim();
+        const date = dateInput.value;
+        const description = descriptionInput.value.trim();
+        const file = fileInput.files[0];
+
+        if (!title || !date || !file) {
+            showAlert('Vänligen fyll i alla obligatoriska fält', 'error');
+            return;
+        }
+
+        // File size check (500MB limit)
+        if (file.size > 500 * 1024 * 1024) {
+            showAlert('Filen är för stor. Max storlek är 500MB.', 'error');
+            return;
+        }
+
+        // Kontrollera att subjectId är definierat
+        if (!subjectId) {
+            showAlert('Kunde inte identifiera ämne', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('subject_id', subjectId);
+        formData.append('title', title);
+        formData.append('lesson_date', date);
+        if (description) {
+            formData.append('description', description);
+        }
+
+        // Debug: logga FormData innehåll
+        console.log('FormData contents:');
+        for (let [key, value] of formData.entries()) {
+            console.log(key, ':', value instanceof File ? `File: ${value.name}` : value);
+        }
+
+        // Show progress
+        uploadBtn.disabled = true;
+        progressDiv.style.display = 'block';
+        statusDiv.style.display = 'block';
+        statusDiv.textContent = 'Laddar upp...';
+        statusDiv.className = 'upload-status';
+
+        try {
+            const xhr = new XMLHttpRequest();
+
+            // Upload progress
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    progressBar.style.width = percentComplete + '%';
+                    statusDiv.textContent = `Laddar upp... ${Math.round(percentComplete)}%`;
+                }
+            });
+
+            // Handle response
+            xhr.addEventListener('load', () => {
+                console.log('XHR response status:', xhr.status);
+                console.log('XHR response text:', xhr.responseText);
+            
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.status === 'success') {
+                            statusDiv.textContent = 'Uppladdning slutförd!';
+                            statusDiv.className = 'upload-status success';
+
+                            // Reset form
+                            titleInput.value = '';
+                            descriptionInput.value = '';
+                            fileInput.value = '';
+                            dateInput.valueAsDate = new Date();
+
+                            // Reload lessons
+                            loadLessons();
+                            if (userRole === 'owner') {
+                                loadLessonStats();
+                            }
+
+                            showAlert('Lektion uppladdad!', 'success');
+                        } else {
+                            throw new Error(response.message || 'Uppladdning misslyckades');
+                        }
+                    } catch (e) {
+                        throw new Error('Invalid server response: ' + xhr.responseText.substring(0, 100));
+                    }
+                } else if (xhr.status === 404) {
+                    throw new Error('Upload endpoint not found. Check your Flask routes.');
+                } else {
+                    throw new Error(`Server error ${xhr.status}: ${xhr.statusText}`);
+                }
+            });
+
+            xhr.addEventListener('error', (e) => {
+                console.error('XHR error:', e);
+                throw new Error('Nätverksfel vid uppladdning');
+            });
+
+            console.log('Sending XHR request to /upload_lesson');
+            xhr.open('POST', '/upload_lesson');
+            xhr.send(formData);
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            statusDiv.textContent = 'Fel vid uppladdning: ' + error.message;
+            statusDiv.className = 'upload-status error';
+            showAlert('Fel vid uppladdning: ' + error.message, 'error');
+        } finally {
+            // Hide progress after a delay
+            setTimeout(() => {
+                progressDiv.style.display = 'none';
+                statusDiv.style.display = 'none';
+                uploadBtn.disabled = false;
+                progressBar.style.width = '0%';
+            }, 3000);
+        }
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
     async function loadLessons() {
-      try {
-        const response = await fetch(`/api/lessons/${subjectId}`);
-        const data = await response.json();
-    
-        if (data.status === 'success') {
-          lessons = data.lessons;
-          renderLessons(lessons);
-        } else {
-          throw new Error(data.message || 'Kunde inte ladda lektioner');
+        try {
+            console.log('Loading lessons for subject:', subjectId);
+            const response = await fetch(`/api/lessons/${subjectId}`);
+        
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        
+            const text = await response.text();
+            console.log('Response text:', text);
+        
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                throw new Error('Server returned invalid JSON: ' + text.substring(0, 100));
+            }
+        
+            if (data.status === 'success') {
+                lessons = data.lessons;
+                renderLessons(lessons);
+                console.log('Successfully loaded', lessons.length, 'lessons');
+            } else {
+                throw new Error(data.message || 'Kunde inte ladda lektioner');
+            }
+        } catch (error) {
+            console.error('Error loading lessons:', error);
+            const timeline = document.getElementById('lesson-timeline');
+            if (timeline) {
+                timeline.innerHTML = `
+                    <div class="no-lessons-message error">
+                        Fel vid laddning av lektioner: ${error.message}
+                    </div>
+                `;
+            }
+            showAlert('Kunde inte ladda lektioner: ' + error.message, 'error');
         }
-      } catch (error) {
-        console.error('Error loading lessons:', error);
-        const timeline = document.getElementById('lesson-timeline');
-        timeline.innerHTML = `
-          <div class="no-lessons-message">
-            Fel vid laddning av lektioner: ${error.message}
-          </div>
-        `;
-      }
     }
+
 
     function renderLessons(lessonsData) {
       const timeline = document.getElementById('lesson-timeline');
@@ -2043,6 +2098,51 @@
         console.error('Error loading lesson stats:', error);
       }
     }
+
+
+
+    function showAlert(message, type = 'info') {
+        // Skapa eller använd befintligt alert-element
+        let alertDiv = document.getElementById('global-alert');
+        if (!alertDiv) {
+            alertDiv = document.createElement('div');
+            alertDiv.id = 'global-alert';
+            alertDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                max-width: 400px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                font-weight: 500;
+            `;
+            document.body.appendChild(alertDiv);
+        }
+    
+        // Färger baserat på typ
+        const colors = {
+            success: { bg: '#d4edda', border: '#c3e6cb', text: '#155724' },
+            error: { bg: '#f8d7da', border: '#f5c6cb', text: '#721c24' },
+            warning: { bg: '#fff3cd', border: '#ffeaa7', text: '#856404' },
+            info: { bg: '#d1ecf1', border: '#bee5eb', text: '#0c5460' }
+        };
+    
+        const color = colors[type] || colors.info;
+        alertDiv.style.backgroundColor = color.bg;
+        alertDiv.style.borderLeft = `4px solid ${color.border}`;
+        alertDiv.style.color = color.text;
+        alertDiv.textContent = message;
+        alertDiv.style.display = 'block';
+    
+        // Dölj efter 5 sekunder
+        setTimeout(() => {
+            alertDiv.style.display = 'none';
+        }, 5000);
+    }
+
+
 
     // Utility function to escape HTML
     function escapeHtml(text) {
