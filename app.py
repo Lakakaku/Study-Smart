@@ -5,6 +5,21 @@ from datetime import datetime, timedelta
 import requests
 import fitz  # PyMuPDF
 import pytesseract
+import threading
+from pydub import AudioSegment  # IMPORTERA AudioSegment
+
+from threading import Thread
+
+
+
+import base64
+from moviepy import VideoFileClip
+import speech_recognition as sr
+import io
+import wave
+
+
+
 import urllib.parse
 from pdf2image import convert_from_path
 import os
@@ -53,20 +68,24 @@ class Lesson(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Skaparen
-    title = db.Column(db.String(200), nullable=False)  # Lektionstitel
-    description = db.Column(db.Text)  # Valfri beskrivning
-    filename = db.Column(db.String(255), nullable=False)  # Ursprungligt filnamn
-    file_path = db.Column(db.String(500), nullable=False)  # Sökväg på servern
-    file_size = db.Column(db.Integer)  # Storlek i bytes
-    file_type = db.Column(db.String(100))  # MIME-typ (video/mp4, audio/mp3 etc.)
-    duration = db.Column(db.Integer)  # Längd i sekunder (valfritt)
-    lesson_date = db.Column(db.Date, nullable=False)  # När lektionen är schemalagd
-    is_active = db.Column(db.Boolean, default=True)  # För att "ta bort" lektioner
-    view_count = db.Column(db.Integer, default=0)  # Statistik
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)
+    file_type = db.Column(db.String(100))
+    duration = db.Column(db.Integer)
+    lesson_date = db.Column(db.Date, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    view_count = db.Column(db.Integer, default=0)
+    transcription = db.Column(db.Text)  # NY: För transkriberat innehåll
+    transcription_status = db.Column(db.String(50), default='pending')  # NY: pending, processing, completed, failed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+
+
     # Relationships
     subject = db.relationship('Subject', backref='lessons')
     creator = db.relationship('User', backref='created_lessons')
@@ -118,6 +137,7 @@ class Lesson(db.Model):
         
         return False
     
+    # Resten av modellen som innan...
     def to_dict(self):
         """Convert to dictionary for JSON serialization"""
         return {
@@ -134,6 +154,8 @@ class Lesson(db.Model):
             'lesson_date': self.lesson_date.isoformat() if self.lesson_date else None,
             'is_active': self.is_active,
             'view_count': self.view_count,
+            'transcription': self.transcription,
+            'transcription_status': self.transcription_status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'extension': self.get_file_extension(),
@@ -1030,9 +1052,567 @@ def get_krav_documents(subject_name):
 
 
 
+def extract_audio_from_video(video_path, audio_output_path):
+    """Extrahera ljud från videofil"""
+    try:
+        video = VideoFileClip(video_path)
+        audio = video.audio
+        audio.write_audiofile(audio_output_path, logger=None, verbose=False)
+        video.close()
+        audio.close()
+        return True
+    except Exception as e:
+        print(f"Error extracting audio: {str(e)}")
+        return False
+
+def compress_audio_if_needed(audio_path, max_size_mb=25):
+    """Komprimera ljud om det är för stort - mer realistisk storlek"""
+    try:
+        # Kontrollera filstorlek
+        file_size = os.path.getsize(audio_path)
+        max_size_bytes = max_size_mb * 1024 * 1024
+        
+        if file_size <= max_size_bytes:
+            return audio_path  # Ingen komprimering behövs
+        
+        print(f"Audio file is {file_size / (1024*1024):.1f}MB, compressing to max {max_size_mb}MB...")
+        
+        # Skapa temporär fil för komprimerad version
+        temp_compressed = audio_path.rsplit('.', 1)[0] + '_compressed.wav'
+        
+        # Ladda audio med pydub
+        audio = AudioSegment.from_file(audio_path)
+        
+        # Beräkna målbitrate för att uppnå önskad filstorlek
+        duration_seconds = len(audio) / 1000
+        target_bitrate_kbps = int((max_size_bytes * 8) / (duration_seconds * 1000) * 0.8)  # 80% av max för säkerhet
+        
+        # Sätt minimum och maximum bitrate
+        target_bitrate_kbps = max(64, min(128, target_bitrate_kbps))
+        
+        print(f"Compressing to {target_bitrate_kbps}kbps...")
+        
+        # Exportera med lägre kvalitet för mindre filstorlek
+        audio.export(
+            temp_compressed,
+            format="wav",
+            parameters=[
+                "-ac", "1",      # Mono
+                "-ar", "16000"   # Lägre samplerate
+            ]
+        )
+        
+        # Kontrollera att den komprimerade filen blev mindre
+        compressed_size = os.path.getsize(temp_compressed)
+        if compressed_size < max_size_bytes:
+            print(f"Compression successful: {compressed_size / (1024*1024):.1f}MB")
+            return temp_compressed
+        else:
+            print(f"File still too large after compression: {compressed_size / (1024*1024):.1f}MB")
+            return temp_compressed  # Returnera ändå, kanske fungerar
+            
+    except Exception as e:
+        print(f"Error compressing audio: {str(e)}")
+        return audio_path  # Returnera original om komprimering misslyckas
 
 
 
+def transcribe_with_speech_recognition(audio_file_path):
+    """Transkribera ljud med lokala speech recognition (backup)"""
+    temp_files_to_cleanup = []
+    
+    try:
+        print(f"Starting transcription with SpeechRecognition for: {audio_file_path}")
+        
+        # Konvertera till WAV-format om det behövs
+        working_audio_path = audio_file_path
+        if not audio_file_path.lower().endswith('.wav'):
+            temp_wav_path = audio_file_path.rsplit('.', 1)[0] + '_temp_sr.wav'
+            try:
+                audio = AudioSegment.from_file(audio_file_path)
+                # Konvertera till format som speech_recognition förväntar sig
+                audio = audio.set_frame_rate(16000).set_channels(1)
+                audio.export(temp_wav_path, format="wav")
+                working_audio_path = temp_wav_path
+                temp_files_to_cleanup.append(temp_wav_path)
+                print(f"Converted audio to WAV format: {temp_wav_path}")
+            except Exception as e:
+                print(f"Could not convert audio format: {e}")
+                return None
+        
+        # Komprimera om filen är för stor
+        compressed_path = compress_audio_if_needed(working_audio_path, max_size_mb=25)
+        if compressed_path != working_audio_path:
+            temp_files_to_cleanup.append(compressed_path)
+            working_audio_path = compressed_path
+        
+        # Använd speech_recognition
+        recognizer = sr.Recognizer()
+        
+        with sr.AudioFile(working_audio_path) as source:
+            print("Reading audio data...")
+            audio_data = recognizer.record(source)
+        
+        print("Starting transcription with Google Speech Recognition...")
+        
+        try:
+            # Försök med Google Speech Recognition (gratis)
+            transcription = recognizer.recognize_google(audio_data, language='sv-SE')
+            print("Transcription completed successfully with Google SR")
+            return transcription
+        except sr.UnknownValueError:
+            print("Google Speech Recognition could not understand audio")
+            return "Ljudet kunde inte transkriberas - talet var oklart eller tystnad."
+        except sr.RequestError as e:
+            print(f"Google Speech Recognition service error: {e}")
+            return f"Transkribering misslyckades: {str(e)}"
+    
+    except Exception as e:
+        print(f"Error in transcription: {str(e)}")
+        return f"Fel vid transkribering: {str(e)}"
+        
+    finally:
+        # Rensa temporära filer
+        for temp_file in temp_files_to_cleanup:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                    print(f"Cleaned up temporary file: {temp_file}")
+            except Exception as e:
+                print(f"Could not remove temp file {temp_file}: {e}")
+
+
+def transcribe_with_whisper_api(audio_file_path):
+    """Transkribera med OpenAI Whisper API (om API-nyckel finns)"""
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        print("No OpenAI API key found, skipping Whisper API")
+        return None
+    
+    temp_files_to_cleanup = []
+    
+    try:
+        print(f"Starting transcription with OpenAI Whisper API: {audio_file_path}")
+        
+        # Komprimera filen om den är för stor (Whisper API har 25MB limit)
+        working_audio_path = compress_audio_if_needed(audio_file_path, max_size_mb=25)
+        if working_audio_path != audio_file_path:
+            temp_files_to_cleanup.append(working_audio_path)
+        
+        with open(working_audio_path, 'rb') as audio_file:
+            response = requests.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={
+                    "Authorization": f"Bearer {api_key}"
+                },
+                files={
+                    "file": audio_file
+                },
+                data={
+                    "model": "whisper-1",
+                    "language": "sv"
+                },
+                timeout=120
+            )
+        
+        if response.status_code == 200:
+            result = response.json()
+            transcription = result.get('text', '')
+            print("Whisper API transcription completed successfully")
+            return transcription
+        else:
+            print(f"Whisper API error {response.status_code}: {response.text}")
+            return None
+    
+    except Exception as e:
+        print(f"Error with Whisper API: {str(e)}")
+        return None
+    
+    finally:
+        # Rensa temporära filer
+        for temp_file in temp_files_to_cleanup:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except Exception as e:
+                print(f"Could not remove temp file {temp_file}: {e}")
+
+
+def transcribe_with_huggingface(audio_file_path):
+    """Transkribera ljud med Hugging Face Inference API (GRATIS)"""
+
+    hf_token = os.getenv("HF_API_TOKEN")
+    if not hf_token:
+        print("Ingen HF_API_TOKEN uppsatt, kan inte använda Hugging Face API")
+        return None    
+    temp_files_to_cleanup = []
+    
+    try:
+        print(f"Starting transcription with Hugging Face API: {audio_file_path}")
+        
+        # Konvertera till WAV om det behövs och komprimera
+        working_audio_path = audio_file_path
+        if not audio_file_path.lower().endswith('.wav'):
+            temp_wav_path = audio_file_path.rsplit('.', 1)[0] + '_temp_hf.wav'
+            try:
+                audio = AudioSegment.from_file(audio_file_path)
+                # Konvertera till format som fungerar bra för API:et
+                audio = audio.set_frame_rate(16000).set_channels(1)
+                audio.export(temp_wav_path, format="wav")
+                working_audio_path = temp_wav_path
+                temp_files_to_cleanup.append(temp_wav_path)
+                print(f"Converted audio to WAV format: {temp_wav_path}")
+            except Exception as e:
+                print(f"Could not convert audio format: {e}")
+                return None
+        
+        # Komprimera filen för API (max 10MB för säkerhet)
+        compressed_path = compress_audio_if_needed(working_audio_path, max_size_mb=10)
+        if compressed_path != working_audio_path:
+            temp_files_to_cleanup.append(compressed_path)
+            working_audio_path = compressed_path
+        
+        # Läs ljudfilen
+        with open(working_audio_path, 'rb') as f:
+            audio_data = f.read()
+        
+        # Kontrollera filstorlek (Hugging Face har ca 10MB limit)
+        if len(audio_data) > 10 * 1024 * 1024:
+            print(f"Audio file still too large: {len(audio_data) / (1024*1024):.1f}MB")
+            return "Ljudfilen är för stor för transkribering. Försök med en kortare fil."
+        
+        print(f"Sending {len(audio_data) / (1024*1024):.1f}MB audio file for transcription...")
+        
+        # Använd Hugging Face Inference API med Whisper-modell
+        # Detta är GRATIS utan API-nyckel!
+        API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3"
+        
+        headers = {
+            "Authorization": f"Bearer {hf_token}",
+            "Content-Type": "audio/wav"
+        }
+        
+        try:
+            response = requests.post(
+                API_URL,
+                headers=headers,
+                data=audio_data,
+                timeout=120
+            )
+            
+            print(f"Hugging Face API response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"API Response: {result}")
+                
+                # Hugging Face returnerar olika format beroende på modell
+                if isinstance(result, dict):
+                    if 'text' in result:
+                        transcription = result['text']
+                    elif 'generated_text' in result:
+                        transcription = result['generated_text']
+                    else:
+                        print(f"Unexpected response format: {result}")
+                        transcription = str(result)
+                elif isinstance(result, str):
+                    transcription = result
+                else:
+                    print(f"Unexpected response type: {type(result)}")
+                    transcription = str(result)
+                
+                if transcription and transcription.strip():
+                    print("Hugging Face transcription completed successfully")
+                    return transcription.strip()
+                else:
+                    return "Transkriberingen gav inget resultat."
+                    
+            elif response.status_code == 503:
+                # Modellen laddar, försök igen efter en kort paus
+                print("Model is loading, retrying in 10 seconds...")
+                import time
+                time.sleep(10)
+                
+                # Andra försök
+                response = requests.post(
+                    API_URL,
+                    headers=headers,
+                    data=audio_data,
+                    timeout=180
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if isinstance(result, dict) and 'text' in result:
+                        return result['text'].strip()
+                    elif isinstance(result, str):
+                        return result.strip()
+                
+                return f"API-fel efter omförsök: {response.status_code}"
+                
+            else:
+                print(f"Hugging Face API error: {response.status_code} - {response.text}")
+                return f"Transkribering misslyckades: API-fel {response.status_code}"
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Request error: {e}")
+            return f"Nätverksfel vid transkribering: {str(e)}"
+            
+    except Exception as e:
+        print(f"Error transcribing with Hugging Face: {str(e)}")
+        return f"Fel vid transkribering: {str(e)}"
+        
+    finally:
+        # Rensa temporära filer
+        for temp_file in temp_files_to_cleanup:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                    print(f"Cleaned up temporary file: {temp_file}")
+            except Exception as e:
+                print(f"Could not remove temp file {temp_file}: {e}")
+
+
+
+def transcribe_with_hackclub_ai(audio_file_path):
+    """Transkribera ljud med Hackclub AI API"""
+    temp_files_to_cleanup = []
+    
+    try:
+        # Konvertera till WAV-format om det behövs
+        working_audio_path = audio_file_path
+        if not audio_file_path.lower().endswith(('.wav', '.mp3')):
+            temp_wav_path = audio_file_path.rsplit('.', 1)[0] + '_temp.wav'
+            try:
+                audio = AudioSegment.from_file(audio_file_path)
+                audio.export(temp_wav_path, format="wav")
+                working_audio_path = temp_wav_path
+                temp_files_to_cleanup.append(temp_wav_path)
+            except Exception as e:
+                print(f"Could not convert audio format: {e}")
+                pass
+        
+        # Komprimera mer aggressivt för stora filer
+        compressed_path = compress_audio_if_needed(working_audio_path, max_size_mb=3)  # Minska till 3MB
+        if compressed_path != working_audio_path:
+            temp_files_to_cleanup.append(compressed_path)
+            working_audio_path = compressed_path
+        
+        # Läs ljudfilen
+        with open(working_audio_path, 'rb') as audio_file:
+            audio_data = audio_file.read()
+        
+        # Kontrollera filstorlek (max 3MB för base64)
+        if len(audio_data) > 3 * 1024 * 1024:
+            print(f"Audio file still too large after compression: {len(audio_data) / (1024*1024):.1f}MB")
+            return None
+        
+        print(f"Sending {len(audio_data) / (1024*1024):.1f}MB audio file for transcription...")
+        
+        # Skapa enklare prompt utan base64 - bara be om transkribering
+        prompt = "Transkribera denna ljudfil till svensk text. Formatera med korrekt interpunktion och styckeindelning."
+        
+        # Använd requests.Session för bättre SSL-hantering
+        session = requests.Session()
+        session.verify = True  # Verifiera SSL
+        
+        try:
+            response = session.post(
+                "https://ai.hackclub.com/chat/completions",
+                json={
+                    "messages": [
+                        {
+                            "role": "user", 
+                            "content": prompt
+                        }
+                    ]
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=300,  # Kortare timeout
+                stream=False
+            )
+            
+            print(f"Response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'choices' in result and len(result['choices']) > 0:
+                    transcription = result['choices'][0]['message']['content']
+                    print("Transcription completed successfully")
+                    return transcription.strip()
+                else:
+                    print("No transcription content in response")
+                    return None
+            else:
+                print(f"API returned status {response.status_code}: {response.text}")
+                return None
+                
+        except requests.exceptions.SSLError as ssl_error:
+            print(f"SSL Error: {ssl_error}")
+            # Försök utan SSL-verifiering som sista utväg
+            try:
+                print("Retrying without SSL verification...")
+                session.verify = False
+                response = session.post(
+                    "https://ai.hackclub.com/chat/completions",
+                    json={
+                        "messages": [
+                            {
+                                "role": "user", 
+                                "content": "Transkribera denna text till svenska: 'Detta är ett test av transkribering.'"
+                            }
+                        ]
+                    },
+                    headers={"Content-Type": "application/json"},
+                    timeout=60
+                )
+                
+                if response.status_code == 200:
+                    print("API connection works, but audio transcription may not be supported")
+                    return "Transkribering är inte tillgänglig för denna fil. API:et svarar men stöder inte ljudfiler."
+                
+            except Exception as retry_error:
+                print(f"Retry failed: {retry_error}")
+                
+            return None
+            
+        except Exception as e:
+            print(f"[ERROR] AI API call failed: {e}")
+            return None
+        
+    except Exception as e:
+        print(f"Error transcribing with Hackclub AI: {str(e)}")
+        return None
+        
+    finally:
+        # Rensa temporära filer
+        for temp_file in temp_files_to_cleanup:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                    print(f"Cleaned up temporary file: {temp_file}")
+            except Exception as e:
+                print(f"Could not remove temp file {temp_file}: {e}")
+
+def start_transcription_async(lesson_id):
+    """Starta transkribering i bakgrundstråd"""
+    thread = Thread(target=process_transcription, args=(lesson_id,))
+    thread.daemon = True
+    thread.start()
+    print(f"Started transcription thread for lesson {lesson_id}")
+
+# Lägg till denna route för att manuellt starta transkribering
+@app.route('/api/lesson/<int:lesson_id>/retranscribe', methods=['POST'])
+@login_required
+def retranscribe_lesson(lesson_id):
+    try:
+        lesson = Lesson.query.get_or_404(lesson_id)
+        
+        # Kontrollera att användaren har rättigheter
+        subject = Subject.query.get(lesson.subject_id)
+        if not subject or subject.creator_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Ingen behörighet'})
+        
+        # Starta transkribering
+        start_transcription_async(lesson_id)
+        
+        return jsonify({'status': 'success', 'message': 'Transkribering startad'})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+def process_transcription(lesson_id):
+    """Behandla transkribering för en lektion (körs i bakgrund) - UPPDATERAD"""
+    try:
+        with app.app_context():  # Viktigt för att använda databas i bakgrundstråd
+            lesson = Lesson.query.get(lesson_id)
+            if not lesson:
+                print(f"Lesson {lesson_id} not found")
+                return False
+            
+            # Uppdatera status
+            lesson.transcription_status = 'processing'
+            db.session.commit()
+            
+            print(f"Starting transcription for lesson {lesson_id}: {lesson.title}")
+            
+            # Kontrollera att filen existerar
+            if not os.path.exists(lesson.file_path):
+                print(f"File not found: {lesson.file_path}")
+                lesson.transcription_status = 'failed'
+                lesson.transcription = 'Fel: Filen hittades inte'
+                db.session.commit()
+                return False
+            
+            # Skapa temporär ljudfil
+            temp_audio_path = None
+            original_file_path = lesson.file_path
+            
+            # Om det är en videofil, extrahera ljud först
+            if lesson.file_type and lesson.file_type.startswith('video/'):
+                temp_audio_path = original_file_path.rsplit('.', 1)[0] + '_temp_audio.wav'
+                print(f"Extracting audio from video to {temp_audio_path}")
+                if not extract_audio_from_video(original_file_path, temp_audio_path):
+                    lesson.transcription_status = 'failed'
+                    lesson.transcription = 'Fel: Kunde inte extrahera ljud från video'
+                    db.session.commit()
+                    return False
+                audio_path = temp_audio_path
+            else:
+                audio_path = original_file_path
+            
+            print(f"Transcribing audio file: {audio_path}")
+            print(f"File size: {os.path.getsize(audio_path) / (1024*1024):.1f}MB")
+            
+            # Försök flera transkriberings-metoder i prioritetsordning
+            transcription = None
+            
+            # 1. Först försök med OpenAI Whisper API (om tillgänglig)
+            transcription = transcribe_with_whisper_api(audio_path)
+            
+            # 2. Fallback till Hugging Face (GRATIS OCH BRA!)
+            if not transcription:
+                print("Whisper API not available, trying Hugging Face...")
+                transcription = transcribe_with_huggingface(audio_path)
+            
+            # 3. Sista utväg: lokal speech recognition
+            if not transcription or transcription.startswith("Fel") or transcription.startswith("Transkribering"):
+                print("Hugging Face failed, trying local speech recognition...")
+                local_result = transcribe_with_speech_recognition(audio_path)
+                if local_result and not local_result.startswith("Fel"):
+                    transcription = local_result
+            
+            # Rensa temporär fil
+            if temp_audio_path and os.path.exists(temp_audio_path):
+                os.remove(temp_audio_path)
+            
+            # Spara resultatet
+            if transcription and transcription.strip() and not transcription.startswith("Fel"):
+                lesson.transcription = transcription.strip()
+                lesson.transcription_status = 'completed'
+                print(f"Transcription completed for lesson {lesson_id}")
+                print(f"Transcription preview: {transcription[:100]}...")
+            else:
+                lesson.transcription_status = 'failed'
+                lesson.transcription = transcription or 'Transkribering misslyckades. Kontrollera att ljudet innehåller tal och försök igen.'
+                print(f"Transcription failed for lesson {lesson_id}")
+            
+            db.session.commit()
+            return transcription is not None and transcription.strip()
+        
+    except Exception as e:
+        print(f"Error processing transcription for lesson {lesson_id}: {str(e)}")
+        # Uppdatera status till failed
+        try:
+            with app.app_context():
+                lesson = Lesson.query.get(lesson_id)
+                if lesson:
+                    lesson.transcription_status = 'failed'
+                    lesson.transcription = f'Fel vid transkribering: {str(e)}'
+                    db.session.commit()
+        except Exception as commit_error:
+            print(f"Error updating lesson status: {commit_error}")
+        return False
 
 
 
@@ -1052,7 +1632,7 @@ def allowed_lesson_file(filename):
 def upload_lesson():
     """Ladda upp en ny lektion"""
     try:
-        print("Upload lesson route called")  # Debug
+        print("Upload lesson route called")
         
         if 'file' not in request.files:
             return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
@@ -1067,7 +1647,7 @@ def upload_lesson():
         description = request.form.get('description', '').strip()
         lesson_date = request.form.get('lesson_date')
         
-        print(f"Form data: subject_id={subject_id}, title={title}, lesson_date={lesson_date}")  # Debug
+        print(f"Form data: subject_id={subject_id}, title={title}, lesson_date={lesson_date}")
         
         # Validera data
         if not subject_id:
@@ -1096,6 +1676,17 @@ def upload_lesson():
                 'message': 'Invalid file type. Only video and audio files are allowed.'
             }), 400
         
+        # Kontrollera filstorlek (100MB limit för uppladdning)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)  # Reset till början
+        
+        if file_size > 100 * 1024 * 1024:  # 100MB
+            return jsonify({
+                'status': 'error', 
+                'message': 'File too large. Maximum size is 100MB.'
+            }), 400
+        
         # Konvertera datum
         try:
             lesson_date_obj = datetime.strptime(lesson_date, '%Y-%m-%d').date()
@@ -1105,7 +1696,7 @@ def upload_lesson():
         # Säker filnamn
         filename = secure_filename(file.filename)
         
-        # Skapa mappstruktur: uploads/lessons/user_id/subject_name/
+        # Skapa mappstruktur
         subject_name_safe = secure_filename(subject.name)
         lesson_dir = os.path.join(
             app.config['UPLOAD_FOLDER'], 
@@ -1121,16 +1712,16 @@ def upload_lesson():
         unique_filename = f"{timestamp}_{name}{ext}"
         file_path = os.path.join(lesson_dir, unique_filename)
         
-        print(f"Saving file to: {file_path}")  # Debug
+        print(f"Saving file to: {file_path}")
         
         # Spara fil
         file.save(file_path)
         
         # Hämta filinfo
-        file_size = os.path.getsize(file_path)
+        actual_file_size = os.path.getsize(file_path)
         file_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
         
-        print(f"File saved: size={file_size}, type={file_type}")  # Debug
+        print(f"File saved: size={actual_file_size}, type={file_type}")
         
         # Skapa Lesson-post
         lesson = Lesson(
@@ -1140,26 +1731,78 @@ def upload_lesson():
             description=description if description else None,
             filename=filename,
             file_path=file_path,
-            file_size=file_size,
+            file_size=actual_file_size,
             file_type=file_type,
-            lesson_date=lesson_date_obj
+            lesson_date=lesson_date_obj,
+            transcription_status='pending'
         )
         
         db.session.add(lesson)
         db.session.commit()
         
-        print(f"Lesson created with ID: {lesson.id}")  # Debug
+        print(f"Lesson created with ID: {lesson.id}")
+        
+        # Starta transkribering i bakgrund
+        start_transcription_async(lesson.id)
         
         return jsonify({
             'status': 'success',
-            'message': 'Lesson uploaded successfully',
+            'message': 'Lesson uploaded successfully. Transcription is being processed.',
             'lesson': lesson.to_dict()
         })
         
     except Exception as e:
-        print(f"Error in upload_lesson: {str(e)}")  # Debug
+        print(f"Error in upload_lesson: {str(e)}")
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/lesson/<int:lesson_id>/transcription')
+@login_required
+def get_lesson_transcription(lesson_id):
+    """Hämta transkription för en lektion"""
+    try:
+        lesson = Lesson.query.get_or_404(lesson_id)
+        
+        # Kontrollera tillgång
+        if not lesson.is_accessible_by_user(current_user.id):
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        return jsonify({
+            'status': 'success',
+            'transcription': lesson.transcription,
+            'transcription_status': lesson.transcription_status
+        })
+        
+    except Exception as e:
+        print(f"Error getting transcription: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/lesson/<int:lesson_id>/retranscribe', methods=['POST'])
+@login_required
+def retry_transcription(lesson_id):
+    """Försök transkribera igen"""
+    try:
+        lesson = Lesson.query.get_or_404(lesson_id)
+        
+        # Endast ägaren kan starta om transkribering
+        if lesson.user_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        # Starta transkribering i bakgrund
+        from threading import Thread
+        transcription_thread = Thread(target=process_transcription, args=(lesson.id,))
+        transcription_thread.daemon = True
+        transcription_thread.start()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Transcription restarted'
+        })
+        
+    except Exception as e:
+        print(f"Error restarting transcription: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @app.route('/api/lessons/<int:subject_id>')
 @login_required
