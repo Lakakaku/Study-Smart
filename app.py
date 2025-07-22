@@ -1548,6 +1548,30 @@ def process_transcription(lesson_id):
         return False
 
 
+@app.route('/api/subjects/by-name/<subject_name>')
+@login_required
+def get_subject_by_name(subject_name):
+    """Hämta subject_id baserat på subject name"""
+    try:
+        subject = Subject.query.filter_by(name=subject_name).first()
+        
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Subject not found'}), 404
+        
+        # Kontrollera att användaren har tillgång
+        if not current_user.is_member_of_subject(subject.id):
+            return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+        
+        return jsonify({
+            'status': 'success',
+            'subject_id': subject.id,
+            'subject_name': subject.name
+        })
+        
+    except Exception as e:
+        print(f"Error in get_subject_by_name: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 
 # Konfiguration för lektioner
@@ -2076,6 +2100,11 @@ def toggle_subject_sharing(subject_id):
         print(f"[ERROR] Failed to toggle subject sharing: {e}")
         db.session.rollback()
         return jsonify({'status': 'error', 'message': 'Failed to update sharing'}), 500
+    
+
+
+
+
 
 @app.route('/api/subject/<int:subject_id>/members')
 @login_required
@@ -2623,17 +2652,21 @@ def extract_text_from_pdf(file_path):
     except Exception as e:
         print(f"[ERROR] Failed to extract text from {file_path}: {e}")
         return ""
+    
+
+
 
 @app.route('/create-quiz', methods=['GET', 'POST'])
 @login_required
 def create_quiz():
-    """Skapa quiz - nu med stöd för shared subjects och personliga quiz"""
+    """Skapa quiz - nu med stöd för shared subjects, personliga quiz och lektioner"""
     # Hämta alla subjects som användaren har tillgång till
     all_subjects = current_user.get_all_subjects()
     subject_names = [s.name for s in all_subjects]
-
+    
     if request.method == 'POST':
         subject_name = request.form.get('subject')
+        selected_lesson_id = request.form.get('selected_lesson')
         
         # Kontrollera att användaren har tillgång till detta subject
         subject_obj = Subject.query.filter_by(name=subject_name).first()
@@ -2643,7 +2676,11 @@ def create_quiz():
         
         # Kontrollera användarens roll för att avgöra om quiz ska vara personlig
         user_role = current_user.get_role_in_subject(subject_obj.id)
-        is_personal = user_role not in ['admin', 'owner']  # Medlemmar skapar personliga quiz
+        is_personal = bool(request.form.get('is_personal'))  # Ta värdet från formuläret
+        
+        # Om användaren inte är admin/owner, tvinga personlig quiz
+        if user_role not in ['admin', 'owner']:
+            is_personal = True
         
         # Hämta form data
         uploaded_files = request.files.getlist('data1')
@@ -2652,7 +2689,7 @@ def create_quiz():
         description = request.form.get('quiz-description', '').strip()
         use_docs = bool(request.form.get('use_documents'))
         create_flashcards = bool(request.form.get('create_flashcards', True))
-
+        
         # Map quiz_type to number of questions
         type_map = {
             'ten': 10,
@@ -2662,17 +2699,17 @@ def create_quiz():
             'exam': None
         }
         desired_count = type_map.get(quiz_type)
-
+        
         # Build title
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         quiz_title = user_title or f"{subject_name} - {quiz_type.replace('-', ' ').title()} - {now}"
-
+        
         # Handle file uploads and extract content
         saved_files = []
         file_contents = []
         upload_folder = os.path.join('static', 'uploads', str(current_user.id), subject_name)
         os.makedirs(upload_folder, exist_ok=True)
-
+        
         for file in uploaded_files:
             if not file or not file.filename:
                 continue
@@ -2680,32 +2717,70 @@ def create_quiz():
             filepath = os.path.join(upload_folder, filename)
             file.save(filepath)
             saved_files.append(filepath)
-
+            
             ext = os.path.splitext(filename)[1].lower()
             try:
                 if ext == '.pdf':
                     text = extract_text_from_pdf(filepath)
-                    file_contents.append(text)
-                elif ext in ['.txt', '.doc', '.docx']:
+                    if text and text.strip():  # Kontrollera att vi fick innehåll
+                        file_contents.append(text)
+                        print(f"[INFO] Extracted PDF content: {len(text)} characters from {filename}")
+                elif ext == '.txt':
                     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                        file_contents.append(f.read())
+                        text = f.read()
+                        if text and text.strip():
+                            file_contents.append(text)
+                            print(f"[INFO] Extracted TXT content: {len(text)} characters from {filename}")
+                elif ext in ['.doc', '.docx']:
+                    # För .doc/.docx filer behöver du troligtvis en speciell parser
+                    # För nu, försök läsa som text
+                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                        text = f.read()
+                        if text and text.strip():
+                            file_contents.append(text)
+                            print(f"[INFO] Extracted DOC content: {len(text)} characters from {filename}")
             except Exception as e:
                 print(f"[ERROR] Failed to process '{filename}': {e}")
-
+        
         combined_text = "\n\n".join(file_contents) if file_contents else ''
-
-        # **NYA DELEN: Lägg till krav-dokument om use_documents är aktiverat**
+        if combined_text:
+            print(f"[INFO] Combined file content: {len(combined_text)} characters")
+        
+        # Lägg till lektionsinnehåll om en lektion är vald
+        lesson_content = ""
+        selected_lesson = None
+        if selected_lesson_id and selected_lesson_id != "":
+            try:
+                lesson_id = int(selected_lesson_id)
+                lesson = Lesson.query.filter_by(id=lesson_id, is_active=True).first()
+                
+                if lesson and lesson.is_accessible_by_user(current_user.id) and lesson.subject_id == subject_obj.id:
+                    if lesson.transcription and lesson.transcription_status == 'completed':
+                        lesson_content = f"=== LESSON: {lesson.title} ===\n{lesson.transcription}"
+                        selected_lesson = lesson
+                        print(f"[INFO] Added lesson content: {len(lesson_content)} characters")
+                    else:
+                        print(f"[WARNING] Selected lesson {lesson_id} has no completed transcription (status: {lesson.transcription_status})")
+                        flash(f'Selected lesson "{lesson.title}" does not have a completed transcription yet.', 'warning')
+                else:
+                    print(f"[WARNING] Invalid lesson selection: {lesson_id}")
+                    flash('Selected lesson is not accessible or does not belong to this subject.', 'error')
+            except (ValueError, TypeError) as e:
+                print(f"[WARNING] Invalid lesson ID: {selected_lesson_id}, error: {e}")
+                flash('Invalid lesson selection.', 'error')
+        
+        # Lägg till krav-dokument om use_documents är aktiverat
         krav_content = ""
         if use_docs:
             # Hämta alla krav-dokument för detta subject
             krav_documents = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
-            
             krav_texts = {}
+            
             for doc in krav_documents:
                 if os.path.exists(doc.file_path):
                     try:
                         text_content = extract_text_from_pdf(doc.file_path)
-                        if text_content:
+                        if text_content and text_content.strip():
                             krav_texts[doc.doc_type] = text_content
                             print(f"[INFO] Loaded {doc.doc_type}: {len(text_content)} characters")
                     except Exception as e:
@@ -2714,20 +2789,22 @@ def create_quiz():
             # Bygg krav-content strängen
             if krav_texts:
                 krav_parts = []
-                
                 if 'kunskapsmal' in krav_texts:
                     krav_parts.append(f"=== KUNSKAPSMÅL ===\n{krav_texts['kunskapsmal']}")
-                
                 if 'kunskapskrav' in krav_texts:
                     krav_parts.append(f"=== KUNSKAPSKRAV ===\n{krav_texts['kunskapskrav']}")
-                
                 if 'begrippslista' in krav_texts:
                     krav_parts.append(f"=== BEGRIPPSLISTA ===\n{krav_texts['begrippslista']}")
                 
                 krav_content = "\n\n".join(krav_parts)
                 print(f"[INFO] Combined krav content: {len(krav_content)} characters")
-
-        # Build AI prompt med krav-dokument
+        
+        # Kontrollera att vi har åtminstone något innehåll
+        if not any([combined_text, lesson_content, krav_content]):
+            flash('Please provide some content: upload files, select a lesson with transcription, or enable curriculum documents.', 'error')
+            return redirect(url_for('create_quiz'))
+        
+        # Build AI prompt med krav-dokument och lektioner
         prompt_parts = []
         
         # Grundläggande instruktion
@@ -2745,97 +2822,204 @@ def create_quiz():
             prompt_parts.append("=== CURRICULUM REQUIREMENTS ===")
             prompt_parts.append("Use these curriculum documents as the PRIMARY foundation for your quiz questions:")
             prompt_parts.append(krav_content)
-            prompt_parts.append("Questions MUST align with the knowledge goals (kunskapsmål), assessment criteria (kunskapskrav), and include relevant terminology from the concept list (begrippslista).")
         
-        # Lägg till uppladdade material som sekundärt
+        # Lägg till lektionsinnehåll som sekundärt viktigt material
+        if lesson_content:
+            prompt_parts.append("=== LESSON MATERIAL ===")
+            prompt_parts.append("Use this lesson transcription as IMPORTANT source material:")
+            prompt_parts.append(lesson_content)
+        
+        # Lägg till uppladdade material som tertiärt
         if combined_text:
             prompt_parts.append("=== ADDITIONAL STUDY MATERIALS ===")
             prompt_parts.append("Use these materials as supporting content:")
             prompt_parts.append(combined_text)
         
-        # Slutlig formatering
-        if krav_content and combined_text:
-            prompt_parts.append("Create questions that integrate both the curriculum requirements and the study materials. Prioritize alignment with the curriculum goals while using the study materials for context and examples.")
+        # Slutlig formatering baserat på vad som är tillgängligt
+        content_sources = []
+        if krav_content: content_sources.append("curriculum requirements")
+        if lesson_content: content_sources.append("lesson material")
+        if combined_text: content_sources.append("uploaded study materials")
+        
+        if content_sources:
+            if len(content_sources) == 1:
+                prompt_parts.append(f"Focus questions on testing understanding from the {content_sources[0]}.")
+            else:
+                sources_text = ", ".join(content_sources[:-1]) + f" and {content_sources[-1]}"
+                prompt_parts.append(f"Create questions that integrate the {sources_text}. Prioritize alignment with curriculum requirements when available.")
+        
+        # Lägg till specifika instruktioner baserat på innehåll
+        if krav_content and lesson_content:
+            prompt_parts.append("Questions MUST align with the knowledge goals (kunskapsmål) and assessment criteria (kunskapskrav), while using the lesson content to provide specific examples and context.")
         elif krav_content:
-            prompt_parts.append("Focus questions on testing the specific knowledge goals and assessment criteria outlined in the curriculum documents.")
-        elif combined_text:
-            prompt_parts.append("Use the study materials to craft questions testing understanding.")
+            prompt_parts.append("Questions MUST align with the knowledge goals (kunskapsmål), assessment criteria (kunskapskrav), and include relevant terminology from the concept list (begrippslista).")
+        elif lesson_content:
+            prompt_parts.append("Questions should test comprehension of the key concepts and information presented in the lesson.")
         
-        prompt_parts.append("\nFormat as Q: [Question]\nA: [Answer]")
-        
+        prompt_parts.append("\nFormat each question as:\nQ: [Question]\nA: [Answer]\n")
         prompt = "\n\n".join(prompt_parts)
-
+        
+        print(f"[INFO] Sending prompt to AI: {len(prompt)} characters")
+        
         # Call AI
         try:
             response = requests.post(
                 "https://ai.hackclub.com/chat/completions",
                 json={"messages": [{"role": "user", "content": prompt}]},
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=120
             )
             response.raise_for_status()
             raw = response.json().get("choices", [])[0].get("message", {}).get("content", "")
+            print(f"[INFO] AI response received: {len(raw)} characters")
         except Exception as e:
             print(f"[ERROR] AI API call failed: {e}")
             raw = ""
-
-        # Parse AI output
+            flash('Failed to generate quiz questions. Please try again.', 'error')
+            return redirect(url_for('create_quiz'))
+        
+        # Parse AI output - förbättrad parsing
         questions = []
-        q = None
-        for line in raw.splitlines():
-            if line.lower().startswith('q:'):
-                q = line[2:].strip()
-            elif line.lower().startswith('a:') and q:
-                a = line[2:].strip()
-                questions.append({'question': q, 'answer': a})
-                q = None
-
+        lines = raw.splitlines()
+        current_question = None
+        current_answer = None
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            if line.lower().startswith('q:') or line.lower().startswith('question:'):
+                # Spara föregående fråga om den finns
+                if current_question and current_answer:
+                    questions.append({'question': current_question, 'answer': current_answer})
+                
+                # Starta ny fråga
+                current_question = line.split(':', 1)[1].strip() if ':' in line else line
+                current_answer = None
+                
+            elif line.lower().startswith('a:') or line.lower().startswith('answer:'):
+                if current_question:
+                    current_answer = line.split(':', 1)[1].strip() if ':' in line else line
+                    
+            elif current_question and not current_answer:
+                # Om vi har en fråga men inget svar ännu, detta kan vara fortsättning av frågan
+                current_question += " " + line
+                
+            elif current_question and current_answer:
+                # Om vi har både fråga och svar, detta kan vara fortsättning av svaret
+                current_answer += " " + line
+        
+        # Lägg till sista frågan
+        if current_question and current_answer:
+            questions.append({'question': current_question, 'answer': current_answer})
+        
+        print(f"[INFO] Parsed {len(questions)} questions from AI response")
+        
+        # Fallback parsing om den första metoden misslyckades
         if not questions:
-            questions = [{'question': '[Error]', 'answer': 'Could not generate questions. Please try again.'}]
-
+            print("[INFO] Trying alternative parsing method...")
+            q = None
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.lower().startswith('q:'):
+                    q = line[2:].strip()
+                elif line.lower().startswith('a:') and q:
+                    a = line[2:].strip()
+                    if q and a:  # Säkerställ att både fråga och svar finns
+                        questions.append({'question': q, 'answer': a})
+                    q = None
+        
+        # Hantera fall då inga frågor genererades
+        if not questions:
+            print("[ERROR] No questions could be parsed from AI response")
+            print(f"[DEBUG] Raw AI response: {raw[:500]}...")
+            flash('Could not generate quiz questions from the provided content. Please try again or provide different content.', 'error')
+            return redirect(url_for('create_quiz'))
+        
+        # Rensa bort tomma eller ogiltiga frågor
+        valid_questions = []
+        for q in questions:
+            if (q.get('question') and q.get('answer') and 
+                q['question'].strip() and q['answer'].strip() and
+                not q['question'].startswith('[Error]')):
+                valid_questions.append({
+                    'question': q['question'].strip(),
+                    'answer': q['answer'].strip()
+                })
+        
+        questions = valid_questions
+        
         # Truncate to desired count
         if desired_count and len(questions) > desired_count:
             questions = questions[:desired_count]
-
+        
+        print(f"[INFO] Final question count: {len(questions)}")
+        
         # Spara quiz med is_personal flagga
-        new_quiz = Quiz(
-            title=quiz_title,
-            quiz_type=quiz_type,
-            description=description,
-            files=saved_files,
-            use_documents=use_docs,
-            questions=questions,
-            subject_name=subject_name,
-            subject_id=subject_obj.id,
-            user_id=current_user.id,
-            is_personal=is_personal
-        )
+        try:
+            new_quiz = Quiz(
+                title=quiz_title,
+                quiz_type=quiz_type,
+                description=description,
+                files=saved_files,
+                use_documents=use_docs,
+                questions=questions,
+                subject_name=subject_name,
+                subject_id=subject_obj.id,
+                user_id=current_user.id,
+                is_personal=is_personal
+            )
+            db.session.add(new_quiz)
+            db.session.commit()
+            
+            print(f"[INFO] Quiz saved with ID: {new_quiz.id}")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to save quiz: {e}")
+            db.session.rollback()
+            flash('Failed to save quiz. Please try again.', 'error')
+            return redirect(url_for('create_quiz'))
         
-        db.session.add(new_quiz)
-        db.session.commit()
+        # Skapa flashcards endast om det finns giltiga frågor
+        if create_flashcards and questions and len(questions) > 0:
+            try:
+                if is_personal:
+                    # Endast för skaparen
+                    create_flashcards_for_user(new_quiz, current_user.id)
+                    print(f"[INFO] Created personal flashcards for user {current_user.id}")
+                else:
+                    # För alla medlemmar i subject
+                    create_flashcards_for_all_members(new_quiz, subject_obj)
+                    print(f"[INFO] Created shared flashcards for subject {subject_obj.id}")
+            except Exception as e:
+                print(f"[ERROR] Failed to create flashcards: {e}")
+                # Don't fail the entire quiz creation if flashcards fail
         
-        # Skapa flashcards - för personliga quiz endast för skaparen
-        if create_flashcards:
-            if is_personal:
-                # Endast för skaparen
-                create_flashcards_for_user(new_quiz, current_user.id)
-            else:
-                # För alla medlemmar i subject
-                create_flashcards_for_all_members(new_quiz, subject_obj)
-        
+        # Build success message
         quiz_type_text = "personal quiz" if is_personal else "shared quiz"
-        success_msg = f'{quiz_type_text.capitalize()} "{quiz_title}" created successfully'
+        success_msg = f'{quiz_type_text.capitalize()} "{quiz_title}" created successfully with {len(questions)} questions'
         
-        # Lägg till information om krav-dokument om de användes
+        # Lägg till information om använda källor
+        sources_used = []
         if use_docs and krav_content:
             krav_count = len([doc for doc in KravDocument.query.filter_by(subject_id=subject_obj.id).all()])
-            success_msg += f" (using {krav_count} curriculum document{'s' if krav_count != 1 else ''})"
+            sources_used.append(f"{krav_count} curriculum document{'s' if krav_count != 1 else ''}")
+        if lesson_content and selected_lesson:
+            sources_used.append(f"lesson '{selected_lesson.title}'")
+        if file_contents:
+            sources_used.append(f"{len(file_contents)} uploaded file{'s' if len(file_contents) != 1 else ''}")
+        
+        if sources_used:
+            success_msg += f" (using {', '.join(sources_used)})"
         
         flash(success_msg, 'success')
         return redirect(url_for('subject', subject_name=subject_name))
-
+    
     # GET - visa create quiz form
     events = Event.query.filter_by(user_id=current_user.id).all()
     events_data = [event.to_dict() for event in events]
+    
     return render_template('create-quiz.html', subjects=subject_names, events=events_data)
 
 def serialize_for_template(obj):
