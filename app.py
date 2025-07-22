@@ -550,10 +550,97 @@ class Quiz(db.Model):
     use_documents = db.Column(db.Boolean, default=False)
     files = db.Column(db.JSON)
     questions = db.Column(db.JSON)
-    is_personal = db.Column(db.Boolean, default=True)  # Lägg till denna om den inte finns
+    is_personal = db.Column(db.Boolean, default=True)
+    
+    def get_questions(self):
+        """
+        Säkert sätt att hämta frågor för denna specifika quiz.
+        Inkluderar extra validering för att säkerställa att frågorna tillhör denna quiz.
+        """
+        if not self.questions:
+            return []
+        
+        # Grundläggande validering
+        if not isinstance(self.questions, list):
+            print(f"[WARNING] Quiz {self.id} has invalid questions format: {type(self.questions)}")
+            return []
+        
+        # Filtrera och validera varje fråga
+        validated_questions = []
+        for i, question in enumerate(self.questions):
+            if not isinstance(question, dict):
+                print(f"[WARNING] Quiz {self.id}, question {i}: Invalid question format")
+                continue
+                
+            # Kontrollera att frågan har nödvändiga fält
+            if not all(key in question for key in ['question', 'answer']):
+                print(f"[WARNING] Quiz {self.id}, question {i}: Missing required fields")
+                continue
+                
+            # Extra validering - kontrollera quiz_id om det finns
+            if 'quiz_id' in question and question['quiz_id'] != self.id:
+                print(f"[ERROR] Quiz {self.id}, question {i}: Question belongs to quiz {question['quiz_id']}")
+                continue
+                
+            # Lägg till implicit quiz_id om det saknas
+            question_copy = question.copy()
+            question_copy['quiz_id'] = self.id
+            question_copy['belongs_to_quiz'] = self.id  # Extra säkerhet
+            
+            validated_questions.append(question_copy)
+        
+        return validated_questions
+    
+    def set_questions(self, questions_list):
+        """
+        Säkert sätt att sätta frågor för denna quiz.
+        Lägger automatiskt till quiz_id för varje fråga.
+        """
+        if not isinstance(questions_list, list):
+            raise ValueError("Questions must be a list")
+        
+        validated_questions = []
+        for i, question in enumerate(questions_list):
+            if not isinstance(question, dict):
+                raise ValueError(f"Question {i} must be a dictionary")
+                
+            if not all(key in question for key in ['question', 'answer']):
+                raise ValueError(f"Question {i} must have 'question' and 'answer' fields")
+            
+            # Säkerställ att varje fråga är kopplad till denna quiz
+            question_copy = question.copy()
+            question_copy['quiz_id'] = self.id
+            question_copy['belongs_to_quiz'] = self.id
+            question_copy['question_index'] = i
+            question_copy['created_at'] = datetime.utcnow().isoformat()
+            
+            validated_questions.append(question_copy)
+        
+        self.questions = validated_questions
+        print(f"[INFO] Set {len(validated_questions)} validated questions for quiz {self.id}")
+    
+    def verify_questions_integrity(self):
+        """
+        Verifiera att alla frågor verkligen tillhör denna quiz.
+        Returnerar antal korrekta frågor och antal fel.
+        """
+        questions = self.get_questions()
+        correct_count = 0
+        error_count = 0
+        
+        for question in questions:
+            if question.get('quiz_id') == self.id and question.get('belongs_to_quiz') == self.id:
+                correct_count += 1
+            else:
+                error_count += 1
+                
+        return correct_count, error_count
     
     def to_dict(self):
         """Konvertera Quiz-objekt till dictionary för JSON-serialisering"""
+        # Använd säkra getter för frågor
+        safe_questions = self.get_questions()
+        
         return {
             'id': self.id,
             'title': self.title,
@@ -565,13 +652,70 @@ class Quiz(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'use_documents': self.use_documents,
             'files': self.files,
-            'questions': self.questions,
-            'is_personal': self.is_personal
+            'questions': safe_questions,  # Använd validerade frågor
+            'is_personal': self.is_personal,
+            'question_count': len(safe_questions),
+            'integrity_check': self.verify_questions_integrity()
         }
     
+    def get_question_count(self):
+        """Säkert sätt att räkna frågor"""
+        return len(self.get_questions())
+    
+    def get_question_by_index(self, index):
+        """Hämta en specifik fråga baserat på index"""
+        questions = self.get_questions()
+        if 0 <= index < len(questions):
+            return questions[index]
+        return None
+    
     def __repr__(self):
-        return f"Quiz('{self.title}', '{self.quiz_type}')"
+        question_count = self.get_question_count()
+        return f"Quiz(id={self.id}, title='{self.title}', questions={question_count}, type='{self.quiz_type}')"
 
+
+# Hjälpfunktion för att migrera befintliga quizzes
+def fix_existing_quizzes():
+    """
+    Använd denna funktion för att fixa befintliga quizzes som kanske har
+    felaktiga eller saknade quiz_id-kopplingar i sina frågor.
+    """
+    all_quizzes = Quiz.query.all()
+    fixed_count = 0
+    
+    for quiz in all_quizzes:
+        if quiz.questions:
+            needs_fix = False
+            updated_questions = []
+            
+            for i, question in enumerate(quiz.questions):
+                if not isinstance(question, dict):
+                    continue
+                    
+                # Kontrollera om frågan behöver fixas
+                if 'quiz_id' not in question or question['quiz_id'] != quiz.id:
+                    needs_fix = True
+                    
+                question_copy = question.copy()
+                question_copy['quiz_id'] = quiz.id
+                question_copy['belongs_to_quiz'] = quiz.id
+                question_copy['question_index'] = i
+                question_copy['fixed_at'] = datetime.utcnow().isoformat()
+                
+                updated_questions.append(question_copy)
+            
+            if needs_fix:
+                quiz.questions = updated_questions
+                fixed_count += 1
+                print(f"[FIX] Updated quiz {quiz.id} with {len(updated_questions)} questions")
+    
+    if fixed_count > 0:
+        db.session.commit()
+        print(f"[SUCCESS] Fixed {fixed_count} quizzes")
+    else:
+        print("[INFO] No quizzes needed fixing")
+    
+    return fixed_count
 
 
 class Flashcard(db.Model):
@@ -2700,14 +2844,17 @@ def create_quiz():
         }
         desired_count = type_map.get(quiz_type)
         
-        # Build title
+        # Build title - INCLUDE UNIQUE IDENTIFIER
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]  # Kort unik identifierare
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        quiz_title = user_title or f"{subject_name} - {quiz_type.replace('-', ' ').title()} - {now}"
+        quiz_title = user_title or f"{subject_name} - {quiz_type.replace('-', ' ').title()} - {now} - {unique_id}"
         
         # Handle file uploads and extract content
         saved_files = []
         file_contents = []
-        upload_folder = os.path.join('static', 'uploads', str(current_user.id), subject_name)
+        # INCLUDE UNIQUE ID IN UPLOAD PATH
+        upload_folder = os.path.join('static', 'uploads', str(current_user.id), subject_name, unique_id)
         os.makedirs(upload_folder, exist_ok=True)
         
         for file in uploaded_files:
@@ -2722,7 +2869,7 @@ def create_quiz():
             try:
                 if ext == '.pdf':
                     text = extract_text_from_pdf(filepath)
-                    if text and text.strip():  # Kontrollera att vi fick innehåll
+                    if text and text.strip():
                         file_contents.append(text)
                         print(f"[INFO] Extracted PDF content: {len(text)} characters from {filename}")
                 elif ext == '.txt':
@@ -2732,8 +2879,6 @@ def create_quiz():
                             file_contents.append(text)
                             print(f"[INFO] Extracted TXT content: {len(text)} characters from {filename}")
                 elif ext in ['.doc', '.docx']:
-                    # För .doc/.docx filer behöver du troligtvis en speciell parser
-                    # För nu, försök läsa som text
                     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                         text = f.read()
                         if text and text.strip():
@@ -2772,7 +2917,6 @@ def create_quiz():
         # Lägg till krav-dokument om use_documents är aktiverat
         krav_content = ""
         if use_docs:
-            # Hämta alla krav-dokument för detta subject
             krav_documents = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
             krav_texts = {}
             
@@ -2786,7 +2930,6 @@ def create_quiz():
                     except Exception as e:
                         print(f"[ERROR] Failed to process krav document {doc.filename}: {e}")
             
-            # Bygg krav-content strängen
             if krav_texts:
                 krav_parts = []
                 if 'kunskapsmal' in krav_texts:
@@ -2804,8 +2947,41 @@ def create_quiz():
             flash('Please provide some content: upload files, select a lesson with transcription, or enable curriculum documents.', 'error')
             return redirect(url_for('create_quiz'))
         
-        # Build AI prompt med krav-dokument och lektioner
+        # SKAPÄ QUIZ I DATABASEN FÖRE AI-GENERERING FÖR SÄKER ID
+        try:
+            # Skapa en tom quiz först för att få ett säkert database ID
+            new_quiz = Quiz(
+                title=quiz_title,
+                quiz_type=quiz_type,
+                description=description,
+                files=saved_files,
+                use_documents=use_docs,
+                questions=[],  # Tom till att börja med
+                subject_name=subject_name,
+                subject_id=subject_obj.id,
+                user_id=current_user.id,
+                is_personal=is_personal
+            )
+            db.session.add(new_quiz)
+            db.session.flush()  # Få database ID innan vi fortsätter
+            
+            quiz_db_id = new_quiz.id  # Nu har vi ett säkert database ID att arbeta med
+            print(f"[INFO] Created quiz with database ID: {quiz_db_id} and unique ID: {unique_id}")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to create initial quiz record: {e}")
+            db.session.rollback()
+            flash('Failed to create quiz. Please try again.', 'error')
+            return redirect(url_for('create_quiz'))
+        
+        # Build AI prompt - ANVÄND BÅDE DATABASE ID OCH UNIQUE ID
         prompt_parts = []
+        
+        # ADD MULTIPLE IDENTIFIERS TO PROMPT FOR MAXIMUM UNIQUENESS
+        prompt_parts.append(f"Creating quiz - Database ID: {quiz_db_id}, Unique ID: {unique_id}")
+        prompt_parts.append(f"Subject: {subject_name} (ID: {subject_obj.id})")
+        prompt_parts.append(f"User: {current_user.id}")
+        prompt_parts.append(f"Timestamp: {now}")
         
         # Grundläggande instruktion
         if desired_count:
@@ -2817,7 +2993,7 @@ def create_quiz():
         if description:
             prompt_parts.append(f"Quiz description: {description}")
         
-        # Lägg till krav-dokument först (viktigast för att forma quizzen)
+        # Lägg till krav-dokument först
         if krav_content:
             prompt_parts.append("=== CURRICULUM REQUIREMENTS ===")
             prompt_parts.append("Use these curriculum documents as the PRIMARY foundation for your quiz questions:")
@@ -2835,7 +3011,7 @@ def create_quiz():
             prompt_parts.append("Use these materials as supporting content:")
             prompt_parts.append(combined_text)
         
-        # Slutlig formatering baserat på vad som är tillgängligt
+        # Slutlig formatering
         content_sources = []
         if krav_content: content_sources.append("curriculum requirements")
         if lesson_content: content_sources.append("lesson material")
@@ -2848,7 +3024,7 @@ def create_quiz():
                 sources_text = ", ".join(content_sources[:-1]) + f" and {content_sources[-1]}"
                 prompt_parts.append(f"Create questions that integrate the {sources_text}. Prioritize alignment with curriculum requirements when available.")
         
-        # Lägg till specifika instruktioner baserat på innehåll
+        # Lägg till specifika instruktioner
         if krav_content and lesson_content:
             prompt_parts.append("Questions MUST align with the knowledge goals (kunskapsmål) and assessment criteria (kunskapskrav), while using the lesson content to provide specific examples and context.")
         elif krav_content:
@@ -2856,10 +3032,14 @@ def create_quiz():
         elif lesson_content:
             prompt_parts.append("Questions should test comprehension of the key concepts and information presented in the lesson.")
         
-        prompt_parts.append("\nFormat each question as:\nQ: [Question]\nA: [Answer]\n")
+        # CRITICAL: ANVÄND KOMBINATION AV DATABASE ID OCH UNIQUE ID FÖR MAXIMAL SÄKERHET
+        combined_identifier = f"{quiz_db_id}_{unique_id}"
+        prompt_parts.append(f"\nFormat each question as:\nQUIZ{combined_identifier}_Q[number]: [Question]\nQUIZ{combined_identifier}_A[number]: [Answer]\n")
+        prompt_parts.append(f"CRITICAL: Use the exact prefix QUIZ{combined_identifier}_Q and QUIZ{combined_identifier}_A for all questions and answers. This ensures proper parsing and prevents mix-ups.")
+        
         prompt = "\n\n".join(prompt_parts)
         
-        print(f"[INFO] Sending prompt to AI: {len(prompt)} characters")
+        print(f"[INFO] Sending prompt to AI for quiz DB_ID:{quiz_db_id}, UNIQUE_ID:{unique_id}: {len(prompt)} characters")
         
         # Call AI
         try:
@@ -2871,30 +3051,62 @@ def create_quiz():
             )
             response.raise_for_status()
             raw = response.json().get("choices", [])[0].get("message", {}).get("content", "")
-            print(f"[INFO] AI response received: {len(raw)} characters")
+            print(f"[INFO] AI response received for quiz DB_ID:{quiz_db_id}: {len(raw)} characters")
         except Exception as e:
-            print(f"[ERROR] AI API call failed: {e}")
-            raw = ""
+            print(f"[ERROR] AI API call failed for quiz DB_ID:{quiz_db_id}: {e}")
+            # Radera den skapade quiz-posten eftersom AI:n misslyckades
+            db.session.delete(new_quiz)
+            db.session.rollback()
             flash('Failed to generate quiz questions. Please try again.', 'error')
             return redirect(url_for('create_quiz'))
         
-        # Parse AI output - förbättrad parsing
+        # FÖRBÄTTRAD PARSING MED UNIKA IDENTIFIERARE
         questions = []
         lines = raw.splitlines()
         current_question = None
         current_answer = None
+        question_number = 0
         
+        # Parse med kombinerade identifierare
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-                
-            if line.lower().startswith('q:') or line.lower().startswith('question:'):
+            
+            # Leta efter våra unika prefix först
+            quiz_q_prefix = f'quiz{combined_identifier}_q'.lower()
+            quiz_a_prefix = f'quiz{combined_identifier}_a'.lower()
+            
+            if line.lower().startswith(quiz_q_prefix):
                 # Spara föregående fråga om den finns
                 if current_question and current_answer:
-                    questions.append({'question': current_question, 'answer': current_answer})
+                    questions.append({
+                        'question': current_question,
+                        'answer': current_answer,
+                        'quiz_id': quiz_db_id,  # EXPLICIT KOPPLING
+                        'question_number': question_number
+                    })
+                    question_number += 1
                 
                 # Starta ny fråga
+                current_question = line.split(':', 1)[1].strip() if ':' in line else line
+                current_answer = None
+                
+            elif line.lower().startswith(quiz_a_prefix):
+                if current_question:
+                    current_answer = line.split(':', 1)[1].strip() if ':' in line else line
+                    
+            # Fallback för standardformat (men mindre tillförlitligt)
+            elif line.lower().startswith('q:') or line.lower().startswith('question:'):
+                if current_question and current_answer:
+                    questions.append({
+                        'question': current_question,
+                        'answer': current_answer,
+                        'quiz_id': quiz_db_id,
+                        'question_number': question_number
+                    })
+                    question_number += 1
+                    
                 current_question = line.split(':', 1)[1].strip() if ':' in line else line
                 current_answer = None
                 
@@ -2903,98 +3115,88 @@ def create_quiz():
                     current_answer = line.split(':', 1)[1].strip() if ':' in line else line
                     
             elif current_question and not current_answer:
-                # Om vi har en fråga men inget svar ännu, detta kan vara fortsättning av frågan
+                # Fortsättning av frågan
                 current_question += " " + line
                 
             elif current_question and current_answer:
-                # Om vi har både fråga och svar, detta kan vara fortsättning av svaret
+                # Fortsättning av svaret
                 current_answer += " " + line
         
         # Lägg till sista frågan
         if current_question and current_answer:
-            questions.append({'question': current_question, 'answer': current_answer})
+            questions.append({
+                'question': current_question,
+                'answer': current_answer,
+                'quiz_id': quiz_db_id,
+                'question_number': question_number
+            })
         
-        print(f"[INFO] Parsed {len(questions)} questions from AI response")
+        print(f"[INFO] Parsed {len(questions)} questions from AI response for quiz DB_ID:{quiz_db_id}")
         
-        # Fallback parsing om den första metoden misslyckades
-        if not questions:
-            print("[INFO] Trying alternative parsing method...")
-            q = None
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.lower().startswith('q:'):
-                    q = line[2:].strip()
-                elif line.lower().startswith('a:') and q:
-                    a = line[2:].strip()
-                    if q and a:  # Säkerställ att både fråga och svar finns
-                        questions.append({'question': q, 'answer': a})
-                    q = None
-        
-        # Hantera fall då inga frågor genererades
-        if not questions:
-            print("[ERROR] No questions could be parsed from AI response")
-            print(f"[DEBUG] Raw AI response: {raw[:500]}...")
-            flash('Could not generate quiz questions from the provided content. Please try again or provide different content.', 'error')
-            return redirect(url_for('create_quiz'))
-        
-        # Rensa bort tomma eller ogiltiga frågor
-        valid_questions = []
+        # Validera att frågorna verkligen tillhör denna quiz
+        validated_questions = []
         for q in questions:
             if (q.get('question') and q.get('answer') and 
                 q['question'].strip() and q['answer'].strip() and
-                not q['question'].startswith('[Error]')):
-                valid_questions.append({
+                not q['question'].startswith('[Error]') and
+                q.get('quiz_id') == quiz_db_id):  # EXPLICIT VALIDERING
+                validated_questions.append({
                     'question': q['question'].strip(),
-                    'answer': q['answer'].strip()
+                    'answer': q['answer'].strip(),
+                    'quiz_id': quiz_db_id,  # BEHÅLL KOPPLING
+                    'created_for_quiz': quiz_db_id  # EXTRA SÄKERHET
                 })
         
-        questions = valid_questions
+        questions = validated_questions
+        
+        # Hantera fall då inga frågor genererades
+        if not questions:
+            print(f"[ERROR] No valid questions could be parsed from AI response for quiz DB_ID:{quiz_db_id}")
+            print(f"[DEBUG] Raw AI response: {raw[:500]}...")
+            # Radera den skapade quiz-posten
+            db.session.delete(new_quiz)
+            db.session.rollback()
+            flash('Could not generate quiz questions from the provided content. Please try again or provide different content.', 'error')
+            return redirect(url_for('create_quiz'))
         
         # Truncate to desired count
         if desired_count and len(questions) > desired_count:
             questions = questions[:desired_count]
         
-        print(f"[INFO] Final question count: {len(questions)}")
+        print(f"[INFO] Final validated question count for quiz DB_ID:{quiz_db_id}: {len(questions)}")
         
-        # Spara quiz med is_personal flagga
+        # Uppdatera quiz med validerade frågor
         try:
-            new_quiz = Quiz(
-                title=quiz_title,
-                quiz_type=quiz_type,
-                description=description,
-                files=saved_files,
-                use_documents=use_docs,
-                questions=questions,
-                subject_name=subject_name,
-                subject_id=subject_obj.id,
-                user_id=current_user.id,
-                is_personal=is_personal
-            )
-            db.session.add(new_quiz)
+            new_quiz.questions = questions  # Detta ska nu vara säkert kopplat
             db.session.commit()
             
-            print(f"[INFO] Quiz saved with ID: {new_quiz.id}")
+            # EXTRA VALIDERING - kontrollera att frågorna verkligen sparades
+            saved_quiz = Quiz.query.get(quiz_db_id)
+            if not saved_quiz or not saved_quiz.questions or len(saved_quiz.questions) != len(questions):
+                print(f"[ERROR] Quiz save validation failed for DB_ID:{quiz_db_id}")
+                db.session.rollback()
+                flash('Failed to save quiz questions correctly. Please try again.', 'error')
+                return redirect(url_for('create_quiz'))
+            
+            print(f"[SUCCESS] Quiz DB_ID:{quiz_db_id} saved successfully with {len(saved_quiz.questions)} questions")
             
         except Exception as e:
-            print(f"[ERROR] Failed to save quiz: {e}")
+            print(f"[ERROR] Failed to update quiz DB_ID:{quiz_db_id} with questions: {e}")
             db.session.rollback()
             flash('Failed to save quiz. Please try again.', 'error')
             return redirect(url_for('create_quiz'))
         
-        # Skapa flashcards endast om det finns giltiga frågor
+        # Skapa flashcards
         if create_flashcards and questions and len(questions) > 0:
             try:
                 if is_personal:
-                    # Endast för skaparen
                     create_flashcards_for_user(new_quiz, current_user.id)
-                    print(f"[INFO] Created personal flashcards for user {current_user.id}")
+                    print(f"[INFO] Created personal flashcards for quiz DB_ID:{quiz_db_id}, user {current_user.id}")
                 else:
-                    # För alla medlemmar i subject
                     create_flashcards_for_all_members(new_quiz, subject_obj)
-                    print(f"[INFO] Created shared flashcards for subject {subject_obj.id}")
+                    print(f"[INFO] Created shared flashcards for quiz DB_ID:{quiz_db_id}, subject {subject_obj.id}")
             except Exception as e:
-                print(f"[ERROR] Failed to create flashcards: {e}")
-                # Don't fail the entire quiz creation if flashcards fail
+                print(f"[ERROR] Failed to create flashcards for quiz DB_ID:{quiz_db_id}: {e}")
         
         # Build success message
         quiz_type_text = "personal quiz" if is_personal else "shared quiz"
@@ -3021,6 +3223,11 @@ def create_quiz():
     events_data = [event.to_dict() for event in events]
     
     return render_template('create-quiz.html', subjects=subject_names, events=events_data)
+
+
+
+
+
 
 def serialize_for_template(obj):
     """Hjälpfunktion för att serialisera objekt för templates"""
