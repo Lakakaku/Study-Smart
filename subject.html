@@ -1064,17 +1064,7 @@
                 {{ quiz.title }}
               </div>
 
-              <!-- Start-knapp -->
-              <form method="GET"
-                    action="{{ url_for('start_quiz',
-                                      subject_name=subject_name,
-                                      quiz_index=loop.index0) }}">
-                <button type="submit" class="start-button">
-                  Starta Flashcard-Quiz
-                </button>
-              </form>
-
-              <!-- Delete-formen du redan har -->
+              <!-- Delete-formen (endast för quiz-ägaren) -->
               {% if quiz.user_id == current_user.id %}
               <form method="POST"
                     action="{{ url_for('delete_quiz',
@@ -1093,14 +1083,6 @@
         <p>No quizzes available for this subject yet.</p>
       {% endif %}
     </div>
-
-
-
-
-
-
-
-
 
     <!-- Lessons Section -->
     <div class="lessons-section">
@@ -1200,42 +1182,6 @@
       </div>
     </div>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     <!-- Documents Section - Only show for owners and admins -->
     {% if user_role in ['owner', 'admin'] %}
     <div class="placeholder-panel">
@@ -1294,6 +1240,8 @@
     </div>
     {% endif %}
     <!-- End of Documents Section -->
+
+  </div>
 
   </div>
 
