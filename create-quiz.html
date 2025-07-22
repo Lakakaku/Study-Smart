@@ -15,91 +15,275 @@
   </div>
 
   <div class="form-container">
-    <form method="POST" id="quiz-form" enctype="multipart/form-data">
-      
-      <section class="form-section">
-        <h2>Choose Subject</h2>
-        <label for="subject" class="section-label">Select a subject:</label>
-        <select name="subject" id="subject" required>
-          <option value="" disabled selected hidden>Select a subject</option>
-          {% for subject in subjects %}
-          <option value="{{ subject }}">{{ subject }}</option>
-          {% endfor %}
-        </select>
-      </section>
-      <section class="form-section" id="test-selector-section" style="display: none;">
-        <h2>Select Related Test</h2>
-        <label for="test-dropdown" class="section-label">Choose test for this quiz:</label>
-        <select id="test-dropdown" name="related_test">
-          <option value="" disabled selected hidden>Select a test</option>
-        </select>
-      </section>
-      <script>
-        const allEvents = {{ events | tojson }};
-      </script>
-
-      <section class="form-section">
-        <h2>Quiz Type</h2>
-        <label for="quiz-options" class="section-label">Select quiz type:</label>
-        <select id="quiz-options" name="quiz-drop" required>
-          <option value="ten">Quiz - 10 Questions</option>
-          <option value="twenty-five">Quiz - 25 Questions</option>
-          <option value="fifty">Quiz - 50 Questions</option>
-          <option value="extended-response">Extended Response Questions</option>
-          <option value="exam">Test Exam</option>
-        </select>
-      </section>
-
-      <section class="form-section">
-        <h2>Data</h2>
-        <label for="data-upload" class="data-label">Add Data</label>
-        <input
-          type="file"
-          id="data-upload"
-          name="data1"
-          class="data-input"
-          multiple
-          accept=".pdf,.doc,.docx,.txt"
-        />
-        <div class="pdf-container"></div>
-      </section>
-
-      <!-- Ny sektion: inkludera kravdokument -->
-      <section class="form-section">
-        <h2>Include Documents</h2>
-        <label class="section-label" for="use-documents">
-          <input type="checkbox" id="use-documents" name="use_documents" />
-          Inkludera begreppslistor, kunskapskrav och kunskapsmål
-        </label>
-      </section>
-
-      <section class="form-section">
-        <h2>Describe Quiz</h2>
-        <textarea
-          name="quiz-description"
-          class="input-description"
-          placeholder="Describe the quiz here..."
-          required
-        ></textarea>
-      </section>
-
-      <section class="form-section">
-        <h2>Quiz Title</h2>
-        <input
-          type="text"
-          id="quiz-title"
-          name="quiz_title"
-          placeholder="Enter a title for your quiz"
-          required
-        />
-      </section>
-
-      <div class="bottom-container">
-        <button class="create-btn" type="submit" name="submit">CREATE QUIZ</button>
-      </div>
-
-    </form>
+    <form method="POST" enctype="multipart/form-data" class="quiz-form">
+  
+  <!-- Subject Selection -->
+  <div class="form-group">
+    <label for="subject">Subject:</label>
+    <select name="subject" id="subject" required>
+      <option value="">Select a subject</option>
+      {% for subject in subjects %}
+        <option value="{{ subject }}">{{ subject }}</option>
+      {% endfor %}
+    </select>
   </div>
 
+  <!-- Quiz Type Selection -->
+  <div class="form-group">
+    <label>Quiz Type:</label>
+    <div class="quiz-type-options">
+      <label class="radio-option">
+        <input type="radio" name="quiz-drop" value="ten" required>
+        <span>10 Questions</span>
+      </label>
+      <label class="radio-option">
+        <input type="radio" name="quiz-drop" value="twenty-five" required>
+        <span>25 Questions</span>
+      </label>
+      <label class="radio-option">
+        <input type="radio" name="quiz-drop" value="fifty" required>
+        <span>50 Questions</span>
+      </label>
+      <label class="radio-option">
+        <input type="radio" name="quiz-drop" value="extended-response" required>
+        <span>Extended Response</span>
+      </label>
+      <label class="radio-option">
+        <input type="radio" name="quiz-drop" value="exam" required>
+        <span>Exam</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Personal Quiz Checkbox -->
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" name="is_personal" id="is_personal">
+      <span class="checkbox-text">
+        Create as personal quiz
+        <small class="help-text">
+          Personal quizzes are only visible to you. Uncheck to create a quiz for all subject members.
+        </small>
+      </span>
+    </label>
+  </div>
+
+  <!-- Quiz Title -->
+  <div class="form-group">
+    <label for="quiz_title">Quiz Title (optional):</label>
+    <input type="text" name="quiz_title" id="quiz_title" placeholder="Leave blank for auto-generated title">
+  </div>
+
+  <!-- Quiz Description -->
+  <div class="form-group">
+    <label for="quiz-description">Description (optional):</label>
+    <textarea name="quiz-description" id="quiz-description" placeholder="Describe what this quiz covers..."></textarea>
+  </div>
+
+  <!-- File Upload -->
+  <div class="form-group">
+    <label for="data1">Upload Files (optional):</label>
+    <input type="file" name="data1" id="data1" multiple accept=".pdf,.txt,.doc,.docx">
+    <small class="help-text">Supported formats: PDF, TXT, DOC, DOCX</small>
+  </div>
+
+  <!-- Use Documents Checkbox -->
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" name="use_documents" id="use_documents" checked>
+      <span class="checkbox-text">
+        Use subject's requirement documents
+        <small class="help-text">
+          Include begrippslista, kunskapskrav, and kunskapsmål in quiz generation
+        </small>
+      </span>
+    </label>
+  </div>
+
+  <!-- Create Flashcards Checkbox -->
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" name="create_flashcards" id="create_flashcards" checked>
+      <span class="checkbox-text">
+        Create flashcards from quiz questions
+        <small class="help-text">
+          Automatically generate flashcards for spaced repetition
+        </small>
+      </span>
+    </label>
+  </div>
+
+  <!-- Submit Button -->
+  <div class="form-group">
+    <button type="submit" class="submit-btn">Create Quiz</button>
+  </div>
+
+</form>
+  </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const subjectSelect = document.getElementById('subject');
+  const personalCheckbox = document.getElementById('is_personal');
+  const useDocumentsCheckbox = document.getElementById('use_documents');
+  const flashcardsCheckbox = document.getElementById('create_flashcards');
+  
+  // Visa/dölj information baserat på om det är personligt quiz
+  personalCheckbox.addEventListener('change', function() {
+    const helpTexts = document.querySelectorAll('.help-text');
+    const isPersonal = this.checked;
+    
+    // Uppdatera hjälptext för flashcards
+    const flashcardsHelp = flashcardsCheckbox.parentElement.querySelector('.help-text');
+    if (isPersonal) {
+      flashcardsHelp.textContent = 'Create flashcards for your personal study';
+    } else {
+      flashcardsHelp.textContent = 'Create flashcards for all subject members';
+    }
+    
+    // Visa varning om behörigheter
+    showPermissionInfo(isPersonal);
+  });
+  
+  // Visa behörighetsinformation
+  function showPermissionInfo(isPersonal) {
+    // Ta bort befintlig info
+    const existingInfo = document.querySelector('.permission-info');
+    if (existingInfo) {
+      existingInfo.remove();
+    }
+    
+    // Lägg till ny info
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'permission-info';
+    infoDiv.innerHTML = isPersonal ? 
+      '<i>ℹ️ Personal quizzes are only visible to you and can be created by any subject member.</i>' :
+      '<i>ℹ️ Subject-wide quizzes are visible to all members but can only be created by subject owners/admins.</i>';
+    
+    personalCheckbox.parentElement.appendChild(infoDiv);
+  }
+  
+  // Visa initial behörighetsinformation
+  showPermissionInfo(personalCheckbox.checked);
+});
+</script>
+
+<style>
+.quiz-form {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+.form-group input[type="text"],
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form-group textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.quiz-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.radio-option:hover {
+  border-color: #007bff;
+  background-color: #f8f9fa;
+}
+
+.radio-option input[type="radio"] {
+  margin-right: 8px;
+}
+
+.radio-option input[type="radio"]:checked + span {
+  color: #007bff;
+  font-weight: 600;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin-right: 10px;
+  margin-top: 2px;
+}
+
+.checkbox-text {
+  flex: 1;
+}
+
+.help-text {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.permission-info {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #e7f3ff;
+  border: 1px solid #bee5eb;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #0c5460;
+}
+
+.submit-btn {
+  background-color: #007bff;
+  color: white;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.submit-btn:hover {
+  background-color: #0056b3;
+}
+
+.submit-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+</style>
 </body>
 </html>
+
+
