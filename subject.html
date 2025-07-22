@@ -1059,12 +1059,50 @@
           
           <!-- subject.html -->
           {% for quiz in quizzes %}
-            <div class="quiz-card">
+          <div class="quiz-card">
+            <div class="quiz-header">
               <div class="quiz-title">
                 {{ quiz.title }}
               </div>
+      
+              <!-- NY: Quiz-typ och antal frågor -->
+              <div class="quiz-meta">
+                <span class="quiz-type-badge {{ quiz.quiz_type }}">
+                  {{ quiz.quiz_type.replace('-', ' ').title() }}
+                </span>
+                <span class="question-count">
+                  {{ quiz.question_count }} frågor
+                </span>
+                {% if quiz.is_personal %}
+                <span class="personal-badge">Personlig</span>
+                {% endif %}
+              </div>
+            </div>
 
-              <!-- Delete-formen (endast för quiz-ägaren) -->
+            <!-- NY: Quiz beskrivning -->
+            {% if quiz.display_description %}
+            <div class="quiz-description">
+              {{ quiz.display_description }}
+            </div>
+            {% endif %}
+
+            <!-- Skapad-information -->
+            <div class="quiz-info">
+              <small class="created-info">
+                Skapad {{ quiz.created_at[:10] if quiz.created_at else 'Okänt datum' }}
+                {% if quiz.user_id != current_user.id %}
+                  av annan användare
+                {% endif %}
+              </small>
+            </div>
+
+            <!-- Knappar -->
+            <div class="quiz-actions">
+              <button class="quiz-action-btn play" onclick="startQuiz({{ quiz.id }})">
+                Spela Quiz
+              </button>
+      
+              <!-- Delete-knappen (endast för quiz-ägaren) -->
               {% if quiz.user_id == current_user.id %}
               <form method="POST"
                     action="{{ url_for('delete_quiz',
@@ -1072,11 +1110,12 @@
                                       quiz_index=loop.index0) }}"
                     class="delete-form"
                     onsubmit="return confirm('Är du säker på att du vill ta bort detta quiz?');">
-                  <button type="submit" class="delete-button">Delete</button>
+                  <button type="submit" class="quiz-action-btn delete">Ta bort</button>
               </form>
               {% endif %}
             </div>
-          {% endfor %}
+          </div>
+        {% endfor %}
 
         </div>
         {% else %}
