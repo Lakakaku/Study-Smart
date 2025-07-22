@@ -542,7 +542,8 @@ class Quiz(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     quiz_type = db.Column(db.String(50), nullable=False)
-    description = db.Column(db.Text)
+    description = db.Column(db.Text)  # AI instructions, not for display
+    display_description = db.Column(db.String(200))  # Short user-facing description
     subject_name = db.Column(db.String(100), nullable=False)
     subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -636,6 +637,25 @@ class Quiz(db.Model):
                 
         return correct_count, error_count
     
+    def get_display_description(self):
+    
+        if self.display_description and self.display_description.strip():
+            return self.display_description.strip()
+    
+        # Förbättrad fallback om ingen display_description finns
+        question_count = len(self.get_questions())
+        quiz_type_readable = self.quiz_type.replace('-', ' ').title()
+    
+        if question_count == 0:
+            return f"{quiz_type_readable} quiz - Inga frågor tillgängliga än"
+        elif question_count <= 10:
+            return f"{question_count} frågor för snabb kunskapsträning och grundläggande repetition"
+        elif question_count <= 25:
+            return f"{question_count} frågor för omfattande kunskapstest och fördjupad ämnesträning"
+        else:
+            return f"{question_count} frågor för fullständig genomgång och djupgående kunskapsbearbeitung"
+        
+
     def to_dict(self):
         """Konvertera Quiz-objekt till dictionary för JSON-serialisering"""
         # Använd säkra getter för frågor
@@ -645,7 +665,8 @@ class Quiz(db.Model):
             'id': self.id,
             'title': self.title,
             'quiz_type': self.quiz_type,
-            'description': self.description,
+            'description': self.description,  # AI instructions
+            'display_description': self.get_display_description(),  # User-facing description
             'subject_name': self.subject_name,
             'subject_id': self.subject_id,
             'user_id': self.user_id,
@@ -2715,7 +2736,6 @@ def get_file_stats(subject_id):
         print(f"Error getting file stats: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Failed to load stats'})
 
-
 @app.route('/subject/<subject_name>')
 @login_required
 def subject(subject_name):
@@ -2756,10 +2776,19 @@ def subject(subject_name):
     krav_docs_objects = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
     krav_docs = [doc.to_dict() for doc in krav_docs_objects]  # Konvertera till dict
     
-    # Konvertera quiz-objekt till dictionaries för JSON-serialisering
-    quizzes_dict = [quiz.to_dict() for quiz in all_quizzes]
-    shared_quizzes_dict = [quiz.to_dict() for quiz in shared_quizzes]
-    personal_quizzes_dict = [quiz.to_dict() for quiz in personal_quizzes]
+    # Konvertera quiz-objekt till dictionaries och generera beskrivningar
+    quizzes_dict = []
+    for quiz in all_quizzes:
+        quiz_dict = quiz.to_dict()
+        
+        # Generera kort beskrivning om den inte finns eller är tom
+        if not quiz_dict.get('display_description'):
+            quiz_dict['display_description'] = generate_quiz_description(quiz)
+        
+        quizzes_dict.append(quiz_dict)
+    
+    shared_quizzes_dict = [q for q in quizzes_dict if not q['is_personal']]
+    personal_quizzes_dict = [q for q in quizzes_dict if q['is_personal'] and q['user_id'] == current_user.id]
     
     # Skapa context för template
     context = {
@@ -2775,6 +2804,110 @@ def subject(subject_name):
     }
     
     return render_template('subject.html', **context)
+
+
+
+
+def generate_quiz_description(quiz):
+    """
+    Generera en längre och mer detaljerad beskrivning av quizet baserat på dess frågor
+    """
+    try:
+        questions = quiz.get_questions()
+        
+        if not questions or len(questions) == 0:
+            return f"{quiz.quiz_type.replace('-', ' ').title()} quiz med 0 frågor - Inga frågor tillgängliga"
+        
+        question_count = len(questions)
+        
+        # Ta fler exempel frågor för bättre AI-analys
+        sample_size = min(5, len(questions))  # Ta upp till 5 frågor som exempel
+        sample_questions = questions[:sample_size]
+        
+        # Extrahera både frågor och svar för bättre kontext
+        questions_and_answers = []
+        for q in sample_questions:
+            question_text = q['question'][:150] + "..." if len(q['question']) > 150 else q['question']
+            answer_text = ""
+            
+            # Hantera olika svarsformat
+            if isinstance(q.get('answer'), dict):
+                if 'correct' in q['answer']:
+                    answer_text = str(q['answer']['correct'])[:100]
+                elif 'alternatives' in q['answer']:
+                    # För flervalsfrågor, ta det korrekta svaret
+                    alts = q['answer']['alternatives']
+                    correct_idx = q['answer'].get('correct_index', 0)
+                    if 0 <= correct_idx < len(alts):
+                        answer_text = alts[correct_idx][:100]
+            else:
+                answer_text = str(q['answer'])[:100] if q.get('answer') else ""
+            
+            questions_and_answers.append(f"Q: {question_text}")
+            if answer_text:
+                questions_and_answers.append(f"A: {answer_text}")
+        
+        content_sample = "\n".join(questions_and_answers)
+        
+        # Mer detaljerad prompt för längre beskrivning
+        prompt = f"""Analysera detta quiz och skriv en informativ beskrivning på svenska som hjälper studenter förstå vad quizet täcker. Beskrivningen ska vara 150-250 tecken lång.
+
+Quiz-information:
+- Typ: {quiz.quiz_type.replace('-', ' ').title()}
+- Totalt antal frågor: {question_count}
+- Exempel på innehåll:
+
+{content_sample}
+
+Skriv en beskrivning som:
+1. Förklarar vilka ämnesområden/topics som behandlas
+2. Nämner vad studenten kommer att lära sig/öva på
+3. Ger en känsla för svårighetsgrad och fokus
+4. Är engagerande och informativ
+
+Exempel på bra beskrivningar:
+- "Tränar grundläggande algebraiska ekvationer och problemlösning med fokus på andragradsekvationer och grafiska tolkningar."
+- "Täcker cellbiologi, fotosyntespocessen och ekosystems energiflöden med betoning på praktiska laborationsresultat."
+
+Svara endast med beskrivningen, inget annat."""
+        
+        response = requests.post(
+            "https://ai.hackclub.com/chat/completions",
+            json={"messages": [{"role": "user", "content": prompt}]},
+            headers={"Content-Type": "application/json"},
+            timeout=30
+        )
+        
+        if response.ok:
+            ai_response = response.json().get("choices", [])[0].get("message", {}).get("content", "")
+            # Rensa beskrivningen
+            description = ai_response.strip().replace('\n', ' ').replace('"', '')
+            
+            # Säkerställ rimlig längd (150-300 tecken)
+            if len(description) < 100:
+                # Om för kort, lägg till antal frågor info
+                description += f" Innehåller {question_count} frågor för grundlig träning."
+            elif len(description) > 300:
+                description = description[:297] + "..."
+                
+            return description
+        else:
+            raise Exception(f"API call failed with status {response.status_code}")
+            
+    except Exception as e:
+        print(f"[ERROR] Failed to generate description for quiz {quiz.id}: {e}")
+        # Förbättrad fallback beskrivning
+        question_count = len(quiz.get_questions()) if quiz.questions else 0
+        quiz_type_readable = quiz.quiz_type.replace('-', ' ').title()
+        
+        if question_count == 0:
+            return f"{quiz_type_readable} quiz - Inga frågor tillgängliga än"
+        elif question_count <= 10:
+            return f"{quiz_type_readable} med {question_count} frågor för snabb kunskapsträning och repetition"
+        elif question_count <= 25:
+            return f"{quiz_type_readable} med {question_count} frågor för omfattande kunskapstest och fördjupad träning"
+        else:
+            return f"{quiz_type_readable} med {question_count} frågor för fullständig genomgång och fördjupad kunskapsbearbeitung"
 
 
 
@@ -2797,6 +2930,159 @@ def extract_text_from_pdf(file_path):
         print(f"[ERROR] Failed to extract text from {file_path}: {e}")
         return ""
     
+# Migration script - kör detta en gång för att lägga till det nya fältet
+# Du kan köra detta som en separat Python-fil eller lägga till det som en route
+
+def migrate_add_display_description():
+    """
+    Lägg till display_description kolumn till Quiz-tabellen
+    och generera beskrivningar för befintliga quizzes
+    """
+    try:
+        # Lägg till kolumn (om den inte redan finns)
+        with db.engine.connect() as conn:
+            # Kontrollera om kolumnen redan finns
+            result = conn.execute(text("""
+                SELECT COUNT(*) as count 
+                FROM pragma_table_info('quiz') 
+                WHERE name='display_description'
+            """)).fetchone()
+            
+            if result.count == 0:
+                # Lägg till kolumn
+                conn.execute(text("ALTER TABLE quiz ADD COLUMN display_description VARCHAR(200)"))
+                conn.commit()
+                print("[INFO] Added display_description column to quiz table")
+            else:
+                print("[INFO] display_description column already exists")
+        
+        # Generera beskrivningar för befintliga quizzes som saknar dem
+        existing_quizzes = Quiz.query.filter(
+            db.or_(
+                Quiz.display_description.is_(None),
+                Quiz.display_description == ''
+            )
+        ).all()
+        
+        print(f"[INFO] Found {len(existing_quizzes)} quizzes without descriptions")
+        
+        for quiz in existing_quizzes:
+            try:
+                print(f"[INFO] Generating description for quiz {quiz.id}: {quiz.title}")
+                description = generate_quiz_description_sync(quiz)
+                quiz.display_description = description
+                db.session.add(quiz)
+            except Exception as e:
+                print(f"[ERROR] Failed to generate description for quiz {quiz.id}: {e}")
+        
+        db.session.commit()
+        print(f"[SUCCESS] Updated descriptions for {len(existing_quizzes)} quizzes")
+        
+    except Exception as e:
+        print(f"[ERROR] Migration failed: {e}")
+        db.session.rollback()
+
+
+def generate_quiz_description_sync(quiz):
+    """
+    Generera beskrivning synkront (för migration) - uppdaterad version
+    """
+    try:
+        questions = quiz.get_questions()
+        
+        if not questions or len(questions) == 0:
+            return f"{quiz.quiz_type.replace('-', ' ').title()} quiz med 0 frågor"
+        
+        question_count = len(questions)
+        
+        # Ta flera exempel frågor för bättre analys
+        sample_questions = questions[:3]
+        questions_text = []
+        
+        for q in sample_questions:
+            q_text = q['question'][:120] + "..." if len(q['question']) > 120 else q['question']
+            questions_text.append(f"Q: {q_text}")
+        
+        content = "\n".join(questions_text)
+        
+        prompt = f"""Skriv en informativ beskrivning på svenska (150-220 tecken) som förklarar vad detta quiz täcker och vad studenten kommer att lära sig:
+
+{content}
+
+Quiz: {quiz.quiz_type} med {question_count} frågor
+
+Fokusera på ämnesområden och lärandemål. Svara endast med beskrivningen."""
+        
+        response = requests.post(
+            "https://ai.hackclub.com/chat/completions",
+            json={"messages": [{"role": "user", "content": prompt}]},
+            headers={"Content-Type": "application/json"},
+            timeout=25
+        )
+        
+        if response.ok:
+            ai_response = response.json().get("choices", [])[0].get("message", {}).get("content", "")
+            description = ai_response.strip().replace('\n', ' ').replace('"', '')
+            
+            # Säkerställ längd
+            if len(description) < 100:
+                description += f" {question_count} frågor för träning."
+            elif len(description) > 250:
+                description = description[:247] + "..."
+                
+            return description
+        else:
+            raise Exception(f"API call failed with status {response.status_code}")
+            
+    except Exception as e:
+        print(f"[ERROR] Failed to generate description for quiz {quiz.id}: {e}")
+        question_count = len(quiz.get_questions()) if quiz.questions else 0
+        quiz_type_readable = quiz.quiz_type.replace('-', ' ').title()
+        return f"{quiz_type_readable} med {question_count} frågor för kunskapsträning och repetition"
+
+def generate_fallback_description(quiz):
+    """Generera en bättre fallback-beskrivning baserat på frågorna"""
+    questions = quiz.get_questions()
+    if not questions:
+        return f"{quiz.quiz_type.replace('-', ' ').title()} quiz - Inga frågor tillgängliga"
+    
+    question_count = len(questions)
+    quiz_type_readable = quiz.quiz_type.replace('-', ' ').title()
+    
+    # Analysera frågorna för att hitta gemensamma teman
+    question_texts = [q['question'].lower() for q in questions[:5]]  # Ta första 5
+    combined_text = " ".join(question_texts)
+    
+    # Leta efter vanliga nyckelord för att gissa ämnesområde
+    science_keywords = ['cell', 'dna', 'protein', 'organism', 'evolution', 'ecosystem', 'photosynthesis', 'membrane']
+    math_keywords = ['equation', 'formula', 'calculate', 'solve', 'function', 'graph', 'derivative', 'integral']
+    history_keywords = ['year', 'period', 'war', 'revolution', 'century', 'empire', 'king', 'democracy']
+    
+    detected_topics = []
+    if any(keyword in combined_text for keyword in science_keywords):
+        detected_topics.append("naturvetenskap")
+    if any(keyword in combined_text for keyword in math_keywords):
+        detected_topics.append("matematik")  
+    if any(keyword in combined_text for keyword in history_keywords):
+        detected_topics.append("historia")
+    
+    if detected_topics:
+        topic_text = " och ".join(detected_topics)
+        if question_count <= 10:
+            return f"Tränar grundläggande {topic_text} med {question_count} frågor för snabb repetition"
+        elif question_count <= 25:
+            return f"Omfattande {topic_text}-quiz med {question_count} frågor för djupare förståelse"
+        else:
+            return f"Fullständig genomgång av {topic_text} med {question_count} frågor för grundlig kunskapsbearbetning"
+    else:
+        # Generisk men mer beskrivande fallback
+        if question_count <= 10:
+            return f"{quiz_type_readable} med {question_count} välutformade frågor för kunskapsträning och förståelse"
+        elif question_count <= 25:
+            return f"Omfattande {quiz_type_readable.lower()} med {question_count} frågor för djupgående ämnesförståelse och färdighetstestning"
+        else:
+            return f"Heltäckande {quiz_type_readable.lower()} med {question_count} frågor för fullständig kunskapsgenomgång och expertträning"
+
 
 
 
@@ -3179,7 +3465,19 @@ def create_quiz():
                 return redirect(url_for('create_quiz'))
             
             print(f"[SUCCESS] Quiz DB_ID:{quiz_db_id} saved successfully with {len(saved_quiz.questions)} questions")
-            
+        
+            try:
+                print(f"[INFO] Generating AI description for quiz DB_ID:{quiz_db_id}")
+                ai_description = generate_quiz_description(saved_quiz)
+                saved_quiz.display_description = ai_description
+                db.session.commit()
+                print(f"[SUCCESS] Generated AI description for quiz DB_ID:{quiz_db_id}: {ai_description[:100]}...")
+            except Exception as e:
+                print(f"[WARNING] Failed to generate AI description for quiz DB_ID:{quiz_db_id}: {e}")
+                # Fallback till en bättre standardbeskrivning baserat på faktiska frågor
+                fallback_desc = generate_fallback_description(saved_quiz)
+                saved_quiz.display_description = fallback_desc
+                db.session.commit()
         except Exception as e:
             print(f"[ERROR] Failed to update quiz DB_ID:{quiz_db_id} with questions: {e}")
             db.session.rollback()
@@ -5728,6 +6026,7 @@ def daily_quiz_all(date):
 if __name__ == '__main__':
     
     migrate_database()
+    
     
     app.run(debug=True)
     cleanup_on_startup()
