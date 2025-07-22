@@ -18,7 +18,7 @@ import speech_recognition as sr
 import io
 import wave
 
-
+import math
 
 import urllib.parse
 from pdf2image import convert_from_path
@@ -1238,141 +1238,74 @@ def transcribe_with_whisper_api(audio_file_path):
                 print(f"Could not remove temp file {temp_file}: {e}")
 
 
-def transcribe_with_huggingface(audio_file_path):
-    """Transkribera ljud med Hugging Face Inference API (GRATIS)"""
-
+def transcribe_with_huggingface(audio_file_path, chunk_duration_ms=30_000):
+    """
+    Transkribera ljud med Hugging Face Inference API genom att dela upp
+    filen i chunk_duration_ms-långa segment och slå ihop resultaten.
+    """
     hf_token = os.getenv("HF_API_TOKEN")
     if not hf_token:
         print("Ingen HF_API_TOKEN uppsatt, kan inte använda Hugging Face API")
-        return None    
-    temp_files_to_cleanup = []
-    
-    try:
-        print(f"Starting transcription with Hugging Face API: {audio_file_path}")
-        
-        # Konvertera till WAV om det behövs och komprimera
-        working_audio_path = audio_file_path
-        if not audio_file_path.lower().endswith('.wav'):
-            temp_wav_path = audio_file_path.rsplit('.', 1)[0] + '_temp_hf.wav'
-            try:
-                audio = AudioSegment.from_file(audio_file_path)
-                # Konvertera till format som fungerar bra för API:et
-                audio = audio.set_frame_rate(16000).set_channels(1)
-                audio.export(temp_wav_path, format="wav")
-                working_audio_path = temp_wav_path
-                temp_files_to_cleanup.append(temp_wav_path)
-                print(f"Converted audio to WAV format: {temp_wav_path}")
-            except Exception as e:
-                print(f"Could not convert audio format: {e}")
-                return None
-        
-        # Komprimera filen för API (max 10MB för säkerhet)
-        compressed_path = compress_audio_if_needed(working_audio_path, max_size_mb=10)
-        if compressed_path != working_audio_path:
-            temp_files_to_cleanup.append(compressed_path)
-            working_audio_path = compressed_path
-        
-        # Läs ljudfilen
-        with open(working_audio_path, 'rb') as f:
-            audio_data = f.read()
-        
-        # Kontrollera filstorlek (Hugging Face har ca 10MB limit)
-        if len(audio_data) > 10 * 1024 * 1024:
-            print(f"Audio file still too large: {len(audio_data) / (1024*1024):.1f}MB")
-            return "Ljudfilen är för stor för transkribering. Försök med en kortare fil."
-        
-        print(f"Sending {len(audio_data) / (1024*1024):.1f}MB audio file for transcription...")
-        
-        # Använd Hugging Face Inference API med Whisper-modell
-        # Detta är GRATIS utan API-nyckel!
-        API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3"
-        
-        headers = {
-            "Authorization": f"Bearer {hf_token}",
-            "Content-Type": "audio/wav"
-        }
-        
-        try:
-            response = requests.post(
-                API_URL,
-                headers=headers,
-                data=audio_data,
-                timeout=120
-            )
-            
-            print(f"Hugging Face API response status: {response.status_code}")
-            
-            if response.status_code == 200:
-                result = response.json()
-                print(f"API Response: {result}")
-                
-                # Hugging Face returnerar olika format beroende på modell
-                if isinstance(result, dict):
-                    if 'text' in result:
-                        transcription = result['text']
-                    elif 'generated_text' in result:
-                        transcription = result['generated_text']
-                    else:
-                        print(f"Unexpected response format: {result}")
-                        transcription = str(result)
-                elif isinstance(result, str):
-                    transcription = result
-                else:
-                    print(f"Unexpected response type: {type(result)}")
-                    transcription = str(result)
-                
-                if transcription and transcription.strip():
-                    print("Hugging Face transcription completed successfully")
-                    return transcription.strip()
-                else:
-                    return "Transkriberingen gav inget resultat."
-                    
-            elif response.status_code == 503:
-                # Modellen laddar, försök igen efter en kort paus
-                print("Model is loading, retrying in 10 seconds...")
-                import time
-                time.sleep(10)
-                
-                # Andra försök
-                response = requests.post(
-                    API_URL,
-                    headers=headers,
-                    data=audio_data,
-                    timeout=180
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    if isinstance(result, dict) and 'text' in result:
-                        return result['text'].strip()
-                    elif isinstance(result, str):
-                        return result.strip()
-                
-                return f"API-fel efter omförsök: {response.status_code}"
-                
+        return None
+
+    # Ladda hela ljudfilen
+    audio = AudioSegment.from_file(audio_file_path)
+    total_length_ms = len(audio)
+    num_chunks = math.ceil(total_length_ms / chunk_duration_ms)
+    print(f"Total längd: {total_length_ms/1000:.1f}s, delar i {num_chunks} chunkar om {chunk_duration_ms/1000:.1f}s vardera")
+
+    full_transcription = []
+
+    API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3"
+    headers = {
+        "Authorization": f"Bearer {hf_token}",
+        "Content-Type": "audio/wav"
+    }
+
+    for i in range(num_chunks):
+        start_ms = i * chunk_duration_ms
+        end_ms = min((i+1) * chunk_duration_ms, total_length_ms)
+        chunk = audio[start_ms:end_ms]
+
+        # Exportera chunk till wav i minnesfil
+        chunk_wav_path = f"/tmp/chunk_{i}.wav"
+        chunk.set_frame_rate(16000).set_channels(1).export(chunk_wav_path, format="wav")
+
+        # Läs in och kontrollera storlek
+        data = open(chunk_wav_path, 'rb').read()
+        size_mb = len(data) / (1024*1024)
+        print(f"Chunk {i+1}/{num_chunks}: {size_mb:.2f}MB")
+
+        if size_mb > 10:
+            print(f"  ⚠️ Chunk {i+1} är för stor ({size_mb:.2f}MB), minska chunk_duration_ms eller komprimera mer.")
+            return None
+
+        # Skicka till API
+        resp = requests.post(API_URL, headers=headers, data=data, timeout=120)
+        if resp.status_code == 200:
+            result = resp.json()
+            text = (result.get('text') or result.get('generated_text') or "").strip()
+            full_transcription.append(text)
+            print(f"  ✅ Chunk {i+1} transkriberad ({len(text)} tecken)")
+        elif resp.status_code == 503:
+            # Model loading – vänta och gör ett försök till
+            time.sleep(10)
+            resp = requests.post(API_URL, headers=headers, data=data, timeout=180)
+            if resp.status_code == 200:
+                text = resp.json().get('text', '').strip()
+                full_transcription.append(text)
             else:
-                print(f"Hugging Face API error: {response.status_code} - {response.text}")
-                return f"Transkribering misslyckades: API-fel {response.status_code}"
-            
-        except requests.exceptions.RequestException as e:
-            print(f"Request error: {e}")
-            return f"Nätverksfel vid transkribering: {str(e)}"
-            
-    except Exception as e:
-        print(f"Error transcribing with Hugging Face: {str(e)}")
-        return f"Fel vid transkribering: {str(e)}"
-        
-    finally:
-        # Rensa temporära filer
-        for temp_file in temp_files_to_cleanup:
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                    print(f"Cleaned up temporary file: {temp_file}")
-            except Exception as e:
-                print(f"Could not remove temp file {temp_file}: {e}")
+                print(f"  ❌ API-fel vid chunk {i+1}: {resp.status_code}")
+                full_transcription.append(f"[Fel vid chunk {i+1}: HTTP {resp.status_code}]")
+        else:
+            print(f"  ❌ API-fel vid chunk {i+1}: {resp.status_code}")
+            full_transcription.append(f"[Fel vid chunk {i+1}: HTTP {resp.status_code}]")
 
+        # Radera temporär chunk
+        os.remove(chunk_wav_path)
 
+    # Slå ihop alla chunk-transkriptioner
+    return "\n\n".join(full_transcription)
 
 def transcribe_with_hackclub_ai(audio_file_path):
     """Transkribera ljud med Hackclub AI API"""
