@@ -87,7 +87,6 @@ class Lesson(db.Model):
 
 
     # Relationships
-    subject = db.relationship('Subject', backref='lessons')
     creator = db.relationship('User', backref='created_lessons')
     
     def __repr__(self):
@@ -246,6 +245,7 @@ class Subject(db.Model):
     name = db.Column(db.String(100), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    lessons = db.relationship('Lesson', backref='subject', lazy=True, cascade='all, delete-orphan')
 
     # Kolumner som kommer att läggas till via migration
     share_code = db.Column(db.String(8), unique=True, nullable=True)
