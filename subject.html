@@ -37,17 +37,27 @@
 }
 
 .quiz-card {
-  background: white;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  padding: 20px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: white;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  height: auto; /* Låt höjden anpassa sig */
 }
 
 .quiz-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+.quiz-info {
+  margin-top: auto; /* Tryck ner till botten om det finns plats */
+  margin-bottom: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
 }
 
 .quiz-card.subject-quiz {
@@ -112,11 +122,39 @@
   margin-bottom: 15px;
   line-height: 1.4;
 }
+.quiz-description-container {
+  margin-bottom: 12px;
+}
 
+.quiz-description {
+  position: relative;
+}
+
+.expand-description-btn {
+  background: none;
+  border: none;
+  color: #007bff;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  margin-left: 4px;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.expand-description-btn:hover {
+  color: #0056b3;
+}
+
+.description-expanded .description-text {
+  display: block;
+}
 .quiz-actions {
+  margin-top: 4px;
   display: flex;
   gap: 8px;
   align-items: center;
+  justify-content: flex-end; /* Högerställ knapparna */
 }
 
 .start-button {
@@ -1057,19 +1095,15 @@
       {% if quizzes %}
         <div class="quiz-grid">
           
-          <!-- subject.html -->
           {% for quiz in quizzes %}
           <div class="quiz-card">
             <div class="quiz-header">
               <div class="quiz-title">
                 {{ quiz.title }}
               </div>
-      
+
               <!-- NY: Quiz-typ och antal frågor -->
               <div class="quiz-meta">
-                <span class="quiz-type-badge {{ quiz.quiz_type }}">
-                  {{ quiz.quiz_type.replace('-', ' ').title() }}
-                </span>
                 <span class="question-count">
                   {{ quiz.question_count }} frågor
                 </span>
@@ -1079,14 +1113,22 @@
               </div>
             </div>
 
-            <!-- NY: Quiz beskrivning -->
+            <!-- NY: Quiz beskrivning med expand-funktionalitet -->
             {% if quiz.display_description %}
-            <div class="quiz-description">
-              {{ quiz.display_description }}
+            <div class="quiz-description-container">
+              <div class="quiz-description" data-full-text="{{ quiz.display_description }}">
+                <span class="description-text">{{ quiz.display_description[:100] }}{% if quiz.display_description|length > 100 %}...{% endif %}</span>
+                {% if quiz.display_description|length > 100 %}
+                <button class="expand-description-btn" onclick="toggleDescription(this)">
+                  <span class="expand-text">Visa mer</span>
+                  <span class="collapse-text" style="display: none;">Visa mindre</span>
+                </button>
+                {% endif %}
+              </div>
             </div>
             {% endif %}
 
-            <!-- Skapad-information -->
+            <!-- Skapad-information - FLYTTAD INUTI KORTET -->
             <div class="quiz-info">
               <small class="created-info">
                 Skapad {{ quiz.created_at[:10] if quiz.created_at else 'Okänt datum' }}
@@ -1096,12 +1138,8 @@
               </small>
             </div>
 
-            <!-- Knappar -->
+            <!-- Knappar - FLYTTADE INUTI KORTET -->
             <div class="quiz-actions">
-              <button class="quiz-action-btn play" onclick="startQuiz({{ quiz.id }})">
-                Spela Quiz
-              </button>
-      
               <!-- Delete-knappen (endast för quiz-ägaren) -->
               {% if quiz.user_id == current_user.id %}
               <form method="POST"
@@ -1115,7 +1153,7 @@
               {% endif %}
             </div>
           </div>
-        {% endfor %}
+          {% endfor %}
 
         </div>
         {% else %}
@@ -1340,6 +1378,44 @@
         }, 2000);
       }
     }
+
+
+
+
+    function toggleDescription(button) {
+      const descriptionDiv = button.closest('.quiz-description');
+      const textSpan = descriptionDiv.querySelector('.description-text');
+      const expandText = button.querySelector('.expand-text');
+      const collapseText = button.querySelector('.collapse-text');
+      const fullText = descriptionDiv.getAttribute('data-full-text');
+  
+      if (expandText.style.display !== 'none') {
+        // Expandera
+        textSpan.textContent = fullText;
+        expandText.style.display = 'none';
+        collapseText.style.display = 'inline';
+        descriptionDiv.classList.add('description-expanded');
+      } else {
+        // Kollapsa
+        textSpan.textContent = fullText.substring(0, 100) + (fullText.length > 100 ? '...' : '');
+        expandText.style.display = 'inline';
+        collapseText.style.display = 'none';
+        descriptionDiv.classList.remove('description-expanded');
+      }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     async function toggleSharing() {
       try {
@@ -2007,9 +2083,8 @@
             <div class="lesson-content">
               <div class="lesson-title">${escapeHtml(lesson.title)}</div>
               <div class="lesson-meta">
-                <span>👁 ${lesson.view_count} visningar</span>
                 <span>📁 ${lesson.display_size}</span>
-                ${lesson.duration_display ? `<span>⏱ ${lesson.duration_display}</span>` : ''}
+                <span>
               </div>
             </div>
             ${lesson.can_edit ? `
@@ -2050,10 +2125,9 @@
       year: 'numeric',
       month: 'long',
       day: 'numeric'
-    });
+    })
 
     document.getElementById('lesson-player-date').textContent = `📅 ${formattedDate}`;
-    document.getElementById('lesson-player-views').textContent = `👁 ${lesson.view_count} visningar`;
     document.getElementById('lesson-player-size').textContent = `📁 ${lesson.display_size}`;
 
     // Create player
@@ -2388,16 +2462,7 @@ window.debugTranscription = debugTranscription;
           const statsText = `(${data.total_lessons} lektioner, ${data.total_views} visningar)`;
           document.getElementById('lesson-stats').textContent = statsText;
       
-          const statsDetails = document.getElementById('lesson-stats-details');
-          if (data.total_lessons > 0) {
-            statsDetails.innerHTML = `
-              <strong>Statistik:</strong><br>
-              📊 Totalt ${data.total_lessons} lektioner<br>
-              👁 ${data.total_views} totala visningar<br>
-              ⏱ ${data.total_duration_display} total längd
-            `;
-            statsDetails.style.display = 'block';
-          }
+          
         }
       } catch (error) {
         console.error('Error loading lesson stats:', error);
