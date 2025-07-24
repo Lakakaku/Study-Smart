@@ -30,6 +30,18 @@
       <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
     </svg>
   </div>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-messages-container">
+        {% for category, message in messages %}
+          <div class="flash-message flash-{{ category }}">
+            {{ message }}
+            <button class="flash-close" onclick="this.parentElement.remove()">&times;</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
 
   <div class="center-container">
     <div class="left-container">
@@ -612,7 +624,12 @@ function updateQuizzesList(quizzes) {
         .then(data => {
           if (data.status === 'success') {
             alert(data.message);
-            location.reload();
+            // Redirect to index page
+            if (data.redirect) {
+              window.location.href = data.redirect;
+            } else {
+              window.location.href = '/';
+            }
           } else {
             alert(data.message);
           }
@@ -634,16 +651,41 @@ function updateQuizzesList(quizzes) {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
-          
-          // Get the form and submit it
+      
           const form = this.closest('form');
           if (form) {
-            const confirmFunction = this.classList.contains('delete-subject-btn') ? 
-              () => confirmDelete(form.querySelector('input[name="subject"]').value) :
-              () => confirmLeave(this.getAttribute('title').replace('Leave subject', ''));
-            
-            if (confirmFunction()) {
-              form.submit();
+          if (this.classList.contains('delete-subject-btn')) {
+              const subjectName = form.querySelector('input[name="subject"]').value;
+              if (confirmDelete(subjectName)) {
+                form.submit();
+              }
+            } else if (this.classList.contains('leave-subject-btn')) {
+              // For leave buttons, use AJAX instead of form submission
+              const formAction = form.action;
+              const subjectId = formAction.split('/').pop();
+          
+              if (confirm('Are you sure you want to leave this subject?')) {
+                fetch(formAction, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  }
+                })
+                .then(response => response.json())
+                .then(data => {
+                  if (data.status === 'success') {
+                    alert(data.message);
+                    // Reload the page to show updated subject list
+                    window.location.reload();
+                  } else {
+                    alert(data.message);
+                  }
+                })
+                .catch(error => {
+                  console.error('Error:', error);
+                  alert('An error occurred while leaving the subject');
+                });
+              }
             }
           }
         });
