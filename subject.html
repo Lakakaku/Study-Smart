@@ -1,3 +1,6 @@
+
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -43,21 +46,27 @@
   margin-bottom: 16px;
   background: white;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  transition: box-shadow 0.2s ease;
+  transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
-  height: auto; /* Låt höjden anpassa sig */
+  height: auto;
 }
 
 .quiz-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
+
 .quiz-info {
-  margin-top: auto; /* Tryck ner till botten om det finns plats */
-  margin-bottom: 8px;
-  padding-top: 8px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  padding-top: 12px;
   border-top: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .quiz-card.subject-quiz {
@@ -131,30 +140,43 @@
 }
 
 .expand-description-btn {
-  background: none;
-  border: none;
-  color: #007bff;
+  background: #007bff;
+  border: 1px solid #007bff;
+  color: white;
   font-size: 12px;
   cursor: pointer;
-  padding: 2px 4px;
-  margin-left: 4px;
-  text-decoration: underline;
-  transition: color 0.2s ease;
+  padding: 4px 8px;
+  margin-left: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
 }
 
 .expand-description-btn:hover {
-  color: #0056b3;
+  background: #0056b3;
+  border-color: #0056b3;
 }
 
 .description-expanded .description-text {
   display: block;
 }
+
 .quiz-actions {
   margin-top: 4px;
   display: flex;
   gap: 8px;
   align-items: center;
-  justify-content: flex-end; /* Högerställ knapparna */
+  justify-content: flex-end;
+}
+
+.created-info {
+  font-size: 0.85em;
+  color: #6c757d;
+  flex: 1;
 }
 
 .start-button {
@@ -198,6 +220,21 @@
 
 .delete-form {
   margin: 0;
+}
+
+.quiz-action-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: background-color 0.2s ease;
+}
+
+.quiz-action-btn:hover {
+  background: #c82333;
 }
 
 .create-quiz-section {
@@ -352,16 +389,6 @@
 
 .copy-button.copied {
   background: #28a745;
-}
-
-.share-help {
-  background: #e7f3ff;
-  border: 1px solid #bee5eb;
-  border-radius: 4px;
-  padding: 10px;
-  font-size: 0.9em;
-  color: #0c5460;
-  margin-bottom: 15px;
 }
 
 .toggle-sharing, .regenerate-code {
@@ -583,6 +610,447 @@
   color: #6c757d;
 }
 
+/* Lessons section styling */
+.lessons-section {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.lessons-section-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.lesson-upload-area {
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  transition: border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.lesson-upload-area:hover,
+.lesson-upload-area.drag-over {
+  border-color: #007bff;
+}
+
+.lesson-upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 15px;
+}
+
+.lesson-title-input, .lesson-date-input {
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.lesson-description-input {
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9em;
+  min-height: 60px;
+  resize: vertical;
+}
+
+.lesson-upload-input {
+  display: none;
+}
+
+.lesson-upload-label {
+  display: block;
+  padding: 15px;
+  border: 2px dashed #ced4da;
+  border-radius: 4px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lesson-upload-label:hover {
+  border-color: #007bff;
+  background-color: #f8f9fa;
+}
+
+.upload-lesson-button {
+  padding: 10px 20px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background 0.2s ease;
+}
+
+.upload-lesson-button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.upload-lesson-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.lesson-timeline {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 20px;
+  padding-right: 5px;
+}
+
+.lesson-timeline::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lesson-timeline::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.lesson-timeline::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.lesson-timeline::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.lesson-item {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  flex-wrap: wrap;
+  min-height: 80px;
+}
+
+.lesson-item:hover {
+  background-color: #f8f9fa;
+  border-color: #007bff;
+}
+
+.lesson-date-badge {
+  background: #007bff;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 15px;
+  font-size: 0.8em;
+  font-weight: 600;
+  margin-right: 15px;
+  min-width: 70px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.lesson-content {
+  flex: 1;
+  min-width: 200px;
+}
+
+.lesson-title {
+  font-weight: 600;
+  font-size: 1em;
+  margin-bottom: 5px;
+  color: #333;
+}
+
+.lesson-meta {
+  color: #6c757d;
+  font-size: 0.8em;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.lesson-type-icon {
+  width: 35px;
+  height: 35px;
+  background: #e9ecef;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 15px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.lesson-type-icon.video {
+  background: #dc3545;
+  color: white;
+}
+
+.lesson-type-icon.audio {
+  background: #28a745;
+  color: white;
+}
+
+.lesson-status-section {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.transcribed-badge {
+  background: #28a745;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lesson-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.lesson-action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.8em;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.lesson-action-btn.download {
+  background: #28a745;
+  color: white;
+}
+
+.lesson-action-btn.delete {
+  background: #dc3545;
+  color: white;
+}
+
+.lesson-action-btn:hover {
+  opacity: 0.8;
+}
+
+.no-lessons-message {
+  text-align: center;
+  color: #6c757d;
+  padding: 40px;
+  font-size: 1em;
+}
+
+/* Lesson Player Modal */
+.lesson-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.8);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lesson-modal-content {
+  background: white;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+.lesson-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.lesson-modal-header h2 {
+  margin: 0;
+  font-size: 1.2em;
+}
+
+.lesson-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.lesson-modal-close:hover {
+  background: #f8f9fa;
+}
+
+.lesson-modal-body {
+  padding: 20px;
+  max-height: calc(90vh - 120px);
+  overflow-y: auto;
+}
+
+#lesson-player-container {
+  margin-bottom: 20px;
+}
+
+#lesson-player-container video,
+#lesson-player-container audio {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.lesson-info {
+  margin-bottom: 20px;
+}
+
+.lesson-transcription-section {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.transcription-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.transcription-header h3 {
+  margin: 0;
+  color: #495057;
+  font-size: 1.1em;
+}
+
+.transcription-status {
+  font-size: 0.9em;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.transcription-status.pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.transcription-status.processing {
+  background-color: #cce5ff;
+  color: #0066cc;
+  animation: pulse 2s infinite;
+}
+
+.transcription-status.completed {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.transcription-status.failed {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.transcription-content {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 15px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: #333;
+}
+
+.transcription-loading {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.transcription-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.transcription-empty {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.retry-transcription-btn {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.retry-transcription-btn:hover {
+  background-color: #0056b3;
+}
+
+.retry-transcription-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .quiz-grid {
@@ -622,10 +1090,56 @@
     width: 100%;
     justify-content: flex-end;
   }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .lesson-item {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 15px;
+    min-height: auto;
+  }
+  
+  .lesson-date-badge {
+    margin-right: 0;
+    margin-bottom: 10px;
+    align-self: flex-start;
+  }
+
+  .lesson-content {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  .lesson-status-section {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+    margin-top: 10px;
+  }
+
+  .lesson-actions {
+    margin-left: 0;
+  }
+  
+  .lesson-modal-content {
+    width: 95%;
+    margin: 20px;
+  }
+
+  .quiz-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .quiz-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
-
-
-
 
     .share-section {
       background: #f8f9fa;
@@ -728,15 +1242,6 @@
     
     .regenerate-code:hover {
       background: #e0a800;
-    }
-    
-    .share-help {
-      background: #d4edda;
-      color: #155724;
-      padding: 10px;
-      border-radius: 4px;
-      font-size: 0.9em;
-      margin-top: 10px;
     }
     
     .members-count {
@@ -979,13 +1484,8 @@
       color: #721c24;
     }
 
-
-
-
-
   </style>
 </head>
-
 <body>
 
   <a href="{{ url_for('index') }}" class="return-button">← Return</a>
@@ -1014,10 +1514,6 @@
       <label>Share Code:</label>
       <div class="share-code" id="share-code-display">{{ subject.share_code }}</div>
       <button class="copy-button" onclick="copyShareCode()">Copy</button>
-    </div>
-    
-    <div class="share-help">
-      💡 Other users can join this subject by entering the code above in their "Join Subject" dialog.
     </div>
     {% endif %}
     
@@ -1078,18 +1574,6 @@
     {% endif %}
   </div>
 
-  <div class="under-title-container">
-    <div class="spacer"></div>
-
-    <div class="study-button-wrapper">
-      <button class="study-now">Study</button>
-    </div>
-
-    <div class="add-button-wrapper">
-      <button class="add-button">+</button>
-    </div>
-  </div>
-
   <div class="main-layout">
     <div class="quiz-container">
       {% if quizzes %}
@@ -1102,7 +1586,7 @@
                 {{ quiz.title }}
               </div>
 
-              <!-- NY: Quiz-typ och antal frågor -->
+              <!-- Quiz-typ och antal frågor -->
               <div class="quiz-meta">
                 <span class="question-count">
                   {{ quiz.question_count }} frågor
@@ -1113,22 +1597,22 @@
               </div>
             </div>
 
-            <!-- NY: Quiz beskrivning med expand-funktionalitet -->
+            <!-- Quiz beskrivning med expand-funktionalitet -->
             {% if quiz.display_description %}
             <div class="quiz-description-container">
               <div class="quiz-description" data-full-text="{{ quiz.display_description }}">
                 <span class="description-text">{{ quiz.display_description[:100] }}{% if quiz.display_description|length > 100 %}...{% endif %}</span>
                 {% if quiz.display_description|length > 100 %}
                 <button class="expand-description-btn" onclick="toggleDescription(this)">
-                  <span class="expand-text">Visa mer</span>
-                  <span class="collapse-text" style="display: none;">Visa mindre</span>
+                  <span class="expand-text">+</span>
+                  <span class="collapse-text" style="display: none;">-</span>
                 </button>
                 {% endif %}
               </div>
             </div>
             {% endif %}
 
-            <!-- Skapad-information - FLYTTAD INUTI KORTET -->
+            <!-- Quiz info och actions - alla inuti kortet -->
             <div class="quiz-info">
               <small class="created-info">
                 Skapad {{ quiz.created_at[:10] if quiz.created_at else 'Okänt datum' }}
@@ -1136,21 +1620,20 @@
                   av annan användare
                 {% endif %}
               </small>
-            </div>
 
-            <!-- Knappar - FLYTTADE INUTI KORTET -->
-            <div class="quiz-actions">
               <!-- Delete-knappen (endast för quiz-ägaren) -->
-              {% if quiz.user_id == current_user.id %}
-              <form method="POST"
-                    action="{{ url_for('delete_quiz',
-                                      subject_name=subject_name,
-                                      quiz_index=loop.index0) }}"
-                    class="delete-form"
-                    onsubmit="return confirm('Är du säker på att du vill ta bort detta quiz?');">
-                  <button type="submit" class="quiz-action-btn delete">Ta bort</button>
-              </form>
-              {% endif %}
+              <div class="quiz-actions">
+                {% if quiz.user_id == current_user.id %}
+                <form method="POST"
+                      action="{{ url_for('delete_quiz',
+                                        subject_name=subject_name,
+                                        quiz_index=loop.index0) }}"
+                      class="delete-form"
+                      onsubmit="return confirm('Är du säker på att du vill ta bort detta quiz?');">
+                    <button type="submit" class="quiz-action-btn delete">Ta bort</button>
+                </form>
+                {% endif %}
+              </div>
             </div>
           </div>
           {% endfor %}
@@ -1237,7 +1720,7 @@
             </div>
           </div>
 
-          <!-- NY: Transkriptions-sektion -->
+          <!-- Transkriptions-sektion -->
           <div class="lesson-transcription-section">
             <div class="transcription-header">
               <h3>📝 Transkription</h3>
@@ -1271,15 +1754,13 @@
           <label for="pdf-upload" class="upload-label">
             Ladda upp PDF-dokument
           </label>
-          <div class="upload-info">
-            Accepterar: Begreppslistor, Kunskapskrav, Kunskapsmål
-          </div>
+          
         </div>
 
         <div class="document-type-selector">
           <label for="document-type">Dokumenttyp:</label>
           <select id="document-type">
-            <option value="begrippslista">Begrippslista</option>
+            <option value="begrippslista">Begreppslista</option>
             <option value="kunskapskrav">Kunskapskrav</option>
             <option value="kunskapsmal">Kunskapsmål</option>
           </select>
