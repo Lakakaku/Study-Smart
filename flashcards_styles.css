@@ -1,85 +1,300 @@
+/* Add these styles to your existing flashcards_styles.css */
 
-
-
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f8f9fa;
-  margin: 0;
-  padding: 40px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-
-.return-button {
-  align-self: flex-start;
-  margin-bottom: 30px;
-  text-decoration: none;
-  color: #007BFF;
-  font-weight: 600;
-  font-size: 1rem;
-  transition: color 0.2s;
-}
-.return-button:hover {
-  color: #0056b3;
-}
-
-.flashcard-container {
-  background: #ffffff;
-  padding: 40px;
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  width: 100%;
-  max-width: 500px;
+/* Progress Indicator */
+.progress-indicator {
+  margin-bottom: 1rem;
   text-align: center;
 }
 
-.card {
-  background-color: #f1f1f1;
-  border-radius: 10px;
-  padding: 30px 20px;
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
-  font-size: 1.2rem;
-  line-height: 1.5;
-  min-height: 120px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
 }
 
-#question {
-  font-weight: 600;
-  margin-bottom: 15px;
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  transition: width 0.3s ease;
 }
 
-#answer {
-  color: #28a745;
-  margin-top: 10px;
-  display: none;
+.progress-text {
+  font-size: 0.9rem;
+  color: #666;
   font-weight: 500;
 }
 
-.button,
-button {
-  background-color: #007BFF;
+/* Completion Message */
+.completion-message {
+  text-align: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  margin: 1rem 0;
+}
+
+.completion-message h2 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-size: 2rem;
+}
+
+.completion-stats {
+  background: rgba(255, 255, 255, 0.8);
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.completion-stats p {
+  margin: 0.5rem 0;
+  font-weight: 500;
+  color: #34495e;
+}
+
+/* Loading and Notification Messages */
+.loading-message {
+  text-align: center;
+  padding: 1rem;
+  background: #e3f2fd;
+  border-radius: 8px;
+  margin: 1rem 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.completion-notification {
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.completion-notification.success {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.completion-notification.error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+.completion-notification.info {
+  background: #d1ecf1;
+  border: 1px solid #bee5eb;
+  color: #0c5460;
+}
+
+.completion-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Enhanced Rating Buttons */
+.rating-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  transform: scale(1);
+}
+
+.rating-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.rating-btn.selected {
+  transform: scale(0.95);
+  background: #4CAF50;
   color: white;
-  border: none;
-  padding: 12px 20px;
-  font-size: 1rem;
-  border-radius: 6px;
+}
+
+.rating-btn:nth-child(1) { background: #f44336; } /* Hard */
+.rating-btn:nth-child(2) { background: #ff9800; } /* Medium */
+.rating-btn:nth-child(3) { background: #4CAF50; } /* Easy */
+.rating-btn:nth-child(4) { background: #2196F3; } /* Very Easy */
+
+.rating-btn:nth-child(1):hover { background: #d32f2f; }
+.rating-btn:nth-child(2):hover { background: #f57c00; }
+.rating-btn:nth-child(3):hover { background: #388e3c; }
+.rating-btn:nth-child(4):hover { background: #1976d2; }
+
+/* Keyboard Shortcuts Help */
+.keyboard-help {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 8px;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  max-width: 200px;
+}
+
+.keyboard-help:not(.expanded) .help-content {
+  display: none;
+}
+
+.help-toggle {
   cursor: pointer;
-  margin: 10px 5px 0 5px;
-  transition: background-color 0.2s ease;
+  padding: 0.5rem;
+  text-align: center;
+  user-select: none;
 }
 
-.button:hover,
-button:hover {
-  background-color: #0056b3;
+.help-content {
+  padding: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
+.help-content p {
+  margin: 0.25rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+kbd {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+}
+
+/* Enhanced Card Styling */
+.card {
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.card:hover {
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* Question and Answer Styling */
+#question {
+  font-size: 1.2rem;
+  line-height: 1.4;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+#answer {
+  font-size: 1.1rem;
+  line-height: 1.4;
+  color: #34495e;
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #4CAF50;
+  margin: 1rem 0;
+}
+
+/* Button Enhancements */
+.button {
+  transition: all 0.2s ease;
+  font-weight: 500;
+  position: relative;
+  overflow: hidden;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.button:active {
+  transform: translateY(0);
+}
+
+/* Return Button Enhancement */
+.return-button {
+  position: sticky;
+  top: 20px;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.return-button:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateX(-2px);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .completion-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .completion-actions .button {
+    min-width: 200px;
+  }
+  
+  .keyboard-help {
+    bottom: 10px;
+    right: 10px;
+    font-size: 0.7rem;
+  }
+  
+  .rating-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  
+  .rating-btn {
+    padding: 1rem;
+    font-size: 1.2rem;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: #ecf0f1;
+  }
+  
+  #question {
+    color: #ecf0f1;
+  }
+  
+  #answer {
+    background: #34495e;
+    color: #ecf0f1;
+    border-left-color: #4CAF50;
+  }
+  
+  .progress-bar {
+    background-color: #34495e;
+  }
+  
+  .completion-message {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: #ecf0f1;
+  }
+  
+  .completion-message h2 {
+    color: #ecf0f1;
+  }
 }
