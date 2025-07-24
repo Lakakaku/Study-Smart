@@ -36,6 +36,40 @@
     const quizTitle = {{ quiz_title|tojson }};
     const questions = {{ questions|tojson }};
   </script>
-  <script src="{{ url_for('static', filename='js/flashcards.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/flashcards.js') }}">
+    function handleComplete() {
+        if (typeof window.handleQuizCompletion === 'function') {
+            const responses = [];
+        
+            for (let i = 0; i < totalQuestions; i++) {
+                if (questionResponses[i]) {
+                    responses.push({
+                        question: questionResponses[i].question,
+                        rating: questionResponses[i].rating,
+                        time_taken: questionResponses[i].timeTaken
+                    });
+                }
+            }
+        
+            console.log('[DEBUG] Sending responses:', responses);
+        
+            // Använd den globala funktionen från index.html
+            window.handleQuizCompletion(subjectName, quizTitle, responses)
+                .then(data => {
+                    console.log('[SUCCESS] Quiz completion handled:', data);
+                // Gå tillbaka till huvudsidan efter framgångsrik uppdatering
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                })
+                .catch(error => {
+                    console.error('[ERROR] Failed to handle quiz completion:', error);
+                });
+        } else {
+            console.log('[WARNING] handleQuizCompletion function not found');
+            alert('Quiz completed locally!');
+        }
+    }
+  </script>
 </body>
 </html>
