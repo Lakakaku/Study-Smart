@@ -28,6 +28,15 @@
     </select>
   </div>
 
+  <!-- Lesson Selection -->
+  <div class="form-group" id="lesson-group" style="display: none;">
+    <label for="selected_lesson">Select Lesson (optional):</label>
+    <select name="selected_lesson" id="selected_lesson">
+      <option value="">No lesson selected</option>
+    </select>
+    <small class="help-text">Choose a lesson to base the quiz on its transcribed content</small>
+  </div>
+
   <!-- Quiz Type Selection -->
   <div class="form-group">
     <label>Quiz Type:</label>
@@ -120,12 +129,64 @@
 
 </form>
   </div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const subjectSelect = document.getElementById('subject');
+  const lessonSelect = document.getElementById('selected_lesson');
+  const lessonGroup = document.getElementById('lesson-group');
   const personalCheckbox = document.getElementById('is_personal');
   const useDocumentsCheckbox = document.getElementById('use_documents');
   const flashcardsCheckbox = document.getElementById('create_flashcards');
+  
+  // Hantera ämnesval - ladda lektioner
+  subjectSelect.addEventListener('change', async function() {
+    const selectedSubject = this.value;
+    
+    if (!selectedSubject) {
+      lessonGroup.style.display = 'none';
+      lessonSelect.innerHTML = '<option value="">No lesson selected</option>';
+      return;
+    }
+    
+    try {
+      // Hämta subject_id baserat på subject name
+      const response = await fetch(`/api/subjects/by-name/${encodeURIComponent(selectedSubject)}`);
+      if (!response.ok) throw new Error('Failed to fetch subject');
+      
+      const subjectData = await response.json();
+      const subjectId = subjectData.subject_id;
+      
+      // Hämta lektioner för detta ämne
+      const lessonsResponse = await fetch(`/api/lessons/${subjectId}`);
+      if (!lessonsResponse.ok) throw new Error('Failed to fetch lessons');
+      
+      const lessonsData = await lessonsResponse.json();
+      
+      // Uppdatera lesson dropdown
+      lessonSelect.innerHTML = '<option value="">No lesson selected</option>';
+      
+      if (lessonsData.lessons && lessonsData.lessons.length > 0) {
+        lessonsData.lessons.forEach(lesson => {
+          // Visa endast lektioner som har transkription
+          if (lesson.transcription_status === 'completed' && lesson.transcription) {
+            const option = document.createElement('option');
+            option.value = lesson.id;
+            option.textContent = `${lesson.title} (${lesson.lesson_date})`;
+            lessonSelect.appendChild(option);
+          }
+        });
+        
+        lessonGroup.style.display = 'block';
+      } else {
+        lessonGroup.style.display = 'none';
+      }
+      
+    } catch (error) {
+      console.error('Error loading lessons:', error);
+      lessonGroup.style.display = 'none';
+    }
+  });
   
   // Visa/dölj information baserat på om det är personligt quiz
   personalCheckbox.addEventListener('change', function() {
@@ -282,7 +343,22 @@ document.addEventListener('DOMContentLoaded', function() {
   background-color: #6c757d;
   cursor: not-allowed;
 }
+
+#lesson-group {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 15px;
+  background-color: #f8f9fa;
+}
+
+#lesson-group label {
+  color: #495057;
+  font-weight: 600;
+}
+
+#selected_lesson {
+  background-color: white;
+}
 </style>
 </body>
 </html>
-
