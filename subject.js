@@ -311,51 +311,7 @@ function hideLoadingIndicator() {
   }
 }
 
-// ----------- SHARED FILES FUNKTIONER -----------
-function initializeSharedFiles() {
-  if (userRole !== 'owner') return;
 
-  const fileInput = document.getElementById('file-upload-input');
-  const uploadArea = document.getElementById('file-upload-area');
-  const progressBar = document.getElementById('progress-bar');
-  const progressDiv = document.getElementById('upload-progress');
-
-  if (!fileInput || !uploadArea) return;
-
-  uploadArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    uploadArea.classList.add('drag-over');
-  });
-
-  uploadArea.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    uploadArea.classList.remove('drag-over');
-  });
-
-  uploadArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadArea.classList.remove('drag-over');
-    const files = e.dataTransfer.files;
-    if (files.length > 0) handleFileUpload(files[0]);
-  });
-
-  uploadArea.addEventListener('click', () => {
-    fileInput.click();
-  });
-
-  fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) handleFileUpload(e.target.files[0]);
-  });
-
-  const uploadForm = document.getElementById('file-upload-form');
-  if (uploadForm) {
-    uploadForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const formData = new FormData(uploadForm);
-      uploadFile(formData);
-    });
-  }
-}
 
 function handleFileUpload(file) {
   const maxSize = 50 * 1024 * 1024;
@@ -442,132 +398,15 @@ function uploadFile(formData) {
   xhr.send(formData);
 }
 
-function resetUploadForm() {
-  const fileInput = document.getElementById('file-upload-input');
-  const descriptionInput = document.getElementById('file-description');
-  const uploadArea = document.getElementById('file-upload-area');
 
-  if (fileInput) fileInput.value = '';
-  if (descriptionInput) descriptionInput.value = '';
-  if (uploadArea) uploadArea.classList.remove('drag-over');
-}
 
-function loadSharedFiles() {
-  if (typeof currentSubject === 'undefined') return;
-  
-  fetch(`/api/shared_files/${encodeURIComponent(currentSubject)}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.status === 'success') {
-        displaySharedFiles(data.files);
-      } else {
-        console.error('Error loading shared files:', data.message);
-      }
-    })
-    .catch(err => console.error('Error loading shared files:', err));
-}
 
-function displaySharedFiles(files) {
-  const container = document.getElementById('shared-files-list');
-  if (!container) return;
 
-  if (files.length === 0) {
-    container.innerHTML = '<p class="no-files">Inga filer uppladdade ännu.</p>';
-    return;
-  }
 
-  container.innerHTML = files.map(file => `
-    <div class="file-item" data-file-id="${file.id}">
-      <div class="file-info">
-        <div class="file-name">
-          <i class="fas fa-file-${getFileIcon(file.extension)}"></i>
-          <span>${file.filename}</span>
-        </div>
-        <div class="file-details">
-          <span class="file-size">${file.file_size}</span>
-          <span class="file-date">${file.created_at}</span>
-          <span class="file-uploader">av ${file.uploader}</span>
-          <span class="download-count">${file.download_count} nedladdningar</span>
-        </div>
-        ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
-      </div>
-      <div class="file-actions">
-        <button class="btn btn-sm btn-primary" onclick="downloadFile(${file.id})">
-          <i class="fas fa-download"></i> Ladda ned
-        </button>
-        ${file.can_delete ? `
-          <button class="btn btn-sm btn-danger" onclick="deleteFile(${file.id})">
-            <i class="fas fa-trash"></i> Ta bort
-          </button>` : ''}
-      </div>
-    </div>
-  `).join('');
-}
 
-function getFileIcon(ext) {
-  const icons = {
-    pdf: 'pdf', doc: 'word', docx: 'word', txt: 'text', rtf: 'text',
-    jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', bmp: 'image',
-    mp4: 'video', avi: 'video', mov: 'video', wmv: 'video', flv: 'video',
-    mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio',
-    zip: 'archive', rar: 'archive', '7z': 'archive', tar: 'archive', gz: 'archive'
-  };
-  return icons[ext] || 'alt';
-}
 
-function downloadFile(id) {
-  const link = document.createElement('a');
-  link.href = `/download_shared_file/${id}`;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
 
-function deleteFile(id) {
-  if (!confirm('Är du säker på att du vill ta bort denna fil?')) return;
 
-  fetch('/delete_shared_file', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ file_id: id })
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (data.status === 'success') {
-        showNotification('Fil borttagen framgångsrikt', 'success');
-        loadSharedFiles();
-        if (userRole === 'owner') loadFileStats();
-      } else {
-        showNotification(data.message || 'Kunde inte ta bort filen', 'error');
-      }
-    })
-    .catch(err => {
-      console.error('Error deleting file:', err);
-      showNotification('Ett fel uppstod vid borttagning', 'error');
-    });
-}
-
-function loadFileStats() {
-  if (userRole !== 'owner') return;
-  if (typeof subjectId === 'undefined') return;
-  
-  fetch(`/api/shared_files/${subjectId}/stats`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.status === 'success') {
-        updateFileStats(data.total_files, data.total_downloads);
-      }
-    })
-    .catch(err => console.error('Error loading file stats:', err));
-}
-
-function updateFileStats(totalFiles, totalDownloads) {
-  const fileCount = document.getElementById('files-count');
-  const downloadCount = document.getElementById('downloads-count');
-  if (fileCount) fileCount.textContent = totalFiles;
-  if (downloadCount) downloadCount.textContent = totalDownloads;
-}
 
 function loadMemberCount() {
   if (userRole !== 'owner') return;
