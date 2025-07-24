@@ -11,11 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeDocumentHandling();
 
   // Ladda initiala data
-  loadSharedFiles();
-  if (userRole === 'owner') {
-    loadMemberCount();
-    loadFileStats();
-  }
+  
 
   // Flashcard navigation
   document.querySelectorAll('.flashcard-trigger').forEach(elem => {
@@ -342,61 +338,7 @@ function handleFileUpload(file) {
   uploadFile(formData);
 }
 
-function uploadFile(formData) {
-  const progressDiv = document.getElementById('upload-progress');
-  const progressBar = document.getElementById('progress-bar');
-  const uploadButton = document.getElementById('upload-button');
 
-  if (progressDiv) progressDiv.style.display = 'block';
-  if (progressBar) progressBar.style.width = '0%';
-  if (uploadButton) {
-    uploadButton.disabled = true;
-    uploadButton.textContent = 'Laddar upp...';
-  }
-
-  const xhr = new XMLHttpRequest();
-
-  xhr.upload.addEventListener('progress', (e) => {
-    if (e.lengthComputable && progressBar) {
-      const percent = (e.loaded / e.total) * 100;
-      progressBar.style.width = percent + '%';
-      progressBar.textContent = Math.round(percent) + '%';
-    }
-  });
-
-  xhr.addEventListener('load', () => {
-    if (uploadButton) {
-      uploadButton.disabled = false;
-      uploadButton.textContent = 'Ladda upp fil';
-    }
-    if (progressDiv) progressDiv.style.display = 'none';
-
-    try {
-      const res = JSON.parse(xhr.responseText);
-      if (res.status === 'success') {
-        showNotification('Fil uppladdad framgångsrikt!', 'success');
-        loadSharedFiles();
-        resetUploadForm();
-      } else {
-        showNotification(res.message || 'Uppladdning misslyckades', 'error');
-      }
-    } catch (err) {
-      showNotification('Ett fel uppstod vid uppladdning', 'error');
-    }
-  });
-
-  xhr.addEventListener('error', () => {
-    if (uploadButton) {
-      uploadButton.disabled = false;
-      uploadButton.textContent = 'Ladda upp fil';
-    }
-    if (progressDiv) progressDiv.style.display = 'none';
-    showNotification('Nätverksfel vid uppladdning', 'error');
-  });
-
-  xhr.open('POST', '/upload_shared_file');
-  xhr.send(formData);
-}
 
 
 
