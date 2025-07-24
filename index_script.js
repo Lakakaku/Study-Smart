@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   // ----------- Part 0: Fetch the entire repetition schedule -----------
   let schedule = {};
+  let userSubjects = {};
+
   async function fetchSchedule() {
     try {
       const res = await fetch('/flashcards_by_date');
@@ -9,6 +11,22 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('[DEBUG] Fetched schedule:', schedule);
     } catch (e) {
       console.error('Could not load repetition schedule:', e);
+    }
+  }
+
+  async function loadUserSubjects() {
+    try {
+      const response = await fetch('/api/user_subjects');
+      if (response.ok) {
+        const data = await response.json();
+        userSubjects = data.reduce((acc, subject) => {
+          acc[subject.id] = subject.user_role; // 'owner' eller 'member'
+          return acc;
+        }, {});
+        console.log('[DEBUG] User subjects loaded:', userSubjects);
+      }
+    } catch (error) {
+      console.error('Error loading user subjects:', error);
     }
   }
 
@@ -41,14 +59,27 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Grupp‐logiken
+    // Förbättrad grupp-logik som räknar faktiska frågor
     const grouped = {};
     entries.forEach(e => {
       const id = `${e.subject}|||${e.topic}`;
       if (!grouped[id]) {
-        grouped[id] = { subject: e.subject, topic: e.topic, count: 0 };
+        grouped[id] = { 
+          subject: e.subject, 
+          topic: e.topic, 
+          count: 0,
+          questions: [] // Lägg till array för att hålla koll på alla frågor
+        };
       }
-      grouped[id].count++;
+      
+      // Om det finns questions-array i entry, räkna dem
+      if (e.questions && Array.isArray(e.questions)) {
+        grouped[id].count += e.questions.length;
+        grouped[id].questions.push(...e.questions);
+      } else {
+        // Fallback för äldre format
+        grouped[id].count++;
+      }
     });
 
     console.log('[DEBUG] Grouped quizzes:', grouped);
@@ -108,7 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const resp = await fetch('/api/events');
       if (resp.ok) {
         calendarEvents = await resp.json();
-        if (calendarModal.style.display === 'block') renderCalendar(currentDate);
+        if (calendarModal.style.display === 'block') {
+          renderCalendar(currentDate);
+        }
       }
     } catch (err) {
       console.error('Error loading events:', err);
@@ -136,35 +169,57 @@ document.addEventListener('DOMContentLoaded', () => {
     renderCalendar(new Date());
   });
 
-  calendarCloseBtn?.addEventListener('click', () => calendarModal.style.display = 'none');
+  calendarCloseBtn?.addEventListener('click', () => {
+    calendarModal.style.display = 'none';
+  });
+
   addEventModalClose?.addEventListener('click', () => { 
     addEventModal.style.display = 'none'; 
     clearEventForm(); 
   });
-  closeEventsDisplay?.addEventListener('click', () => eventsDisplay.style.display = 'none');
+
+  closeEventsDisplay?.addEventListener('click', () => {
+    eventsDisplay.style.display = 'none';
+  });
 
   saveEventBtn?.addEventListener('click', async () => {
     const subject = document.getElementById('subject-select').value;
     const testType = document.getElementById('test-type-select').value;
     const title = document.getElementById('event-title').value;
     const desc = document.getElementById('event-description').value;
+    const shareWithMembers = document.getElementById('share-with-members')?.checked || false;
 
     if (subject && testType && title && selectedDate) {
-      const ev = {
-        id: Date.now(),
-        date: selectedDate.toISOString().split('T')[0],
-        subject,
-        testType,
-        title,
+      const eventData = {
+        date: formatKey(selectedDate),
+        subject: subject,
+        testType: testType,
+        title: title,
         description: desc,
-        created: new Date().toISOString()
+        share_with_members: shareWithMembers
       };
-      await saveEvent(ev);
-      alert(`Event "${title}" saved!`);
-      addEventModal.style.display = 'none';
-      clearEventForm();
+      try {
+        const response = await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData)
+        });
+        const data = await response.json();
+        if (response.ok && data.status === 'success') {
+          alert(data.message);
+          await loadEvents();
+          renderCalendar(currentDate);
+          addEventModal.style.display = 'none';
+          clearEventForm();
+        } else {
+          alert(data.error || 'Failed to create event');
+        }
+      } catch (error) {
+        console.error('Error creating event:', error);
+        alert('Network error occurred while creating event');
+      }
     } else {
-      alert('Please fill all fields');
+      alert('Please fill all required fields');
     }
   });
 
@@ -175,52 +230,110 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function clearEventForm() {
     ['subject-select','test-type-select','event-title','event-description'].forEach(id => {
-      const element = document.getElementById(id);
-      if (element) element.value = '';
+      const el = document.getElementById(id);
+      if (el) el.value = '';
     });
+    const shareCheckbox = document.getElementById('share-with-members');
+    if (shareCheckbox) shareCheckbox.checked = false;
     selectedDate = null;
   }
 
   function getEventsForDate(d) {
-    const ds = d.toISOString().split('T')[0];
+    const ds = formatKey(d);
     return calendarEvents.filter(e => e.date === ds);
   }
 
   function displayEventsForDate(d) {
     const evs = getEventsForDate(d);
     selectedDateTitle.textContent =
-      `Events for ${d.toLocaleDateString('en-US',{ weekday:'long',year:'numeric',month:'long',day:'numeric'})}`;
-    eventsList.innerHTML = evs.length
-      ? evs.map(e => `
-          <div class="event-item">
-            <div class="event-header">
-              <h4>${e.title}</h4><span>${e.testType}</span>
+      `Events for ${d.toLocaleDateString('en-US',{ weekday:'long', year:'numeric', month:'long', day:'numeric'})}`;
+    
+    if (evs.length === 0) {
+      eventsList.innerHTML = '<p class="no-events">No events scheduled for this date.</p>';
+    } else {
+      eventsList.innerHTML = evs.map(e => `
+        <div class="event-item ${e.is_shared ? 'shared-event' : 'private-event'}">
+          <div class="event-header">
+            <h4>${e.title}</h4>
+            <div class="event-badges">
+              <span class="test-type-badge">${e.testType}</span>
+              ${e.is_shared ? '<span class="shared-badge">Shared</span>' : ''}
             </div>
-            <div class="event-details">
-              <p><strong>Subject:</strong> ${e.subject}</p>
-              ${e.description?`<p><strong>Description:</strong> ${e.description}</p>`:''}
-            </div>
-            <button onclick="deleteEvent(${e.id})">Delete</button>
           </div>
-        `).join('')
-      : '<p class="no-events">No events scheduled for this date.</p>';
+          <div class="event-details">
+            <p><strong>Subject:</strong> ${e.subject}</p>
+            ${e.description ? `<p><strong>Description:</strong> ${e.description}</p>` : ''}
+          </div>
+          <div class="event-actions">
+            ${canDeleteEvent(e) ? `<button onclick="deleteEvent(${e.id})" class="delete-btn">Delete</button>` : ''}
+            ${canToggleSharing(e) ? `<button onclick="toggleEventSharing(${e.id}, ${e.is_shared})" class="share-btn">${e.is_shared ? 'Make Private' : 'Share with Members'}</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
     eventsDisplay.style.display = 'block';
   }
 
-  window.deleteEvent = async id => {
+  window.toggleEventSharing = async function(eventId, isCurrentlyShared) {
+    try {
+      const response = await fetch(`/api/events/${eventId}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        alert(data.message);
+        await loadEvents();
+        renderCalendar(currentDate);
+        if (eventsDisplay.style.display === 'block' && selectedDate) {
+          displayEventsForDate(selectedDate);
+        }
+      } else {
+        alert(data.error || 'Failed to update sharing settings');
+      }
+    } catch (error) {
+      console.error('Error toggling event sharing:', error);
+      alert('Network error occurred while updating sharing settings');
+    }
+  };
+
+  function canDeleteEvent(event) {
+    if (!event.subject_id) {
+      return true;
+    }
+    const userRole = userSubjects[event.subject_id];
+    return userRole === 'owner';
+  }
+
+  function canToggleSharing(event) {
+    if (!event.subject_id) {
+      return true;
+    }
+    const userRole = userSubjects[event.subject_id];
+    return userRole === 'owner';
+  }
+
+  window.deleteEvent = async function(id) {
     if (!confirm('Delete this event?')) return;
     try {
-      const resp = await fetch(`/api/events/${id}`, { method: 'DELETE' });
-      if (!resp.ok) throw new Error('Failed to delete event');
-      calendarEvents = calendarEvents.filter(e => e.id !== id);
-      renderCalendar(currentDate);
-      if (eventsDisplay.style.display === 'block' && selectedDate) {
-        displayEventsForDate(selectedDate);
+      const response = await fetch(`/api/events/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        alert(data.message);
+        await loadEvents();
+        renderCalendar(currentDate);
+        if (eventsDisplay.style.display === 'block' && selectedDate) {
+          displayEventsForDate(selectedDate);
+        }
+      } else {
+        alert(data.error || 'Failed to delete event');
       }
-      alert('Event deleted');
     } catch (error) {
       console.error('Error deleting event:', error);
-      alert('Could not delete event');
+      alert('Network error occurred while deleting event');
     }
   };
 
@@ -231,6 +344,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addEventModal && addEventModal.style.display === 'block' && !e.target.closest('#add-event-modal')) {
       addEventModal.style.display = 'none';
       clearEventForm();
+    }
+    if (e.target === subjectModal) {
+      subjectModal.style.display = 'none';
     }
   });
 
@@ -247,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.renderCalendar = date => {
     monthYearSpan.textContent = `${date.toLocaleString('default',{month:'long'})} ${date.getFullYear()}`;
     calendarBody.innerHTML = '';
-    
+
     let start = new Date(date.getFullYear(), date.getMonth(), 1);
     start.setDate(start.getDate() - start.getDay());
 
@@ -260,12 +376,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const d = new Date(start);
         d.setDate(start.getDate() + (r * 7 + c));
 
-        // Markera dagens datum
         if (d.toDateString() === new Date().toDateString()) {
           td.classList.add('today');
         }
-
-        // Markera dagar som inte tillhör aktuell månad
         if (d.getMonth() !== date.getMonth()) {
           td.classList.add('other-month');
         }
@@ -276,41 +389,51 @@ document.addEventListener('DOMContentLoaded', () => {
         const hdr = document.createElement('div');
         hdr.className = 'day-header';
         hdr.textContent = d.getDate();
-        hdr.onclick = async () => {
+        hdr.onclick = () => {
           selectedDate = new Date(d);
-          // Visa events för det valda datumet utan att stänga kalendern
           displayEventsForDate(d);
-          // Ta INTE bort kalendern - låt den vara öppen
         };
         dayDiv.appendChild(hdr);
 
-        // Event indicator
         const dayEvents = getEventsForDate(d);
-        const scheduleKey = formatKey(d);
-        const scheduledQuizzes = schedule[scheduleKey] || [];
-        
+        const scheduledQuizzes = schedule[formatKey(d)] || [];
+
         if (dayEvents.length > 0 || scheduledQuizzes.length > 0) {
           const indicator = document.createElement('div');
           indicator.className = 'event-indicator';
-          
-          if (dayEvents.length > 0) {
+
+          const ownEvents = dayEvents.filter(e => !e.is_shared);
+          const sharedEvents = dayEvents.filter(e => e.is_shared);
+
+          if (ownEvents.length > 0) {
             indicator.classList.add('has-events');
-            indicator.title = `${dayEvents.length} event(s)`;
           }
-          
+          if (sharedEvents.length > 0) {
+            indicator.classList.add('has-shared-events');
+          }
           if (scheduledQuizzes.length > 0) {
             indicator.classList.add('has-repetitions');
-            indicator.title += (indicator.title ? ', ' : '') + `${scheduledQuizzes.length} repetition(s)`;
           }
-          
+
+          let tooltipText = '';
+          if (ownEvents.length > 0) {
+            tooltipText += `${ownEvents.length} event(s)`;
+          }
+          if (sharedEvents.length > 0) {
+            tooltipText += (tooltipText ? ', ' : '') + `${sharedEvents.length} shared event(s)`;
+          }
+          if (scheduledQuizzes.length > 0) {
+            tooltipText += (tooltipText ? ', ' : '') + `${scheduledQuizzes.length} repetition(s)`;
+          }
+
+          indicator.title = tooltipText;
           dayDiv.appendChild(indicator);
         }
 
-        // Add event button
         const addBtn = document.createElement('div');
         addBtn.className = 'add-event-btn';
         addBtn.textContent = '+';
-        addBtn.onclick = (e) => {
+        addBtn.onclick = e => {
           e.stopPropagation();
           selectedDate = new Date(d);
           addEventModal.style.display = 'block';
@@ -324,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  // ----------- Subject Modal Logic ----------- 
+  // ----------- Subject Modal Logic -----------
   const subjectModal = document.getElementById('subject-modal');
   const subjectBtn = document.getElementById('left-subject-btn');
   const subjectClose = subjectModal?.querySelector('.close');
@@ -338,21 +461,15 @@ document.addEventListener('DOMContentLoaded', () => {
     subjectModal.style.display = 'none';
   });
 
-  window.addEventListener('click', event => {
-    if (event.target === subjectModal) {
-      subjectModal.style.display = 'none';
-    }
-  });
-
-  subjectForm?.addEventListener('submit', () => {
+  subjectForm?.addEventListener('submit', e => {
+    e.preventDefault();
     subjectModal.style.display = 'none';
   });
 
   // ----------- Quiz Completion Handling -----------
-  // Global function to handle quiz completion data from flashcards.html
   window.handleQuizCompletion = function(subject, quizTitle, responses) {
     console.log('[DEBUG] Quiz completion data received:', { subject, quizTitle, responses });
-    
+
     const submitData = {
       subject: subject,
       quiz_title: quizTitle,
@@ -363,9 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return fetch('/submit_ratings', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(submitData)
     })
     .then(response => response.json())
@@ -373,16 +488,12 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('[DEBUG] Response:', data);
       if (data.status === 'success') {
         alert(`Quiz completed! Updated ${data.updated_count} questions.`);
-        // Optionellt: visa vilka subject/topic som användes
         if (data.resolved_subject && data.resolved_topic) {
           console.log(`[DEBUG] Used subject: ${data.resolved_subject}, topic: ${data.resolved_topic}`);
         }
-        
-        // Uppdatera schemat efter quiz completion
         fetchSchedule().then(() => {
           loadQuizzesForDate();
         });
-        
         return data;
       } else {
         alert('Error: ' + (data.error || 'Unknown error'));
@@ -400,9 +511,59 @@ document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     console.log('[DEBUG] Initializing application...');
     await fetchSchedule();
+    await loadUserSubjects();
     updateDateHeader();
     await loadQuizzesForDate();
     await loadEvents();
     console.log('[DEBUG] Application initialized successfully');
   })();
-});
+}); // End of DOMContentLoaded
+
+// Exempel på hur JavaScript bör hantera add_subject response
+function addSubject() {
+  const subjectName = document.getElementById('subject-name').value.trim();
+  const isShared = document.getElementById('is-shared').checked;
+
+  if (!subjectName) {
+    alert('Please enter a subject name');
+    return;
+  }
+
+  fetch('/add_subject', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: subjectName, is_shared: isShared })
+  })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        addSubjectToDOM(data.subject);
+        document.getElementById('subject-name').value = '';
+        document.getElementById('is-shared').checked = false;
+        showMessage(data.message, 'success');
+      } else {
+        showMessage(data.message, 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      showMessage('Failed to create subject', 'error');
+    });
+}
+
+function addSubjectToDOM(subject) {
+  const ownedSubjectsContainer = document.getElementById('owned-subjects');
+  const subjectHTML = `
+    <div class="subject-card" data-subject-id="${subject.id}">
+      <h3><a href="/subject/${subject.name}">${subject.name}</a></h3>
+      <div class="subject-stats">
+        <p>Quizzes: ${subject.quiz_count}</p>
+        <p>Flashcards: ${subject.flashcard_count}</p>
+        <p>Due: ${subject.due_flashcards}</p>
+        <p>Role: ${subject.user_role}</p>
+      </div>
+      ${subject.is_shared ? `<p class="share-code">Share Code: ${subject.share_code}</p>` : ''}
+    </div>
+  `;
+  ownedSubjectsContainer.insertAdjacentHTML('beforeend', subjectHTML);
+}
