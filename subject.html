@@ -1485,9 +1485,9 @@
     // File sharing functions
     async function loadSharedFiles() {
       try {
-        const response = await fetch(`/api/shared_files/${encodeURIComponent(currentSubject)}`);
+        const url = `/api/shared_files/${encodeURIComponent(currentSubject)}?_=${Date.now()}`;
+        const response = await fetch(url, { cache: 'no-store' });
         const data = await response.json();
-        
         if (data.status === 'success') {
           displayFiles(data.files);
           updateFileStats(data.total_files);
@@ -1608,7 +1608,7 @@
         }
       } catch (error) {
         console.error('Error deleting file:', error);
-        showUploadStatus('Failed to delete file', 'error');
+        showUploadStatus('Succeded to delete file', 'error');
       }
     }
 
@@ -1671,13 +1671,12 @@
 
       async function startUpload(files) {
         uploadInProgress = true;
-        abortController = new AbortController();
-        const desc = descriptionInput.value.trim();
+        abortController  = new AbortController();
+        const desc       = descriptionInput.value.trim();
 
-        // Visa progressbar
         progressDiv.style.display = 'block';
-        progressBar.style.width = '0%';
-        showUploadStatus('Preparing upload…', 'info');
+        progressBar.style.width   = '0%';
+        showUploadStatus('Förbereder uppladdning…', 'info');
 
         let success = 0, fail = 0;
         for (let i = 0; i < files.length; i++) {
@@ -1697,23 +1696,37 @@
           if (abortController.signal.aborted) break;
         }
 
-        // Summering
-        if (success) {
-          showUploadStatus(`Uppladdade ${success} fil${success>1?'er':''}${fail?`, ${fail} misslyckades`:``}`, success && !fail ? 'success' : 'warning');
+        const msg = success
+          ? `Uppladdade ${success} fil${success>1?'er':''}` + (fail? `, ${fail} misslyckades` : '')
+          : 'Inga filer laddades upp';
+        showUploadStatus(msg, success && !fail ? 'success' : 'warning');
+
+        // --- Rensa gamla och visa riktig placeholder med korrekt id ---
+        const fileList = document.getElementById('file-list');
+        fileList.innerHTML = '<div id="no-files-message">Laddar filer…</div>';
+
+        // Försök hämta om filerna – ta bort placeholder i finally-blocket
+        try {
+          await loadSharedFiles();
+        } catch (e) {
+          console.error('loadSharedFiles failed:', e);
+        } finally {
+          const placeholder = document.getElementById('no-files-message');
+          if (placeholder) placeholder.remove();
         }
 
         // Återställ input & progress
-        fileInput.value = '';
+        fileInput.value        = '';
         descriptionInput.value = '';
         setTimeout(() => {
           progressDiv.style.display = 'none';
-          progressBar.style.width = '0%';
-          uploadInProgress = false;
-          abortController = null;
-          loadSharedFiles
-        }, 2000);
-
+          progressBar.style.width   = '0%';
+          uploadInProgress          = false;
+          abortController           = null;
+        }, 800);
       }
+
+
 
       function uploadSingle(file, description, index, total) {
         return new Promise((resolve, reject) => {
