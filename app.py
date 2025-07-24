@@ -2358,7 +2358,12 @@ def leave_subject(subject_id):
         ).first()
         
         if not membership:
-            return jsonify({'status': 'error', 'message': 'You are not a member of this subject'}), 404
+            # Check if it's an AJAX request
+            if request.headers.get('Content-Type') == 'application/json':
+                return jsonify({'status': 'error', 'message': 'You are not a member of this subject'}), 404
+            else:
+                flash('You are not a member of this subject', 'error')
+                return redirect(url_for('index'))
         
         subject = Subject.query.get(subject_id)
         subject_name = subject.name if subject else 'Unknown'
@@ -2366,16 +2371,27 @@ def leave_subject(subject_id):
         db.session.delete(membership)
         db.session.commit()
         
-        return jsonify({
-            'status': 'success',
-            'message': f'Left subject "{subject_name}"'
-        })
+        # Check if it's an AJAX request
+        if request.headers.get('Content-Type') == 'application/json':
+            return jsonify({
+                'status': 'success',
+                'message': f'Left subject "{subject_name}"',
+                'redirect': url_for('index')
+            })
+        else:
+            flash(f'Successfully left subject "{subject_name}"', 'success')
+            return redirect(url_for('index'))
         
     except Exception as e:
         print(f"[ERROR] Failed to leave subject: {e}")
         db.session.rollback()
-        return jsonify({'status': 'error', 'message': 'Failed to leave subject'}), 500
-
+        
+        # Check if it's an AJAX request
+        if request.headers.get('Content-Type') == 'application/json':
+            return jsonify({'status': 'error', 'message': 'Failed to leave subject'}), 500
+        else:
+            flash('Failed to leave subject', 'error')
+            return redirect(url_for('index'))
 
 # Uppdatera din befintliga index route med denna kod
 
