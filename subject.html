@@ -1863,6 +1863,461 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Krav Document Management Functions
+    // These handle curriculum documents (kunskapskrav, kunskapsmål, begrippslista)
+
+    let kravUploadInProgress = false;
+
+    // Initialize krav document functionality
+    function initializeKravDocuments() {
+        if (userRole !== 'owner') return; // Only owners can manage krav documents
+        
+        setupKravDocumentUpload();
+        setupKravDocumentRemoval();
+    }
+
+    // Setup krav document upload functionality
+    function setupKravDocumentUpload() {
+        // Get all upload buttons for different document types
+        const uploadButtons = document.querySelectorAll('[id^="upload-krav-"], [id$="-upload-btn"]');
+        
+        uploadButtons.forEach(button => {
+            const docType = extractDocTypeFromButton(button);
+            if (docType) {
+                button.addEventListener('click', () => uploadKravDocument(docType));
+            }
+        });
+        
+        // Setup file input change handlers
+        const fileInputs = document.querySelectorAll('input[type="file"][accept=".pdf"]');
+        fileInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                const docType = extractDocTypeFromInput(this);
+                if (docType && this.files.length > 0) {
+                    uploadKravDocument(docType, this.files[0]);
+                }
+            });
+        });
+    }
+
+    // Extract document type from button ID or data attributes
+    function extractDocTypeFromButton(button) {
+        // Try different patterns to identify document type
+        const id = button.id.toLowerCase();
+        const dataType = button.getAttribute('data-doc-type');
+        
+        if (dataType) return dataType;
+        
+        if (id.includes('begrippslista')) return 'begrippslista';
+        if (id.includes('kunskapskrav')) return 'kunskapskrav';
+        if (id.includes('kunskapsmal')) return 'kunskapsmal';
+        
+        return null;
+    }
+
+    // Extract document type from file input
+    function extractDocTypeFromInput(input) {
+        const id = input.id.toLowerCase();
+        const name = input.name?.toLowerCase() || '';
+        
+        if (id.includes('begrippslista') || name.includes('begrippslista')) return 'begrippslista';
+        if (id.includes('kunskapskrav') || name.includes('kunskapskrav')) return 'kunskapskrav';
+        if (id.includes('kunskapsmal') || name.includes('kunskapsmal')) return 'kunskapsmal';
+        
+        return null;
+    }
+
+    // Upload krav document
+    async function uploadKravDocument(docType, file = null) {
+        if (kravUploadInProgress) {
+            showKravStatus('Upload already in progress', 'warning');
+            return;
+        }
+        
+        // If no file provided, try to get it from file input
+        if (!file) {
+            const fileInput = document.querySelector(`input[type="file"][data-doc-type="${docType}"], #${docType}-file-input, #upload-${docType}-file`);
+            if (!fileInput || !fileInput.files.length) {
+                // Trigger file selection
+                triggerFileSelection(docType);
+                return;
+            }
+            file = fileInput.files[0];
+        }
+        
+        // Validate file
+        if (!file) {
+            showKravStatus('Please select a file', 'error');
+            return;
+        }
+        
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            showKravStatus('Only PDF files are allowed', 'error');
+            return;
+        }
+        
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit
+            showKravStatus('File too large. Maximum size is 50MB', 'error');
+            return;
+        }
+        
+        // Validate document type
+        const allowedTypes = ['begrippslista', 'kunskapskrav', 'kunskapsmal'];
+        if (!allowedTypes.includes(docType)) {
+            showKravStatus('Invalid document type', 'error');
+            return;
+        }
+        
+        kravUploadInProgress = true;
+        const uploadButton = document.querySelector(`[data-doc-type="${docType}"]`);
+        const originalButtonText = uploadButton ? uploadButton.textContent : '';
+        
+        try {
+            // Update UI to show upload in progress
+            if (uploadButton) {
+                uploadButton.disabled = true;
+                uploadButton.textContent = 'Uploading...';
+            }
+            
+            showKravStatus(`Uploading ${docType}...`, 'info');
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('subject', currentSubject);
+            formData.append('type', docType);
+            
+            // Upload with progress tracking
+            const response = await uploadKravWithProgress(formData, docType);
+            
+            if (response.status === 'success') {
+                showKravStatus(`${docType} uploaded successfully!`, 'success');
+                
+                // Update the documents display
+                await refreshKravDocuments();
+                
+                // Clear file input
+                const fileInput = document.querySelector(`input[type="file"][data-doc-type="${docType}"], #${docType}-file-input, #upload-${docType}-file`);
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+                
+            } else {
+                throw new Error(response.message || 'Upload failed');
+            }
+            
+        } catch (error) {
+            console.error('Krav document upload error:', error);
+            showKravStatus(`Upload failed: ${error.message}`, 'error');
+        } finally {
+            kravUploadInProgress = false;
+            
+            // Restore button
+            if (uploadButton) {
+                uploadButton.disabled = false;
+                uploadButton.textContent = originalButtonText || 'Upload';
+            }
+        }
+    }
+
+    // Upload with progress tracking
+    function uploadKravWithProgress(formData, docType) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            
+            // Progress handler
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    showKravStatus(`Uploading ${docType}... ${percentComplete}%`, 'info');
+                }
+            });
+            
+            // Success handler
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        resolve(response);
+                    } catch (e) {
+                        reject(new Error('Invalid server response'));
+                    }
+                } else {
+                    reject(new Error(`Server error ${xhr.status}`));
+                }
+            });
+            
+            // Error handler
+            xhr.addEventListener('error', () => {
+                reject(new Error('Network error during upload'));
+            });
+            
+            // Send request
+            xhr.open('POST', '/upload_krav_pdf');
+            xhr.send(formData);
+        });
+    }
+
+    // Trigger file selection dialog
+    function triggerFileSelection(docType) {
+        // Create temporary file input if none exists
+        let fileInput = document.querySelector(`input[type="file"][data-doc-type="${docType}"]`);
+        
+        if (!fileInput) {
+            fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.pdf';
+            fileInput.style.display = 'none';
+            fileInput.setAttribute('data-doc-type', docType);
+            document.body.appendChild(fileInput);
+            
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    uploadKravDocument(docType, this.files[0]);
+                }
+                // Remove temporary input
+                document.body.removeChild(this);
+            });
+        }
+        
+        fileInput.click();
+    }
+
+    // Setup removal functionality
+    function setupKravDocumentRemoval() {
+        // Use event delegation for remove buttons
+        document.addEventListener('click', function(e) {
+            const removeButton = e.target.closest('.remove-document, .remove-krav-document');
+            if (removeButton) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const docType = removeButton.getAttribute('data-doc-type');
+                const docId = removeButton.getAttribute('data-doc-id');
+                
+                if (docType) {
+                    removeKravDocument(docType, docId);
+                }
+            }
+        });
+    }
+
+    // Remove krav document
+    async function removeKravDocument(docType, docId = null) {
+        const confirmMessage = `Are you sure you want to remove the ${docType} document?`;
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        try {
+            showKravStatus(`Removing ${docType}...`, 'info');
+            
+            const requestData = {
+                subject: currentSubject,
+                type: docType
+            };
+            
+            if (docId) {
+                requestData.document_id = docId;
+            }
+            
+            const response = await fetch('/remove_krav_pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                showKravStatus(`${docType} removed successfully!`, 'success');
+                
+                // Remove the document item from DOM
+                const documentItem = document.querySelector(`[data-doc-type="${docType}"]`);
+                if (documentItem) {
+                    documentItem.style.transition = 'opacity 0.3s ease';
+                    documentItem.style.opacity = '0';
+                    
+                    setTimeout(() => {
+                        documentItem.remove();
+                        
+                        // Check if no documents remain
+                        const remainingDocs = document.querySelectorAll('.document-item').length;
+                        if (remainingDocs === 0) {
+                            const container = document.getElementById('documents-container');
+                            if (container) {
+                                container.innerHTML = '<p>Inga dokument uppladdade än.</p>';
+                            }
+                        }
+                    }, 300);
+                }
+                
+            } else {
+                throw new Error(data.message || 'Removal failed');
+            }
+            
+        } catch (error) {
+            console.error('Krav document removal error:', error);
+            showKravStatus(`Removal failed: ${error.message}`, 'error');
+        }
+    }
+
+    // Refresh krav documents display
+    async function refreshKravDocuments() {
+        try {
+            const response = await fetch(`/api/krav_documents/${encodeURIComponent(currentSubject)}`);
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                updateKravDocumentsDisplay(data.documents);
+            } else {
+                console.error('Failed to refresh krav documents:', data.message);
+            }
+            
+        } catch (error) {
+            console.error('Error refreshing krav documents:', error);
+        }
+    }
+
+    // Update krav documents display
+    function updateKravDocumentsDisplay(documents) {
+        const container = document.getElementById('documents-container');
+        if (!container) return;
+        
+        if (!documents || documents.length === 0) {
+            container.innerHTML = '<p>Inga dokument uppladdade än.</p>';
+            return;
+        }
+        
+        const documentsHtml = documents.map(doc => `
+            <div class="document-item" data-doc-type="${doc.doc_type}">
+                <button class="remove-document"
+                        data-doc-type="${doc.doc_type}"
+                        data-doc-id="${doc.id}">×</button>
+                <div class="document-header">
+                    <span class="document-title">
+                        ${doc.doc_type.charAt(0).toUpperCase() + doc.doc_type.slice(1)}
+                    </span>
+                </div>
+                <div class="document-preview">
+                    <iframe
+                        src="${doc.file_url}"
+                        width="100%"
+                        height="300px"
+                        style="border:1px solid #ccc;"
+                    ></iframe>
+                </div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = documentsHtml;
+    }
+
+    // Show krav status messages
+    function showKravStatus(message, type = 'info') {
+        // Try to use existing status div first
+        let statusDiv = document.getElementById('krav-upload-status');
+        
+        // If no dedicated krav status div, use or create a general one
+        if (!statusDiv) {
+            statusDiv = document.getElementById('upload-status');
+        }
+        
+        if (!statusDiv) {
+            statusDiv = document.createElement('div');
+            statusDiv.id = 'krav-upload-status';
+            statusDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 10px 15px;
+                border-radius: 4px;
+                z-index: 1000;
+                max-width: 300px;
+                font-weight: 500;
+            `;
+            document.body.appendChild(statusDiv);
+        }
+        
+        // Set colors based on type
+        const colors = {
+            success: { bg: '#d4edda', border: '#c3e6cb', text: '#155724' },
+            error: { bg: '#f8d7da', border: '#f5c6cb', text: '#721c24' },
+            warning: { bg: '#fff3cd', border: '#ffeaa7', text: '#856404' },
+            info: { bg: '#d1ecf1', border: '#bee5eb', text: '#0c5460' }
+        };
+        
+        const color = colors[type] || colors.info;
+        statusDiv.style.backgroundColor = color.bg;
+        statusDiv.style.borderLeft = `4px solid ${color.border}`;
+        statusDiv.style.color = color.text;
+        statusDiv.textContent = message;
+        statusDiv.style.display = 'block';
+        
+        // Auto-hide after delay
+        const hideDelay = (type === 'error') ? 5000 : 3000;
+        setTimeout(() => {
+            if (statusDiv.style.display === 'block') {
+                statusDiv.style.display = 'none';
+            }
+        }, hideDelay);
+    }
+
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof userRole !== 'undefined' && userRole === 'owner') {
+            initializeKravDocuments();
+        }
+    });
+
+    // Export functions for external use
+    if (typeof window !== 'undefined') {
+        window.uploadKravDocument = uploadKravDocument;
+        window.removeKravDocument = removeKravDocument;
+        window.refreshKravDocuments = refreshKravDocuments;
+    }
+
+
+
+
+
+
     function toggleDescription(button) {
       const descriptionDiv = button.closest('.quiz-description');
       const textSpan = descriptionDiv.querySelector('.description-text');
