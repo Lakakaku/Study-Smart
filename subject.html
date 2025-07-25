@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -41,7 +34,7 @@
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 15px;
   margin-bottom: 30px;
-  max-height: 600px;
+  max-height: 650px; /* Ökad höjd */
   overflow-y: auto;
   padding-right: 10px;
 }
@@ -635,14 +628,14 @@
   color: #6c757d;
 }
 
-/* Lessons section styling */
+/* Lessons section styling - UPPDATERAD */
 .lessons-section {
   background: white;
   border: 1px solid #dee2e6;
   border-radius: 8px;
   padding: 20px;
   margin: 20px 0;
-  max-height: 600px;
+  max-height: 730px; /* Ökad höjd från 600px till 730px */
   display: flex;
   flex-direction: column;
 }
@@ -664,32 +657,45 @@
   padding: 20px;
   margin-bottom: 20px;
   transition: border-color 0.2s ease;
-  flex-shrink: 0;
+  /* Säkerställ att innehållet håller sig inom gränserna */
+  overflow: hidden;
+  box-sizing: border-box;
 }
+
 
 .lesson-upload-area:hover,
 .lesson-upload-area.drag-over {
   border-color: #007bff;
 }
 
+/* UPPDATERAD lesson-upload-form - bättre spacing och layout */
 .lesson-upload-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 15px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+/* UPPDATERAD form-row - mer responsiv layout */
 .form-row {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 1fr 180px; /* Minskad från 200px till 180px */
   gap: 15px;
+  align-items: center;
+  width: 100%;
 }
+
 
 .lesson-title-input, .lesson-date-input {
   padding: 8px;
   border: 1px solid #ced4da;
   border-radius: 4px;
   font-size: 0.9em;
+  box-sizing: border-box;
+  width: 100%;
 }
+
 
 .lesson-description-input {
   padding: 8px;
@@ -698,12 +704,15 @@
   font-size: 0.9em;
   min-height: 60px;
   resize: vertical;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .lesson-upload-input {
   display: none;
 }
 
+/* FIXAD lesson-upload-label - nu håller den sig inom gränserna */
 .lesson-upload-label {
   display: block;
   padding: 15px;
@@ -712,6 +721,12 @@
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  /* Säkerställ att den inte går utanför container */
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .lesson-upload-label:hover {
@@ -728,6 +743,10 @@
   cursor: pointer;
   font-size: 0.9em;
   transition: background 0.2s ease;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 200px; /* Begränsa knappens bredd */
+  justify-self: start; /* Vänsterjustera knappen */
 }
 
 .upload-lesson-button:hover:not(:disabled) {
@@ -739,11 +758,168 @@
   cursor: not-allowed;
 }
 
+PASTED
+Lektions-uppladdnings stylingen är fel. I full-screen så skjuts : Välj Video/Ljudfil eller Drag & Drop. Detta ut från html-blocket som är lektions-uppladdningens bakgrund åt höger. Fixa så att allt håller sig inom lektions-uppladdnings bakgrundens gränser.
+Edit
+Jag kan se problemet! I full-screen så går "Välj Video/Ljudfil eller Drag & Drop" utanför bakgrunden. Detta beror på att .lesson-upload-label är för bred för sin container. Här är fixarna:
+
+Fixed Lesson Upload Styling
+Interactive artifact 
+Huvudproblemen som jag fixade:
+Överfull text i upload-label: Lade till box-sizing: border-box, max-width: 100%, word-wrap: break-word och overflow-wrap: break-word för att säkerställa att texten håller sig inom gränserna.
+Container overflow: Lade till overflow: hidden på .lesson-upload-area som säkerhetsåtgärd.
+Bättre responsivitet:
+Minskade datumfältets bredd från 200px till 180px (och 160px på stora skärmar)
+Lade till width: 100% och box-sizing: border-box på alla formulärelement
+Stack layout vertikalt på mobiler
+Knapp-optimering: Begränsade knappens maxbredd och vänsterjusterade den så den inte tar upp onödig plats.
+Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets bakgrund, oavsett skärmstorlek!
+
+
+
+
+
+/* Lektions-uppladdnings stylingen - FIXAD */
+.lesson-upload-area {
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  transition: border-color 0.2s ease;
+  /* Säkerställ att innehållet håller sig inom gränserna */
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.lesson-upload-area:hover,
+.lesson-upload-area.drag-over {
+  border-color: #007bff;
+}
+
+/* UPPDATERAD lesson-upload-form - bättre spacing och layout */
+.lesson-upload-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* UPPDATERAD form-row - mer responsiv layout */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 180px; /* Minskad från 200px till 180px */
+  gap: 15px;
+  align-items: center;
+  width: 100%;
+}
+
+.lesson-title-input, .lesson-date-input {
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9em;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.lesson-description-input {
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9em;
+  min-height: 60px;
+  resize: vertical;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.lesson-upload-input {
+  display: none;
+}
+
+/* FIXAD lesson-upload-label - nu håller den sig inom gränserna */
+.lesson-upload-label {
+  display: block;
+  padding: 15px;
+  border: 2px dashed #ced4da;
+  border-radius: 4px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  /* Säkerställ att den inte går utanför container */
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.lesson-upload-label:hover {
+  border-color: #007bff;
+  background-color: #f8f9fa;
+}
+
+.upload-lesson-button {
+  padding: 10px 20px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background 0.2s ease;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 200px; /* Begränsa knappens bredd */
+  justify-self: start; /* Vänsterjustera knappen */
+}
+
+.upload-lesson-button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.upload-lesson-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+/* UPPDATERADE responsiva regler för mobiler */
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr; /* Stack vertikalt på mobiler */
+    gap: 10px;
+  }
+  
+  .lesson-upload-label {
+    padding: 12px; /* Mindre padding på mobiler */
+    font-size: 0.9em;
+  }
+  
+  .upload-lesson-button {
+    max-width: 100%; /* Full bredd på mobiler */
+  }
+}
+
+/* Extra säkerhet för större skärmar */
+@media (min-width: 1200px) {
+  .form-row {
+    grid-template-columns: 1fr 160px; /* Ännu mindre datumfält på stora skärmar */
+  }
+  
+  .lesson-upload-label {
+    /* Begränsa texten ytterligare på stora skärmar om behövs */
+    max-width: 100%;
+  }
+}
+
+/* UPPDATERAD lesson-timeline - ökad max-höjd */
 .lesson-timeline {
   flex: 1;
   overflow-y: auto;
   margin-top: 20px;
   padding-right: 5px;
+  max-height: 500px; /* Ökad höjd från tidigare värde */
 }
 
 .lesson-timeline::-webkit-scrollbar {
@@ -776,6 +952,7 @@
   position: relative;
   flex-wrap: wrap;
   min-height: 80px;
+  order: -1; /* TILLAGD - gör att nyare lektioner hamnar högst upp */
 }
 
 .lesson-item:hover {
@@ -1140,11 +1317,12 @@
         cursor: pointer;
     }
 
+    /* UPPDATERAD main-layout - ökad höjd */
     .main-layout {
         display: grid;
         grid-template-columns: 2fr 1fr 1fr;
         gap: 20px;
-        height: calc(100vh - 200px);
+        height: calc(100vh - 150px); /* Ökad höjd från 200px till 150px */
         padding: 20px;
     }
 
@@ -1160,6 +1338,7 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        max-height: 730px; /* Ökad höjd för att matcha lessons-section */
     }
 
     .lessons-section {
@@ -1170,8 +1349,10 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        max-height: 730px; /* Konsekvent höjd */
     }
 
+    /* UPPDATERAD placeholder-panel - ökad höjd för att matcha */
     .placeholder-panel {
         background-color: #f5f5f5;
         border: 1px solid #dee2e6;
@@ -1180,6 +1361,7 @@
         overflow-y: auto;
         display: flex;
         flex-direction: column;
+        max-height: 730px; /* Ökad höjd för att matcha andra sektioner */
     }
 
     .return-button {
@@ -1865,7 +2047,7 @@
         grid-template-columns: 1fr;
         grid-template-rows: auto auto auto;
         height: auto;
-        min-height: calc(100vh - 200px);
+        min-height: calc(100vh - 150px); /* Uppdaterad från 200px */
       }
       
       .main-layout.member-view {
@@ -1874,7 +2056,7 @@
       }
       
       .quiz-container, .lessons-section, .placeholder-panel {
-        max-height: 500px;
+        max-height: 600px; /* Minskad för mobiler */
       }
       
       .quiz-grid {
@@ -2160,9 +2342,7 @@
             Välj Video/Ljudfil eller Drag & Drop
           </label>
       
-          <div style="margin-top: 10px; color: #6c757d;">
-            Video: MP4, AVI, MOV, WMV, WebM | Audio: MP3, WAV, AAC, OGG (Max 500MB)
-          </div>
+          
       
           <button id="upload-lesson-btn" class="upload-lesson-button" disabled>
             Ladda upp Lektion
@@ -3647,7 +3827,21 @@
         return;
       }
 
-      const lessonsHtml = lessonsData.map(lesson => {
+      // Sortera lektioner så att de nyaste kommer först
+      const sortedLessons = [...lessonsData].sort((a, b) => {
+        // Först sortera på lesson_date (nyaste datum först)
+        const dateA = new Date(a.lesson_date);
+        const dateB = new Date(b.lesson_date);
+        
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateB.getTime() - dateA.getTime(); // Nyaste först
+        }
+        
+        // Om samma datum, sortera på ID (högre ID = nyare)
+        return (b.id || 0) - (a.id || 0);
+      });
+
+      const lessonsHtml = sortedLessons.map(lesson => {
         const isVideo = lesson.file_type && lesson.file_type.startsWith('video/');
         const isAudio = lesson.file_type && lesson.file_type.startsWith('audio/');
         const iconClass = isVideo ? 'video' : isAudio ? 'audio' : '';
@@ -5617,7 +5811,21 @@ window.debugTranscription = debugTranscription;
         return;
       }
 
-      const lessonsHtml = lessonsData.map(lesson => {
+      // Sortera lektioner så att de nyaste kommer först
+      const sortedLessons = [...lessonsData].sort((a, b) => {
+        // Först sortera på lesson_date (nyaste datum först)
+        const dateA = new Date(a.lesson_date);
+        const dateB = new Date(b.lesson_date);
+        
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateB.getTime() - dateA.getTime(); // Nyaste först
+        }
+        
+        // Om samma datum, sortera på ID (högre ID = nyare)
+        return (b.id || 0) - (a.id || 0);
+      });
+
+      const lessonsHtml = sortedLessons.map(lesson => {
         const isVideo = lesson.file_type && lesson.file_type.startsWith('video/');
         const isAudio = lesson.file_type && lesson.file_type.startsWith('audio/');
         const iconClass = isVideo ? 'video' : isAudio ? 'audio' : '';
