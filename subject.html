@@ -1904,79 +1904,57 @@
 
     // Initialize krav document functionality
     function initializeKravDocuments() {
-        if (userRole !== 'owner') return; // Only owners can manage krav documents
+        if (userRole !== 'owner' && userRole !== 'admin') return; // Only owners/admins can manage krav documents
         
         setupKravDocumentUpload();
         setupKravDocumentRemoval();
+        loadExistingKravDocuments();
     }
 
     // Setup krav document upload functionality
     function setupKravDocumentUpload() {
-        // Get all upload buttons for different document types
-        const uploadButtons = document.querySelectorAll('[id^="upload-krav-"], [id$="-upload-btn"]');
+        // Setup file input change handler
+        const pdfUploadInput = document.getElementById('pdf-upload');
+        if (pdfUploadInput) {
+            pdfUploadInput.addEventListener('change', handleKravFileSelection);
+        }
         
-        uploadButtons.forEach(button => {
-            const docType = extractDocTypeFromButton(button);
-            if (docType) {
-                button.addEventListener('click', () => uploadKravDocument(docType));
+        // Setup document type selector
+        const docTypeSelector = document.getElementById('document-type');
+        if (docTypeSelector) {
+            // Set default selection if needed
+            if (!docTypeSelector.value) {
+                docTypeSelector.value = 'begrippslista';
             }
-        });
-        
-        // Setup file input change handlers
-        const fileInputs = document.querySelectorAll('input[type="file"][accept=".pdf"]');
-        fileInputs.forEach(input => {
-            input.addEventListener('change', function() {
-                const docType = extractDocTypeFromInput(this);
-                if (docType && this.files.length > 0) {
-                    uploadKravDocument(docType, this.files[0]);
-                }
-            });
-        });
+        }
     }
 
-    // Extract document type from button ID or data attributes
-    function extractDocTypeFromButton(button) {
-        // Try different patterns to identify document type
-        const id = button.id.toLowerCase();
-        const dataType = button.getAttribute('data-doc-type');
+    // Handle file selection for krav documents
+    async function handleKravFileSelection(event) {
+        const files = event.target.files;
+        const docTypeSelector = document.getElementById('document-type');
         
-        if (dataType) return dataType;
-        
-        if (id.includes('begrippslista')) return 'begrippslista';
-        if (id.includes('kunskapskrav')) return 'kunskapskrav';
-        if (id.includes('kunskapsmal')) return 'kunskapsmal';
-        
-        return null;
-    }
-
-    // Extract document type from file input
-    function extractDocTypeFromInput(input) {
-        const id = input.id.toLowerCase();
-        const name = input.name?.toLowerCase() || '';
-        
-        if (id.includes('begrippslista') || name.includes('begrippslista')) return 'begrippslista';
-        if (id.includes('kunskapskrav') || name.includes('kunskapskrav')) return 'kunskapskrav';
-        if (id.includes('kunskapsmal') || name.includes('kunskapsmal')) return 'kunskapsmal';
-        
-        return null;
-    }
-
-    // Upload krav document
-    async function uploadKravDocument(docType, file = null) {
-        if (kravUploadInProgress) {
-            showKravStatus('Upload already in progress', 'warning');
+        if (!files.length || !docTypeSelector) {
             return;
         }
         
-        // If no file provided, try to get it from file input
-        if (!file) {
-            const fileInput = document.querySelector(`input[type="file"][data-doc-type="${docType}"], #${docType}-file-input, #upload-${docType}-file`);
-            if (!fileInput || !fileInput.files.length) {
-                // Trigger file selection
-                triggerFileSelection(docType);
-                return;
-            }
-            file = fileInput.files[0];
+        const selectedDocType = docTypeSelector.value;
+        
+        // Process each selected file
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            await uploadKravDocument(selectedDocType, file);
+        }
+        
+        // Clear the file input after upload
+        event.target.value = '';
+    }
+
+    // Upload krav document
+    async function uploadKravDocument(docType, file) {
+        if (kravUploadInProgress) {
+            showKravStatus('Upload already in progress', 'warning');
+            return;
         }
         
         // Validate file
@@ -2003,16 +1981,8 @@
         }
         
         kravUploadInProgress = true;
-        const uploadButton = document.querySelector(`[data-doc-type="${docType}"]`);
-        const originalButtonText = uploadButton ? uploadButton.textContent : '';
         
         try {
-            // Update UI to show upload in progress
-            if (uploadButton) {
-                uploadButton.disabled = true;
-                uploadButton.textContent = 'Uploading...';
-            }
-            
             showKravStatus(`Uploading ${docType}...`, 'info');
             
             // Create form data
@@ -2030,12 +2000,6 @@
                 // Update the documents display
                 await refreshKravDocuments();
                 
-                // Clear file input
-                const fileInput = document.querySelector(`input[type="file"][data-doc-type="${docType}"], #${docType}-file-input, #upload-${docType}-file`);
-                if (fileInput) {
-                    fileInput.value = '';
-                }
-                
             } else {
                 throw new Error(response.message || 'Upload failed');
             }
@@ -2045,12 +2009,6 @@
             showKravStatus(`Upload failed: ${error.message}`, 'error');
         } finally {
             kravUploadInProgress = false;
-            
-            // Restore button
-            if (uploadButton) {
-                uploadButton.disabled = false;
-                uploadButton.textContent = originalButtonText || 'Upload';
-            }
         }
     }
 
@@ -2092,37 +2050,12 @@
         });
     }
 
-    // Trigger file selection dialog
-    function triggerFileSelection(docType) {
-        // Create temporary file input if none exists
-        let fileInput = document.querySelector(`input[type="file"][data-doc-type="${docType}"]`);
-        
-        if (!fileInput) {
-            fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.pdf';
-            fileInput.style.display = 'none';
-            fileInput.setAttribute('data-doc-type', docType);
-            document.body.appendChild(fileInput);
-            
-            fileInput.addEventListener('change', function() {
-                if (this.files.length > 0) {
-                    uploadKravDocument(docType, this.files[0]);
-                }
-                // Remove temporary input
-                document.body.removeChild(this);
-            });
-        }
-        
-        fileInput.click();
-    }
-
     // Setup removal functionality
     function setupKravDocumentRemoval() {
         // Use event delegation for remove buttons
         document.addEventListener('click', function(e) {
-            const removeButton = e.target.closest('.remove-document, .remove-krav-document');
-            if (removeButton) {
+            const removeButton = e.target.closest('.remove-document');
+            if (removeButton && removeButton.dataset.docType) {
                 e.preventDefault();
                 e.stopPropagation();
                 
@@ -2198,21 +2131,39 @@
         }
     }
 
-    // Refresh krav documents display
-    async function refreshKravDocuments() {
+    // Load existing krav documents
+    async function loadExistingKravDocuments() {
         try {
             const response = await fetch(`/api/krav_documents/${encodeURIComponent(currentSubject)}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
             
             if (data.status === 'success') {
-                updateKravDocumentsDisplay(data.documents);
+                updateKravDocumentsDisplay(data.documents || []);
             } else {
-                console.error('Failed to refresh krav documents:', data.message);
+                console.error('Failed to load krav documents:', data.message);
+                // If API endpoint doesn't exist, try to use the initial data from template
+                if (typeof initialDocuments !== 'undefined') {
+                    updateKravDocumentsDisplay(initialDocuments);
+                }
             }
             
         } catch (error) {
-            console.error('Error refreshing krav documents:', error);
+            console.error('Error loading krav documents:', error);
+            // Fallback to initial data if available
+            if (typeof initialDocuments !== 'undefined') {
+                updateKravDocumentsDisplay(initialDocuments);
+            }
         }
+    }
+
+    // Refresh krav documents display
+    async function refreshKravDocuments() {
+        await loadExistingKravDocuments();
     }
 
     // Update krav documents display
@@ -2225,26 +2176,43 @@
             return;
         }
         
-        const documentsHtml = documents.map(doc => `
-            <div class="document-item" data-doc-type="${doc.doc_type}">
-                <button class="remove-document"
-                        data-doc-type="${doc.doc_type}"
-                        data-doc-id="${doc.id}">×</button>
-                <div class="document-header">
-                    <span class="document-title">
-                        ${doc.doc_type.charAt(0).toUpperCase() + doc.doc_type.slice(1)}
-                    </span>
+        const documentsHtml = documents.map(doc => {
+            // Create the file URL - try multiple possible URL patterns
+            let fileUrl = '';
+            if (doc.file_url) {
+                fileUrl = doc.file_url;
+            } else if (doc.doc_type && currentSubject) {
+                // Fallback to the pattern used in the template
+                fileUrl = `/static/uploads/krav/${currentUserId}/${encodeURIComponent(currentSubject)}/${doc.doc_type}.pdf`;
+            }
+            
+            return `
+                <div class="document-item" data-doc-type="${escapeHtml(doc.doc_type)}">
+                    ${userRole === 'owner' || userRole === 'admin' ? `
+                        <button class="remove-document"
+                                data-doc-type="${escapeHtml(doc.doc_type)}"
+                                data-doc-id="${doc.id || ''}">×</button>
+                    ` : ''}
+                    <div class="document-header">
+                        <span class="document-title">
+                            ${escapeHtml(doc.doc_type.charAt(0).toUpperCase() + doc.doc_type.slice(1))}
+                        </span>
+                    </div>
+                    <div class="document-preview">
+                        <iframe
+                            src="${escapeHtml(fileUrl)}"
+                            width="100%"
+                            height="300px"
+                            style="border:1px solid #ccc;"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        </iframe>
+                        <div style="display:none; padding:20px; text-align:center; color:#666; border:1px solid #ccc;">
+                            Document could not be loaded
+                        </div>
+                    </div>
                 </div>
-                <div class="document-preview">
-                    <iframe
-                        src="${doc.file_url}"
-                        width="100%"
-                        height="300px"
-                        style="border:1px solid #ccc;"
-                    ></iframe>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
         
         container.innerHTML = documentsHtml;
     }
@@ -2254,11 +2222,7 @@
         // Try to use existing status div first
         let statusDiv = document.getElementById('krav-upload-status');
         
-        // If no dedicated krav status div, use or create a general one
-        if (!statusDiv) {
-            statusDiv = document.getElementById('upload-status');
-        }
-        
+        // If no dedicated krav status div, create one
         if (!statusDiv) {
             statusDiv = document.createElement('div');
             statusDiv.id = 'krav-upload-status';
@@ -2271,6 +2235,7 @@
                 z-index: 1000;
                 max-width: 300px;
                 font-weight: 500;
+                display: none;
             `;
             document.body.appendChild(statusDiv);
         }
@@ -2299,9 +2264,21 @@
         }, hideDelay);
     }
 
+    // Utility function to escape HTML (reuse existing if available)
+    function escapeHtml(text) {
+        if (typeof window.escapeHtml === 'function') {
+            return window.escapeHtml(text);
+        }
+        
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
-        if (typeof userRole !== 'undefined' && userRole === 'owner') {
+        if (typeof userRole !== 'undefined' && (userRole === 'owner' || userRole === 'admin')) {
             initializeKravDocuments();
         }
     });
@@ -2311,6 +2288,7 @@
         window.uploadKravDocument = uploadKravDocument;
         window.removeKravDocument = removeKravDocument;
         window.refreshKravDocuments = refreshKravDocuments;
+        window.initializeKravDocuments = initializeKravDocuments;
     }
 
 
