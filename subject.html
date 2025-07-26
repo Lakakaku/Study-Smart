@@ -2224,9 +2224,9 @@ Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets
         Choose Files or Drag & Drop
       </label>
       <div style="margin-top: 10px; color: #6c757d;">
-        Supported: PDF, DOC, DOCX, TXT, Images, Videos, Audio, Archives (Max 50MB per file)
+        (Max 50MB per file)
       </div>
-      <textarea id="file-description" class="file-description-input" placeholder="Optional description for the file(s)..."></textarea>
+      <textarea id="file-description" class="file-description-input" placeholder="Description"></textarea>
       <div id="upload-progress" class="upload-progress" style="display: none;">
         <div class="upload-progress-bar" id="progress-bar"></div>
       </div>
@@ -2331,11 +2331,11 @@ Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets
       <div class="lesson-upload-area" id="lesson-upload-area">
         <div class="lesson-upload-form">
           <div class="form-row">
-            <input type="text" id="lesson-title" class="lesson-title-input" placeholder="Lektionstitel *" required>
+            <input type="text" id="lesson-title" class="lesson-title-input" placeholder="Titel *" required>
             <input type="date" id="lesson-date" class="lesson-date-input" required>
           </div>
       
-          <textarea id="lesson-description" class="lesson-description-input" placeholder="Beskrivning av lektionen (valfritt)..."></textarea>
+          <textarea id="lesson-description" class="lesson-description-input" placeholder="Beskrivning..."></textarea>
       
           <input type="file" id="lesson-upload-input" class="lesson-upload-input" accept="video/*,audio/*">
           <label for="lesson-upload-input" class="lesson-upload-label">
@@ -3917,7 +3917,6 @@ Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets
           <div class="lesson-item" onclick="openLessonPlayer(${lesson.id})">
             <div class="lesson-date-badge">${formattedDate}</div>
             <div class="lesson-type-icon ${iconClass}">${icon}</div>
-            ${transcriptionIndicator}
             <div class="lesson-content">
               <div class="lesson-title">${escapeHtml(lesson.title)}</div>
               <div class="lesson-meta">
@@ -4297,7 +4296,7 @@ window.debugTranscription = debugTranscription;
         const data = await response.json();
     
         if (data.status === 'success') {
-          const statsText = `(${data.total_lessons} lektioner, ${data.total_views} visningar)`;
+          const statsText = ` ${data.total_lessons}`;
           document.getElementById('lesson-stats').textContent = statsText;
       
           
