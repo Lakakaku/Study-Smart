@@ -735,132 +735,6 @@
 }
 
 .upload-lesson-button {
-            padding: 10px 20px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: background 0.2s ease;
-            box-sizing: border-box;
-            width: 200px; /* Fast bredd */
-            justify-self: center; /* CENTRERAD i grid */
-            margin: 0 auto; /* Extra säkerhet för centrering */
-}
-
-.upload-lesson-button:hover:not(:disabled) {
-  background: #0056b3;
-}
-
-.upload-lesson-button:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-}
-
-PASTED
-Lektions-uppladdnings stylingen är fel. I full-screen så skjuts : Välj Video/Ljudfil eller Drag & Drop. Detta ut från html-blocket som är lektions-uppladdningens bakgrund åt höger. Fixa så att allt håller sig inom lektions-uppladdnings bakgrundens gränser.
-Edit
-Jag kan se problemet! I full-screen så går "Välj Video/Ljudfil eller Drag & Drop" utanför bakgrunden. Detta beror på att .lesson-upload-label är för bred för sin container. Här är fixarna:
-
-Fixed Lesson Upload Styling
-Interactive artifact 
-Huvudproblemen som jag fixade:
-Överfull text i upload-label: Lade till box-sizing: border-box, max-width: 100%, word-wrap: break-word och overflow-wrap: break-word för att säkerställa att texten håller sig inom gränserna.
-Container overflow: Lade till overflow: hidden på .lesson-upload-area som säkerhetsåtgärd.
-Bättre responsivitet:
-Minskade datumfältets bredd från 200px till 180px (och 160px på stora skärmar)
-Lade till width: 100% och box-sizing: border-box på alla formulärelement
-Stack layout vertikalt på mobiler
-Knapp-optimering: Begränsade knappens maxbredd och vänsterjusterade den så den inte tar upp onödig plats.
-Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets bakgrund, oavsett skärmstorlek!
-
-
-
-
-
-/* Lektions-uppladdnings stylingen - FIXAD */
-.lesson-upload-area {
-  border: 2px dashed #dee2e6;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
-  transition: border-color 0.2s ease;
-  /* Säkerställ att innehållet håller sig inom gränserna */
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-.lesson-upload-area:hover,
-.lesson-upload-area.drag-over {
-  border-color: #007bff;
-}
-
-/* UPPDATERAD lesson-upload-form - bättre spacing och layout */
-.lesson-upload-form {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 15px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* UPPDATERAD form-row - mer responsiv layout */
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 180px; /* Minskad från 200px till 180px */
-  gap: 15px;
-  align-items: center;
-  width: 100%;
-}
-
-.lesson-title-input, .lesson-date-input {
-  padding: 8px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 0.9em;
-  box-sizing: border-box;
-  width: 100%;
-}
-
-.lesson-description-input {
-  padding: 8px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 0.9em;
-  min-height: 60px;
-  resize: vertical;
-  box-sizing: border-box;
-  width: 100%;
-}
-
-.lesson-upload-input {
-  display: none;
-}
-
-/* FIXAD lesson-upload-label - nu håller den sig inom gränserna */
-.lesson-upload-label {
-  display: block;
-  padding: 15px;
-  border: 2px dashed #ced4da;
-  border-radius: 4px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  /* Säkerställ att den inte går utanför container */
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
-
-.lesson-upload-label:hover {
-  border-color: #007bff;
-  background-color: #f8f9fa;
-}
-
-.upload-lesson-button {
   padding: 10px 20px;
   background: #007bff;
   color: white;
@@ -1326,9 +1200,12 @@ Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets
         padding: 20px;
     }
 
-    /* For members - remove third column */
+    /* For members - remove third column and stack vertically */
     .main-layout.member-view {
-        grid-template-columns: 2fr 1fr;
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+        height: auto;
+        min-height: calc(100vh - 150px);
     }
 
     .quiz-container {
@@ -2209,45 +2086,6 @@ Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets
   </div>
   {% endif %}
 
-  <!-- Shared Files Section -->
-  <div class="shared-files-section">
-    <div class="files-section-title">
-      📁 Shared Files
-      <span id="file-stats"></span>
-    </div>
-
-    <!-- File Upload Area - Only for owners -->
-    {% if user_role == 'owner' %}
-    <div class="file-upload-area" id="file-upload-area">
-      <input type="file" id="file-upload-input" class="file-upload-input" multiple>
-      <label for="file-upload-input" class="file-upload-label">
-        Choose Files or Drag & Drop
-      </label>
-      <div style="margin-top: 10px; color: #6c757d;">
-        (Max 50MB per file)
-      </div>
-      <textarea id="file-description" class="file-description-input" placeholder="Description"></textarea>
-      <div id="upload-progress" class="upload-progress" style="display: none;">
-        <div class="upload-progress-bar" id="progress-bar"></div>
-      </div>
-      <div id="upload-status" class="upload-status" style="display: none;"></div>
-    </div>
-    {% endif %}
-
-    <!-- File List -->
-    <div class="file-list" id="file-list">
-      <div class="no-files-message" id="no-files-message">
-        Loading files...
-      </div>
-    </div>
-
-    <!-- File Statistics for owners -->
-    {% if user_role == 'owner' %}
-    <div class="file-stats" id="file-stats-details" style="display: none;">
-    </div>
-    {% endif %}
-  </div>
-
   <div class="main-layout {% if user_role not in ['owner', 'admin'] %}member-view{% endif %}">
     <div class="quiz-container">
       <h3>🎯 Quizzes</h3>
@@ -2342,8 +2180,6 @@ Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets
             Välj Video/Ljudfil eller Drag & Drop
           </label>
       
-          
-      
           <button id="upload-lesson-btn" class="upload-lesson-button" disabled>
             Ladda upp Lektion
           </button>
@@ -2429,6 +2265,62 @@ Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets
 
   </div>
 
+  <!-- Shared Files Section - Moved to bottom for members -->
+  {% if user_role not in ['owner', 'admin'] %}
+  <div class="shared-files-section">
+    <div class="files-section-title">
+      📁 Shared Files
+      <span id="file-stats"></span>
+    </div>
+
+    <!-- File List -->
+    <div class="file-list" id="file-list">
+      <div class="no-files-message" id="no-files-message">
+        Loading files...
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <!-- Shared Files Section for owners/admins -->
+  <div class="shared-files-section">
+    <div class="files-section-title">
+      📁 Shared Files
+      <span id="file-stats"></span>
+    </div>
+
+    <!-- File Upload Area - Only for owners -->
+    {% if user_role == 'owner' %}
+    <div class="file-upload-area" id="file-upload-area">
+      <input type="file" id="file-upload-input" class="file-upload-input" multiple>
+      <label for="file-upload-input" class="file-upload-label">
+        Choose Files or Drag & Drop
+      </label>
+      <div style="margin-top: 10px; color: #6c757d;">
+        (Max 50MB per file)
+      </div>
+      <textarea id="file-description" class="file-description-input" placeholder="Description"></textarea>
+      <div id="upload-progress" class="upload-progress" style="display: none;">
+        <div class="upload-progress-bar" id="progress-bar"></div>
+      </div>
+      <div id="upload-status" class="upload-status" style="display: none;"></div>
+    </div>
+    {% endif %}
+
+    <!-- File List -->
+    <div class="file-list" id="file-list">
+      <div class="no-files-message" id="no-files-message">
+        Loading files...
+      </div>
+    </div>
+
+    <!-- File Statistics for owners -->
+    {% if user_role == 'owner' %}
+    <div class="file-stats" id="file-stats-details" style="display: none;">
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <!-- Lesson Player Modal -->
   <div id="lesson-player-modal" class="lesson-modal" style="display: none;">
     <div class="lesson-modal-content">
@@ -2472,6 +2364,8 @@ Nu bör all text och alla element hålla sig inom lektions-uppladdningsområdets
       </div>
     </div>
   </div>
+
+
 
 
 
