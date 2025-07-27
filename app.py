@@ -3153,7 +3153,6 @@ def generate_fallback_description(quiz):
             return f"Heltäckande {quiz_type_readable.lower()} med {question_count} frågor för fullständig kunskapsgenomgång och expertträning"
 
 
-
 @app.route('/create-quiz', methods=['GET', 'POST'])
 @login_required
 def create_quiz():
@@ -3276,7 +3275,7 @@ def create_quiz():
             new_quiz.description = f"Manual quiz with {len(questions)} questions created by user"
             
         else:
-            # HANTERA AI-GENERERADE FRÅGOR (befintlig kod)
+            # HANTERA AI-GENERERADE FRÅGOR (förbättrad kod)
             description = request.form.get('quiz-description', '').strip()
             use_docs = bool(request.form.get('use_documents'))
             
@@ -3344,20 +3343,34 @@ def create_quiz():
                     print(f"[WARNING] Invalid lesson ID: {selected_lesson_id}, error: {e}")
                     flash('Invalid lesson selection.', 'error')
             
-            # Lägg till krav-dokument som RIKTLINJER om use_documents är aktiverat
+            # FÖRBÄTTRAD HANTERING AV KRAV-DOKUMENT
             curriculum_guidelines = {}
             if use_docs:
-                krav_documents = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
-                
-                for doc in krav_documents:
-                    if os.path.exists(doc.file_path):
-                        try:
-                            text_content = extract_text_from_pdf(doc.file_path)
-                            if text_content and text_content.strip():
-                                curriculum_guidelines[doc.doc_type] = text_content
-                                print(f"[INFO] Loaded {doc.doc_type} guidelines: {len(text_content)} characters")
-                        except Exception as e:
-                            print(f"[ERROR] Failed to process krav document {doc.filename}: {e}")
+                try:
+                    print(f"[INFO] Loading curriculum documents for subject_id: {subject_obj.id}")
+                    krav_documents = KravDocument.query.filter_by(subject_id=subject_obj.id).all()
+                    print(f"[INFO] Found {len(krav_documents)} krav documents")
+                    
+                    for doc in krav_documents:
+                        print(f"[INFO] Processing krav document: {doc.filename} (type: {doc.doc_type})")
+                        if os.path.exists(doc.file_path):
+                            try:
+                                text_content = extract_text_from_pdf(doc.file_path)
+                                if text_content and text_content.strip():
+                                    curriculum_guidelines[doc.doc_type] = text_content
+                                    print(f"[INFO] Loaded {doc.doc_type} guidelines: {len(text_content)} characters")
+                                else:
+                                    print(f"[WARNING] Empty content from {doc.filename}")
+                            except Exception as e:
+                                print(f"[ERROR] Failed to extract text from {doc.filename}: {e}")
+                        else:
+                            print(f"[ERROR] File not found at path: {doc.file_path}")
+                    
+                    print(f"[INFO] Successfully loaded {len(curriculum_guidelines)} curriculum guidelines")
+                    
+                except Exception as e:
+                    print(f"[ERROR] Failed to load curriculum guidelines: {e}")
+                    curriculum_guidelines = {}
             
             # Kontrollera att vi har åtminstone något INNEHÅLL att skapa quiz från
             main_content_sources = [combined_text, lesson_content]
@@ -3372,7 +3385,7 @@ def create_quiz():
             new_quiz.description = description
             new_quiz.use_documents = use_docs
             
-            # Build AI prompt - FÖRBÄTTRAD STRUKTUR MED KRAV-DOKUMENT SOM RIKTLINJER
+            # FÖRBÄTTRAD AI PROMPT - ROBUSTARE STRUKTUR
             prompt_parts = []
             
             # ADD MULTIPLE IDENTIFIERS TO PROMPT FOR MAXIMUM UNIQUENESS
@@ -3400,17 +3413,17 @@ def create_quiz():
                 
                 if 'kunskapsmal' in curriculum_guidelines:
                     prompt_parts.append("KNOWLEDGE GOALS (what students should learn):")
-                    prompt_parts.append(curriculum_guidelines['kunskapsmal'])
+                    prompt_parts.append(curriculum_guidelines['kunskapsmal'][:5000])  # Begränsa storlek
                     prompt_parts.append("")
                 
                 if 'kunskapskrav' in curriculum_guidelines:
                     prompt_parts.append("ASSESSMENT CRITERIA (what levels of understanding to test):")
-                    prompt_parts.append(curriculum_guidelines['kunskapskrav'])
+                    prompt_parts.append(curriculum_guidelines['kunskapskrav'][:5000])  # Begränsa storlek
                     prompt_parts.append("")
                 
                 if 'begrippslista' in curriculum_guidelines:
                     prompt_parts.append("KEY CONCEPTS TO FOCUS ON (look for these specific terms in the study materials):")
-                    prompt_parts.append(curriculum_guidelines['begrippslista'])
+                    prompt_parts.append(curriculum_guidelines['begrippslista'][:3000])  # Mindre för begrepp
                     prompt_parts.append("PAY SPECIAL ATTENTION: When you find these concepts in the study materials below, create questions that test understanding of these specific terms and their applications.")
                     prompt_parts.append("")
             
@@ -3421,14 +3434,14 @@ def create_quiz():
             # Lägg till lektionsinnehåll först (högst prioritet av innehållet)
             if lesson_content:
                 prompt_parts.append("PRIMARY SOURCE - LESSON MATERIAL:")
-                prompt_parts.append(lesson_content)
+                prompt_parts.append(lesson_content[:15000])  # Begränsa storlek
                 prompt_parts.append("")
             
             # Lägg till uppladdade material
             if combined_text:
                 source_label = "SECONDARY SOURCE - UPLOADED MATERIALS:" if lesson_content else "PRIMARY SOURCE - UPLOADED MATERIALS:"
                 prompt_parts.append(source_label)
-                prompt_parts.append(combined_text)
+                prompt_parts.append(combined_text[:15000])  # Begränsa storlek
                 prompt_parts.append("")
             
             # FÖRBÄTTRADE INSTRUKTIONER
@@ -3472,26 +3485,93 @@ def create_quiz():
             
             prompt = "\n\n".join(prompt_parts)
             
+            # Begränsa total prompt-storlek
+            if len(prompt) > 50000:
+                print(f"[WARNING] Prompt too long ({len(prompt)} chars), truncating...")
+                prompt = prompt[:45000] + "\n\n[Content truncated for length]"
+            
             print(f"[INFO] Sending prompt to AI for quiz DB_ID:{quiz_db_id}, UNIQUE_ID:{unique_id}: {len(prompt)} characters")
             
-            # Call AI
+            # FÖRBÄTTRAD AI API CALL MED SSL/CONNECTION HANTERING
             try:
-                response = requests.post(
+                import requests
+                from requests.adapters import HTTPAdapter
+                from urllib3.util.retry import Retry
+                import ssl
+                
+                # Skapa en session med retry-logik och SSL-hantering
+                session = requests.Session()
+                
+                # Retry strategi
+                retry_strategy = Retry(
+                    total=3,
+                    backoff_factor=1,
+                    status_forcelist=[429, 500, 502, 503, 504]
+                )
+                
+                adapter = HTTPAdapter(max_retries=retry_strategy)
+                session.mount("http://", adapter)
+                session.mount("https://", adapter)
+                
+                # SSL context för att hantera SSL-problem
+                session.verify = True  # Behåll certifikatverifiering
+                
+                # Försök API-anrop med förbättrad felhantering
+                response = session.post(
                     "https://ai.hackclub.com/chat/completions",
                     json={"messages": [{"role": "user", "content": prompt}]},
                     headers={"Content-Type": "application/json"},
-                    timeout=120
+                    timeout=120,
                 )
                 response.raise_for_status()
                 raw = response.json().get("choices", [])[0].get("message", {}).get("content", "")
                 print(f"[INFO] AI response received for quiz DB_ID:{quiz_db_id}: {len(raw)} characters")
+                
+            except requests.exceptions.SSLError as ssl_err:
+                print(f"[ERROR] SSL Error for quiz DB_ID:{quiz_db_id}: {ssl_err}")
+                # Fallback: försök med mindre strikt SSL
+                try:
+                    print(f"[INFO] Retrying with adjusted SSL settings...")
+                    session.verify = False  # Tillfällig lösning för SSL-problem
+                    response = session.post(
+                        "https://ai.hackclub.com/chat/completions",
+                        json={"messages": [{"role": "user", "content": prompt}]},
+                        headers={"Content-Type": "application/json"},
+                        timeout=120,
+                    )
+                    response.raise_for_status()
+                    raw = response.json().get("choices", [])[0].get("message", {}).get("content", "")
+                    print(f"[INFO] AI response received (SSL retry) for quiz DB_ID:{quiz_db_id}: {len(raw)} characters")
+                except Exception as retry_err:
+                    print(f"[ERROR] SSL retry also failed for quiz DB_ID:{quiz_db_id}: {retry_err}")
+                    db.session.delete(new_quiz)
+                    db.session.rollback()
+                    flash('Failed to generate quiz questions due to connection issues. Please try again.', 'error')
+                    return redirect(url_for('create_quiz'))
+                    
+            except requests.exceptions.ConnectionError as conn_err:
+                print(f"[ERROR] Connection Error for quiz DB_ID:{quiz_db_id}: {conn_err}")
+                db.session.delete(new_quiz)
+                db.session.rollback()
+                flash('Failed to connect to AI service. Please check your internet connection and try again.', 'error')
+                return redirect(url_for('create_quiz'))
+                
+            except requests.exceptions.Timeout as timeout_err:
+                print(f"[ERROR] Timeout Error for quiz DB_ID:{quiz_db_id}: {timeout_err}")
+                db.session.delete(new_quiz)
+                db.session.rollback()
+                flash('AI service timed out. Please try again with shorter content.', 'error')
+                return redirect(url_for('create_quiz'))
+                
             except Exception as e:
                 print(f"[ERROR] AI API call failed for quiz DB_ID:{quiz_db_id}: {e}")
-                # Radera den skapade quiz-posten eftersom AI:n misslyckades
                 db.session.delete(new_quiz)
                 db.session.rollback()
                 flash('Failed to generate quiz questions. Please try again.', 'error')
                 return redirect(url_for('create_quiz'))
+            
+            finally:
+                session.close()
             
             # FÖRBÄTTRAD PARSING MED UNIKA IDENTIFIERARE
             lines = raw.splitlines()
@@ -3574,7 +3654,7 @@ def create_quiz():
             # Hantera fall då inga frågor genererades
             if not questions:
                 print(f"[ERROR] No valid questions could be parsed from AI response for quiz DB_ID:{quiz_db_id}")
-                print(f"[DEBUG] Raw AI response: {raw[:500]}...")
+                print(f"[DEBUG] Raw AI response preview: {raw[:500]}...")
                 # Radera den skapade quiz-posten
                 db.session.delete(new_quiz)
                 db.session.rollback()
@@ -3666,12 +3746,12 @@ def create_quiz():
         # Lägg till information om använda källor (endast för AI)
         if creation_method == 'ai':
             sources_used = []
-            if use_docs and 'curriculum_guidelines' in locals() and curriculum_guidelines:
+            if use_docs and curriculum_guidelines:
                 guidelines_count = len(curriculum_guidelines)
                 sources_used.append(f"{guidelines_count} curriculum guideline{'s' if guidelines_count != 1 else ''}")
-            if lesson_content and 'selected_lesson' in locals() and selected_lesson:
+            if lesson_content and selected_lesson:
                 sources_used.append(f"lesson '{selected_lesson.title}'")
-            if 'file_contents' in locals() and file_contents:
+            if file_contents:
                 sources_used.append(f"{len(file_contents)} uploaded file{'s' if len(file_contents) != 1 else ''}")
             
             if sources_used:
@@ -3685,8 +3765,6 @@ def create_quiz():
     events_data = [event.to_dict() for event in events]
     
     return render_template('create-quiz.html', subjects=subject_names, events=events_data)
-
-
 
 def serialize_for_template(obj):
     """Hjälpfunktion för att serialisera objekt för templates"""
@@ -5781,7 +5859,6 @@ def delete_quiz_api(quiz_id):
         db.session.rollback()
         print(f"[ERROR] Failed to delete quiz: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
 
 def delete_flashcards_for_quiz(quiz):
     """Ta bort alla flashcards som skapats från ett specifikt quiz"""
