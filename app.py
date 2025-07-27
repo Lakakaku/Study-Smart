@@ -2203,16 +2203,68 @@ def join_subject():
         db.session.add(membership)
         db.session.commit()
         
+        # *** NYTT: Skapa flashcards för befintliga shared quizzes ***
+        flashcards_created = create_flashcards_for_new_member(current_user.id, subject.id)
+        
+        response_message = f'Successfully joined "{subject.name}"'
+        if flashcards_created > 0:
+            response_message += f' and created {flashcards_created} flashcards for existing quizzes'
+        
         return jsonify({
             'status': 'success',
-            'message': f'Successfully joined "{subject.name}"',
-            'subject_name': subject.name
+            'message': response_message,
+            'subject_name': subject.name,
+            'flashcards_created': flashcards_created
         })
         
     except Exception as e:
         print(f"[ERROR] Failed to join subject: {e}")
         db.session.rollback()
-        return jsonify({'status': 'error', 'message': 'Failed to join subject'}), 500 
+        return jsonify({'status': 'error', 'message': 'Failed to join subject'}), 500
+
+# Also add a utility function to retroactively fix existing members
+def fix_existing_members_flashcards():
+    """
+    Fixa flashcards för befintliga medlemmar som gått med innan denna funktionalitet fanns
+    """
+    try:
+        fixed_members = 0
+        total_flashcards = 0
+        
+        # Hämta alla subject memberships
+        memberships = SubjectMember.query.all()
+        
+        for membership in memberships:
+            # Kontrollera om medlemmen saknar flashcards för shared quizzes
+            shared_quizzes = Quiz.query.filter_by(
+                subject_id=membership.subject_id,
+                is_personal=False
+            ).all()
+            
+            for quiz in shared_quizzes:
+                # Kontrollera om användaren redan har flashcards för detta quiz
+                existing_flashcards = Flashcard.query.filter_by(
+                    user_id=membership.user_id,
+                    subject_id=quiz.subject_id,
+                    topic=quiz.title
+                ).count()
+                
+                expected_flashcards = len(quiz.questions or [])
+                
+                if existing_flashcards < expected_flashcards:
+                    # Skapa saknade flashcards
+                    created = create_flashcards_for_user(quiz, membership.user_id)
+                    if created > 0:
+                        total_flashcards += created
+                        if membership.user_id not in [m.user_id for m in memberships[:memberships.index(membership)]]:
+                            fixed_members += 1
+        
+        print(f"[FIX] Fixed {fixed_members} members with {total_flashcards} new flashcards")
+        return fixed_members, total_flashcards
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to fix existing members: {e}")
+        return 0, 0
 
 
 @app.route('/api/subject/<int:subject_id>/share_code')
@@ -6001,15 +6053,56 @@ def get_subject_stats_api(subject_name):
     except Exception as e:
         return jsonify({'error': 'Failed to get subject stats'}), 500
 
+
+
+
+# Add this function to handle flashcard creation for new members
+def create_flashcards_for_new_member(user_id, subject_id):
+    """
+    Skapa flashcards för en ny medlem baserat på alla shared quizzes i subject
+    """
+    try:
+        # Hämta alla shared quizzes i detta subject
+        shared_quizzes = Quiz.query.filter_by(
+            subject_id=subject_id,
+            is_personal=False
+        ).all()
+        
+        total_created = 0
+        for quiz in shared_quizzes:
+            created_count = create_flashcards_for_user(quiz, user_id)
+            total_created += created_count
+            
+        print(f"[INFO] Created {total_created} flashcards for new member {user_id} in subject {subject_id}")
+        return total_created
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to create flashcards for new member: {e}")
+        return 0
+
+
+
+
+
+
+
+
+
 @app.route('/flashcards_by_date')
 @login_required
 def flashcards_by_date():
-    """Get flashcards grouped by their next review date - integrerad med spaced repetition"""
+    """Get flashcards grouped by their next review date - now includes shared subjects"""
     try:
         from datetime import datetime, timedelta
         
-        # Hämta alla flashcards för användaren
-        flashcards = Flashcard.query.filter_by(user_id=current_user.id).all()
+        # Hämta alla flashcards för användaren från alla tillgängliga subjects
+        all_subjects = current_user.get_all_subjects()
+        subject_ids = [s.id for s in all_subjects]
+        
+        flashcards = Flashcard.query.filter(
+            Flashcard.user_id == current_user.id,
+            Flashcard.subject_id.in_(subject_ids)  # Filter by accessible subjects
+        ).all()
         
         schedule = {}
         today = datetime.now().date()
@@ -6017,25 +6110,21 @@ def flashcards_by_date():
         for flashcard in flashcards:
             # Bestäm vilket datum kortet ska repeteras
             if flashcard.next_review is None:
-                # Nya kort - lägg till idag
                 review_date = today
                 status = 'new'
             elif flashcard.next_review <= today:
-                # Förfallna kort - lägg under deras ursprungliga datum eller idag
                 review_date = today if flashcard.next_review < today else flashcard.next_review
                 status = 'due' if flashcard.next_review == today else 'overdue'
             else:
-                # Framtida kort - lägg under deras schemalagda datum
                 review_date = flashcard.next_review
                 status = 'scheduled'
             
-            # Konvertera till string för JSON
             date_key = review_date.isoformat()
             
             if date_key not in schedule:
                 schedule[date_key] = []
             
-            # Gruppera efter subject och topic för att skapa quiz-grupper
+            # Gruppera efter subject och topic
             quiz_key = f"{flashcard.subject}#{flashcard.topic}"
             
             # Hitta befintlig quiz-grupp eller skapa ny
@@ -6046,7 +6135,6 @@ def flashcards_by_date():
                     break
             
             if existing_quiz:
-                # Lägg till fråga till befintlig quiz-grupp
                 existing_quiz['questions'].append({
                     'id': flashcard.id,
                     'question': flashcard.question,
@@ -6058,15 +6146,21 @@ def flashcards_by_date():
                 })
                 existing_quiz['count'] += 1
             else:
-                # Skapa ny quiz-grupp
+                # Hämta subject info för extra metadata
+                subject = Subject.query.get(flashcard.subject_id)
+                user_role = current_user.get_role_in_subject(subject.id) if subject else 'unknown'
+                
                 schedule[date_key].append({
                     'quiz_key': quiz_key,
                     'subject': flashcard.subject,
+                    'subject_id': flashcard.subject_id,
                     'topic': flashcard.topic,
                     'quiz_title': flashcard.topic,
                     'status': status,
                     'count': 1,
                     'is_spaced_repetition': True,
+                    'user_role': user_role,
+                    'is_shared_subject': subject.user_id != current_user.id if subject else False,
                     'questions': [{
                         'id': flashcard.id,
                         'question': flashcard.question,
@@ -6087,6 +6181,78 @@ def flashcards_by_date():
     except Exception as e:
         print(f"[ERROR] Failed to get flashcards by date: {e}")
         return jsonify({}), 500
+
+
+
+# Enhanced User method to get quiz calendar data
+def get_user_quiz_calendar_data(user_id, date=None):
+    """
+    Hämta quiz-kalendersdata för en användare, inklusive shared subject quizzes
+    """
+    try:
+        if date is None:
+            date = datetime.now().date()
+        
+        # Hämta alla subjects som användaren har tillgång till
+        user = User.query.get(user_id)
+        all_subjects = user.get_all_subjects()
+        subject_ids = [s.id for s in all_subjects]
+        
+        # Hämta flashcards från alla tillgängliga subjects
+        flashcards = Flashcard.query.filter(
+            Flashcard.user_id == user_id,
+            Flashcard.subject_id.in_(subject_ids),
+            db.or_(
+                Flashcard.next_review == date,
+                db.and_(Flashcard.next_review == None, date == datetime.now().date()),
+                db.and_(Flashcard.next_review < datetime.now().date(), date == datetime.now().date())
+            )
+        ).all()
+        
+        # Gruppera efter ämne och topic
+        grouped_data = {}
+        for flashcard in flashcards:
+            # Hämta subject info
+            subject = Subject.query.get(flashcard.subject_id)
+            user_role = user.get_role_in_subject(subject.id)
+            
+            key = f"{flashcard.subject}#{flashcard.topic}"
+            if key not in grouped_data:
+                grouped_data[key] = {
+                    'subject': flashcard.subject,
+                    'subject_id': flashcard.subject_id,
+                    'topic': flashcard.topic,
+                    'quiz_title': flashcard.topic,
+                    'count': 0,
+                    'flashcards': [],
+                    'user_role': user_role,
+                    'is_shared_subject': subject.user_id != user_id,
+                    'quiz_url': url_for('spaced_repetition_quiz', 
+                                      subject=flashcard.subject, 
+                                      topic=flashcard.topic.replace(' ', '_'),
+                                      date=date.isoformat())
+                }
+            
+            grouped_data[key]['count'] += 1
+            grouped_data[key]['flashcards'].append({
+                'id': flashcard.id,
+                'question': flashcard.question,
+                'answer': flashcard.answer,
+                'next_review': flashcard.next_review.isoformat() if flashcard.next_review else None,
+                'status': 'new' if flashcard.next_review is None else (
+                    'overdue' if flashcard.next_review < datetime.now().date() else 'due'
+                )
+            })
+        
+        return grouped_data
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get user quiz calendar data: {e}")
+        return {}
+
+
+
+
 
 @app.route('/spaced_repetition_quiz/<subject>/<topic>/<date>')
 @login_required 
