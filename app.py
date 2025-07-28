@@ -6088,10 +6088,11 @@ def create_flashcards_for_new_member(user_id, subject_id):
 
 
 
+# Uppdatera flashcards_by_date funktionen för att inkludera quiz_id och user_role info
 @app.route('/flashcards_by_date')
 @login_required
 def flashcards_by_date():
-    """Get flashcards grouped by their next review date - now includes shared subjects"""
+    """Get flashcards grouped by their next review date - now includes shared subjects and quiz info"""
     try:
         from datetime import datetime, timedelta
         
@@ -6150,12 +6151,22 @@ def flashcards_by_date():
                 subject = Subject.query.get(flashcard.subject_id)
                 user_role = current_user.get_role_in_subject(subject.id) if subject else 'unknown'
                 
+                # Försök hitta quiz-objektet baserat på topic
+                quiz = None
+                if subject:
+                    quiz = Quiz.query.filter_by(
+                        subject_id=subject.id,
+                        title=flashcard.topic,
+                        is_personal=False
+                    ).first()
+                
                 schedule[date_key].append({
                     'quiz_key': quiz_key,
                     'subject': flashcard.subject,
                     'subject_id': flashcard.subject_id,
                     'topic': flashcard.topic,
                     'quiz_title': flashcard.topic,
+                    'quiz_id': quiz.id if quiz else None,
                     'status': status,
                     'count': 1,
                     'is_spaced_repetition': True,
@@ -6181,8 +6192,6 @@ def flashcards_by_date():
     except Exception as e:
         print(f"[ERROR] Failed to get flashcards by date: {e}")
         return jsonify({}), 500
-
-
 
 # Enhanced User method to get quiz calendar data
 def get_user_quiz_calendar_data(user_id, date=None):
@@ -6249,6 +6258,92 @@ def get_user_quiz_calendar_data(user_id, date=None):
     except Exception as e:
         print(f"[ERROR] Failed to get user quiz calendar data: {e}")
         return {}
+
+@app.route('/api/leave_quiz', methods=['POST'])
+@login_required
+def leave_quiz_api():
+    """API endpoint för medlemmar att lämna ett specifikt quiz"""
+    try:
+        data = request.get_json()
+        subject = data.get('subject')
+        topic = data.get('topic')
+        quiz_id = data.get('quiz_id')
+        
+        if not subject or not topic:
+            return jsonify({'status': 'error', 'error': 'Subject and topic are required'}), 400
+        
+        # Hitta subject-objektet
+        subject_obj = Subject.query.filter_by(name=subject).first()
+        if not subject_obj:
+            return jsonify({'status': 'error', 'error': 'Subject not found'}), 404
+        
+        # Kontrollera att användaren är medlem (inte ägare)
+        user_role = current_user.get_role_in_subject(subject_obj.id)
+        if user_role != 'member':
+            return jsonify({'status': 'error', 'error': 'Only members can leave quizzes'}), 403
+        
+        # Hitta quiz om quiz_id finns
+        quiz = None
+        if quiz_id:
+            quiz = Quiz.query.filter_by(
+                id=quiz_id,
+                subject_id=subject_obj.id,
+                is_personal=False  # Endast shared quizzes
+            ).first()
+        
+        # Om quiz inte hittas via ID, försök hitta via topic
+        if not quiz:
+            quiz = Quiz.query.filter_by(
+                title=topic,
+                subject_id=subject_obj.id,
+                is_personal=False
+            ).first()
+        
+        if not quiz:
+            return jsonify({'status': 'error', 'error': 'Quiz not found'}), 404
+        
+        # Ta bort alla flashcards för denna användare från detta quiz
+        deleted_count = remove_user_flashcards_from_quiz(current_user.id, subject_obj.id, topic)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Successfully left quiz "{topic}". Removed {deleted_count} flashcards.',
+            'deleted_flashcards': deleted_count
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Failed to leave quiz: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
+def remove_user_flashcards_from_quiz(user_id, subject_id, topic):
+    """
+    Ta bort alla flashcards för en specifik användare från ett specifikt quiz/topic
+    """
+    try:
+        # Hitta alla flashcards för denna användare, subject och topic
+        flashcards_to_delete = Flashcard.query.filter(
+            Flashcard.user_id == user_id,
+            Flashcard.subject_id == subject_id,
+            Flashcard.topic == topic
+        ).all()
+        
+        deleted_count = len(flashcards_to_delete)
+        
+        # Ta bort flashcards
+        for flashcard in flashcards_to_delete:
+            db.session.delete(flashcard)
+        
+        db.session.commit()
+        
+        print(f"[INFO] Removed {deleted_count} flashcards for user {user_id} from quiz '{topic}' in subject {subject_id}")
+        return deleted_count
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to remove user flashcards from quiz: {e}")
+        db.session.rollback()
+        raise e
 
 
 
