@@ -6153,12 +6153,27 @@ def flashcards_by_date():
                 
                 # Försök hitta quiz-objektet baserat på topic
                 quiz = None
+                is_personal_quiz = True  # Default assumption
                 if subject:
+                    # Först försök hitta shared quiz (is_personal=False)
                     quiz = Quiz.query.filter_by(
                         subject_id=subject.id,
                         title=flashcard.topic,
                         is_personal=False
                     ).first()
+                    
+                    if quiz:
+                        is_personal_quiz = False
+                    else:
+                        # Om ingen shared quiz hittas, kolla efter personal quiz
+                        quiz = Quiz.query.filter_by(
+                            subject_id=subject.id,
+                            title=flashcard.topic,
+                            is_personal=True,
+                            user_id=current_user.id  # Personal quiz should belong to current user
+                        ).first()
+                        
+                        is_personal_quiz = True
                 
                 schedule[date_key].append({
                     'quiz_key': quiz_key,
@@ -6172,6 +6187,7 @@ def flashcards_by_date():
                     'is_spaced_repetition': True,
                     'user_role': user_role,
                     'is_shared_subject': subject.user_id != current_user.id if subject else False,
+                    'is_personal_quiz': is_personal_quiz,  # NEW: Add this field
                     'questions': [{
                         'id': flashcard.id,
                         'question': flashcard.question,
