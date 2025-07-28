@@ -2931,73 +2931,74 @@ def subject(subject_name):
 
 def generate_quiz_description(quiz):
     """
-    Generera en längre och mer detaljerad beskrivning av quizet baserat på dess frågor
+    Generera en detaljerad beskrivning av quizet baserat på dess innehåll och frågor
+    Fokuserar på vad quizet handlar om, inte antal frågor eller quiz-typ
     """
     try:
         questions = quiz.get_questions()
         
         if not questions or len(questions) == 0:
-            return f"{quiz.quiz_type.replace('-', ' ').title()} quiz med 0 frågor - Inga frågor tillgängliga"
+            return "Quiz utan frågor - innehåll ej tillgängligt"
         
-        question_count = len(questions)
-        
-        # Ta fler exempel frågor för bättre AI-analys
-        sample_size = min(5, len(questions))  # Ta upp till 5 frågor som exempel
+        # Ta fler exempel frågor för bättre innehållsanalys
+        sample_size = min(8, len(questions))  # Öka från 5 till 8 för bättre analys
         sample_questions = questions[:sample_size]
         
-        # Extrahera både frågor och svar för bättre kontext
+        # Extrahera både frågor och svar för djupare innehållsförståelse
         questions_and_answers = []
         for q in sample_questions:
-            question_text = q['question'][:150] + "..." if len(q['question']) > 150 else q['question']
+            question_text = q['question'][:200] if len(q['question']) > 200 else q['question']
             answer_text = ""
             
             # Hantera olika svarsformat
             if isinstance(q.get('answer'), dict):
                 if 'correct' in q['answer']:
-                    answer_text = str(q['answer']['correct'])[:100]
+                    answer_text = str(q['answer']['correct'])[:150]
                 elif 'alternatives' in q['answer']:
-                    # För flervalsfrågor, ta det korrekta svaret
                     alts = q['answer']['alternatives']
                     correct_idx = q['answer'].get('correct_index', 0)
                     if 0 <= correct_idx < len(alts):
-                        answer_text = alts[correct_idx][:100]
+                        answer_text = alts[correct_idx][:150]
             else:
-                answer_text = str(q['answer'])[:100] if q.get('answer') else ""
+                answer_text = str(q['answer'])[:150] if q.get('answer') else ""
             
-            questions_and_answers.append(f"Q: {question_text}")
+            questions_and_answers.append(f"Fråga: {question_text}")
             if answer_text:
-                questions_and_answers.append(f"A: {answer_text}")
+                questions_and_answers.append(f"Svar: {answer_text}")
         
         content_sample = "\n".join(questions_and_answers)
         
-        # FÖRBÄTTRAD PROMPT - mer fokuserad och specifik
-        prompt = f"""Skriv en informativ beskrivning på svenska för detta quiz. Beskrivningen ska vara exakt 150-220 tecken lång och beskriva vad quizet täcker.
+        # HELT NY PROMPT - fokuserar enbart på innehåll
+        prompt = f"""Analysera detta quiz-innehåll och skriv en informativ beskrivning på svenska som förklarar vad quizet handlar om innehållsmässigt.
 
-QUIZ-INNEHÅLL:
+QUIZ-INNEHÅLL ATT ANALYSERA:
 {content_sample}
 
-Antal frågor: {question_count}
-Quiz-typ: {quiz.quiz_type.replace('-', ' ').title()}
-
 INSTRUKTIONER:
-- Skriv ENDAST beskrivningen, inget annat
-- Fokusera på vilka ämnesområden som behandlas
-- Nämn vad studenten kommer att lära sig
-- Använd enkla, tydliga ord
-- Längd: 150-220 tecken
+- Fokusera ENDAST på vad quizet behandlar innehållsmässigt
+- Nämn INTE antal frågor, quiz-typ eller tekniska detaljer
+- Beskriv vilka specifika ämnesområden, koncept och kunskapsområden som behandlas
+- Var konkret om vad studenten kommer att lära sig eller träna på
+- Nämn specifika termer, teorier eller områden som tas upp
+- Gör beskrivningen detaljerad nog att skilja detta quiz från andra liknande
+- Längd: 180-280 tecken för att ge plats för detaljer
+- Skriv som en sammanhängande text, inte punktlista
 
-EXEMPEL PÅ BRA BESKRIVNINGAR:
-"Tränar grundläggande algebraiska ekvationer och problemlösning med fokus på andragradsekvationer och grafiska tolkningar."
-"Täcker cellbiologi, fotosyntespocessen och ekosystems energiflöden med betoning på praktiska laborationsresultat."
+EXEMPEL PÅ BRA INNEHÅLLSFOKUSERADE BESKRIVNINGAR:
+"Behandlar celldelning med fokus på mitos och meios, kromosombeteende under olika faser samt skillnader mellan somatiska celler och könsceller. Täcker även mutationer och deras påverkan på genetisk variation."
 
-Svara endast med beskrivningen:"""
+"Utforskar algebraiska ekvationslösning med andragradsekvationer, kvadratkomplettering och pq-formeln. Inkluderar grafisk tolkning av paraboler och praktisk problemlösning inom geometri och fysik."
+
+"Fokuserar på svenska romantiken med Stagnelius och Tegnér, analyserar dikttolkning, stilfigurer och romantikens ideal. Behandlar även språkhistoria och utvecklingen från fornsvenska till moderna svenska."
+
+Svara endast med innehållsbeskrivningen:"""
         
         response = requests.post(
             "https://ai.hackclub.com/chat/completions",
             json={
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 100,  # Begränsa svar-längd
-                "temperature": 0.7
+                "max_tokens": 120,  # Öka för mer detaljerade beskrivningar
+                "temperature": 0.8  # Lite högre för mer varierade beskrivningar
             },
             headers={"Content-Type": "application/json"},
             timeout=30
@@ -3006,17 +3007,21 @@ Svara endast med beskrivningen:"""
         if response.ok:
             ai_response = response.json().get("choices", [])[0].get("message", {}).get("content", "")
             
-            # RENSA SVARET från AI-artefakter
+            # FÖRBÄTTRAD RENSNING av AI-svar
             description = ai_response.strip()
             
-            # Ta bort vanliga AI-prefixer och suffixer
+            # Ta bort vanliga AI-prefixer och meta-text
             prefixes_to_remove = [
                 "här är beskrivningen:",
                 "beskrivning:",
                 "quiz-beskrivning:",
+                "innehållsbeskrivning:",
                 "description:",
                 "här är en beskrivning:",
                 "beskrivningen är:",
+                "innehållet handlar om:",
+                "quizet behandlar:",
+                "detta quiz:",
                 "svaret är:",
                 "resultatet är:"
             ]
@@ -3028,62 +3033,184 @@ Svara endast med beskrivningen:"""
             # Ta bort citattecken och onödiga tecken
             description = description.replace('"', '').replace("'", "").replace('\n', ' ')
             
-            # Ta bort AI-meta-text som "think" eller andra artefakter
-            if description.lower().startswith('<think>'):
-                # Hitta slutet på think-blocket och ta bort det
-                think_end = description.lower().find('</think>')
-                if think_end != -1:
-                    description = description[think_end + 8:].strip()
-                else:
-                    # Om inget slutmärke, ta bara bort början
-                    description = description[7:].strip()
-            
-            # Ta bort andra vanliga AI-artefakter
-            artifacts_to_remove = ['<think>', '</think>', '```', '---', '***']
+            # Ta bort AI-artefakter
+            artifacts_to_remove = ['<think>', '</think>', '```', '---', '***', '<reasoning>', '</reasoning>']
             for artifact in artifacts_to_remove:
                 description = description.replace(artifact, '').strip()
             
-            # Ta bort text efter punkter som indikerar meta-kommentarer
-            meta_indicators = [
-                'observera att',
-                'notera att',
-                'kom ihåg att',
-                'viktigt att',
-                'tänk på att',
-                'detta är',
-                'beskrivningen'
+            # Ta bort meta-kommentarer i slutet
+            meta_endings = [
+                'detta ger en bra',
+                'beskrivningen visar',
+                'på detta sätt',
+                'detta hjälper',
+                'användaren förstår'
             ]
             
-            words = description.split('.')
-            if len(words) > 1:
-                first_sentence = words[0].strip()
-                # Kontrollera om första meningen är ren beskrivning
-                if not any(indicator in first_sentence.lower() for indicator in meta_indicators):
-                    description = first_sentence
+            for ending in meta_endings:
+                if ending in description.lower():
+                    cut_index = description.lower().find(ending)
+                    if cut_index > 100:  # Behåll bara om det finns tillräckligt innehåll före
+                        description = description[:cut_index].strip()
             
-            # Säkerställ längd (150-250 tecken)
-            if len(description) < 100:
-                description += f" Innehåller {question_count} träningsfrågor för kunskapsförbättring."
-            elif len(description) > 250:
-                description = description[:247] + "..."
+            # Säkerställ att beskrivningen börjar ordentligt
+            if description and not description[0].isupper():
+                description = description[0].upper() + description[1:]
             
-            # Final validering - se till att beskrivningen är meningsfull
-            if (len(description) < 50 or 
-                description.lower().startswith('okej') or 
-                description.lower().startswith('låt mig') or
-                'ai' in description.lower() or
-                'generera' in description.lower()):
-                raise Exception("AI generated meta-text instead of description")
+            # Säkerställ att den slutar med punkt
+            if description and not description.endswith('.'):
+                description = description + '.'
+            
+            # Kontrollera längd och kvalitet
+            if (len(description) < 100 or 
+                len(description) > 350 or
+                'quiz' in description.lower()[:50] or  # Undvik att börja med "quiz"
+                any(bad_word in description.lower() for bad_word in ['antal frågor', 'frågor', 'quiz-typ', 'test med'])):
+                raise Exception("Generated description contains unwanted elements or wrong length")
                 
             return description.strip()
         else:
             raise Exception(f"API call failed with status {response.status_code}")
             
     except Exception as e:
-        print(f"[ERROR] Failed to generate description for quiz {quiz.id}: {e}")
-        # Förbättrad fallback beskrivning
-        return generate_smart_fallback_description(quiz)
+        print(f"[ERROR] Failed to generate content-focused description for quiz {quiz.id}: {e}")
+        return generate_smart_content_fallback(quiz)
 
+
+def generate_smart_content_fallback(quiz):
+    """Generera en smart fallback-beskrivning baserat på innehållsanalys av frågorna"""
+    try:
+        questions = quiz.get_questions()
+        if not questions:
+            return "Innehåll inte tillgängligt för analys"
+        
+        # Samla all text från frågor och svar för djupare analys
+        question_texts = []
+        answer_texts = []
+        
+        for q in questions[:10]:  # Analysera upp till 10 frågor
+            if q.get('question'):
+                question_texts.append(q['question'].lower())
+            
+            if q.get('answer'):
+                if isinstance(q['answer'], dict):
+                    if 'correct' in q['answer']:
+                        answer_texts.append(str(q['answer']['correct']).lower())
+                    elif 'alternatives' in q['answer']:
+                        alts = q['answer']['alternatives']
+                        correct_idx = q['answer'].get('correct_index', 0)
+                        if 0 <= correct_idx < len(alts):
+                            answer_texts.append(alts[correct_idx].lower())
+                else:
+                    answer_texts.append(str(q['answer']).lower())
+        
+        combined_text = " ".join(question_texts + answer_texts)
+        
+        # UTÖKADE ämnesområden med specifika termer
+        subject_areas = {
+            'biologi_cell': {
+                'keywords': ['cell', 'cellmembran', 'mitokondrier', 'kloroplast', 'cellkärna', 'cytoplasma', 'ribosom', 'endoplasmatiska', 'golgi'],
+                'description': 'Behandlar cellbiologi med fokus på cellorganeller, cellens struktur och funktion samt cellulära processer'
+            },
+            'biologi_genetik': {
+                'keywords': ['dna', 'gen', 'kromosom', 'mutation', 'nedärvning', 'allel', 'genotyp', 'fenotyp', 'mitos', 'meios'],
+                'description': 'Utforskar genetik och ärftlighet med DNA-struktur, genuttryck, kromosombeteende och evolutionära processer'
+            },
+            'biologi_ekologi': {
+                'keywords': ['ekosystem', 'näringskedja', 'population', 'art', 'biotop', 'symbios', 'predator', 'evolution', 'naturligt urval'],
+                'description': 'Fokuserar på ekologi och evolution med artinteraktioner, populationsdynamik och miljöpåverkan'
+            },
+            'matematik_algebra': {
+                'keywords': ['ekvation', 'andragrad', 'polynom', 'faktorisering', 'rötter', 'koefficient', 'kvadratkomplettering', 'pq-formel'],
+                'description': 'Tränar algebraisk problemlösning med ekvationer, polynomhantering och matematisk modellering'
+            },
+            'matematik_geometri': {
+                'keywords': ['triangel', 'cirkel', 'area', 'volym', 'pythagoras', 'trigonometri', 'sinus', 'cosinus', 'vektor'],
+                'description': 'Behandlar geometri och trigonometri med former, mätningar och rumsliga relationer'
+            },
+            'matematik_analys': {
+                'keywords': ['derivata', 'integral', 'gränsvärde', 'funktion', 'graf', 'kontinuitet', 'extrempunkt', 'asymptoter'],
+                'description': 'Utforskar matematisk analys med funktioner, derivering, integrering och kurvstudie'
+            },
+            'kemi_grundläggande': {
+                'keywords': ['atom', 'proton', 'neutron', 'elektron', 'grundämne', 'periodiska systemet', 'molekyl', 'kemisk bindning'],
+                'description': 'Fokuserar på grundläggande kemi med atomstruktur, periodiska systemet och kemiska bindningar'
+            },
+            'kemi_reaktioner': {
+                'keywords': ['kemisk reaktion', 'balansering', 'katalysator', 'oxidation', 'reduktion', 'syra', 'bas', 'ph', 'jonbindning'],
+                'description': 'Behandlar kemiska reaktioner, reaktionsmekanism, syra-basbalans och elektrokemi'
+            },
+            'fysik_mekanik': {
+                'keywords': ['kraft', 'rörelse', 'hastighet', 'acceleration', 'massa', 'newtons lagar', 'energi', 'rörelsemängd'],
+                'description': 'Utforskar klassisk mekanik med krafter, rörelse, energiomvandlingar och fysikaliska lagar'
+            },
+            'fysik_elektricitet': {
+                'keywords': ['ström', 'spänning', 'resistans', 'ohms lag', 'elektrisk krets', 'kondensator', 'magnetfält'],
+                'description': 'Behandlar elektricitet och magnetism med elektriska kretsar, elektromagnetiska fenomen'
+            },
+            'historia_sverige': {
+                'keywords': ['gustav vasa', 'stormaktstiden', 'karl xii', 'sverige', 'union', 'reformation', 'trettioåriga kriget'],
+                'description': 'Fokuserar på svensk historia med politiska förändringar, kungar och Sveriges utveckling'
+            },
+            'historia_världen': {
+                'keywords': ['världskrig', 'revolution', 'imperialism', 'kolonialism', 'demokrati', 'diktatur', 'industrialisering'],
+                'description': 'Behandlar världshistoria med stora konflikter, samhällsförändringar och globala processer'
+            },
+            'svenska_grammatik': {
+                'keywords': ['verb', 'substantiv', 'adjektiv', 'tempus', 'subjekt', 'predikat', 'bisats', 'syntax'],
+                'description': 'Tränar svensk grammatik med ordklasser, meningsanalys och språkstruktur'
+            },
+            'svenska_litteratur': {
+                'keywords': ['författare', 'roman', 'dikt', 'novell', 'romantik', 'realism', 'modernism', 'symbolik', 'tema'],
+                'description': 'Utforskar svensk litteratur med författarskap, litterära epoker och textanalys'
+            }
+        }
+        
+        # Hitta bäst matchande ämnesområden
+        matches = []
+        for area_key, area_data in subject_areas.items():
+            keyword_matches = sum(1 for keyword in area_data['keywords'] if keyword in combined_text)
+            if keyword_matches >= 2:  # Kräv minst 2 matchningar
+                matches.append((area_key, keyword_matches, area_data['description']))
+        
+        # Sortera efter antal matchningar
+        matches.sort(key=lambda x: x[1], reverse=True)
+        
+        if matches:
+            # Använd den bäst matchande beskrivningen
+            best_match = matches[0]
+            base_description = best_match[2]
+            
+            # Lägg till specifika detaljer baserat på identifierade nyckelord
+            area_key = best_match[0]
+            area_keywords = subject_areas[area_key]['keywords']
+            found_keywords = [kw for kw in area_keywords if kw in combined_text]
+            
+            if len(found_keywords) >= 3:
+                # Lägg till specifika termer som hittades
+                specific_terms = ', '.join(found_keywords[:4])  # Ta max 4 termer
+                enhanced_description = f"{base_description}. Inkluderar specifikt {specific_terms} och relaterade koncept."
+            else:
+                enhanced_description = base_description + "."
+            
+            return enhanced_description
+            
+        else:
+            # Generisk innehållsbaserad beskrivning
+            if 'vad' in combined_text and 'är' in combined_text:
+                return "Behandlar definitioner och grundläggande förståelse av centrala begrepp inom ämnesområdet."
+            elif 'beräkna' in combined_text or 'räkna' in combined_text:
+                return "Fokuserar på praktisk problemlösning och beräkningar med tillämpning av teoretiska koncept."
+            elif 'förklara' in combined_text or 'beskriva' in combined_text:
+                return "Tränar fördjupad förståelse och förmåga att förklara komplexa samband och processer."
+            elif 'när' in combined_text or 'år' in combined_text:
+                return "Behandlar tidsperspektiv, historiska skeenden och kronologisk förståelse av utvecklingsprocesser."
+            else:
+                return "Täcker viktiga kunskapsområden med fokus på förståelse och tillämpning av centrala koncept."
+                
+    except Exception as e:
+        print(f"[ERROR] Smart content fallback failed: {e}")
+        return "Behandlar viktiga ämnesområden och centrala koncept för kunskapsfördjupning."
 
 def generate_smart_fallback_description(quiz):
     """Generera en smart fallback-beskrivning baserat på frågorna"""
