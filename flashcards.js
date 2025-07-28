@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="progress-bar">
         <div class="progress-fill" style="width: ${progress}%"></div>
       </div>
-      <div class="progress-text">Card ${currentCardIndex + 1} of ${questions.length}</div>
+      <div class="progress-text">Flashcard ${currentCardIndex + 1} av ${questions.length}</div>
     `;
   }
 
@@ -35,11 +35,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // All cards completed
       questionDiv.innerHTML = `
         <div class="completion-message">
-          <h2>🎉 Great job!</h2>
-          <p>You have completed all ${questions.length} flashcards!</p>
+          <h2>🎉 Grymt Jobbat!</h2>
+          <p>Du har spelat ${questions.length} flashcards!</p>
           <div class="completion-stats">
-            <p>Cards reviewed: ${responses.length}</p>
-            <p>Time spent: ${formatTime(getTotalTime())}</p>
+            <p>Flashcards spelade: ${responses.length}</p>
+            <p>Tid: ${formatTime(getTotalTime())}</p>
           </div>
         </div>
       `;
@@ -110,9 +110,9 @@ document.addEventListener('DOMContentLoaded', () => {
           'success'
         );
         
-        // Auto-redirect after a delay
+        // Auto-redirect to dashboard after a delay
         setTimeout(() => {
-          window.location.href = `/subject/${encodeURIComponent(subjectName)}`;
+          window.location.href = '/';
         }, 3000);
       }
     })
@@ -132,11 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
     messageDiv.innerHTML = `
       <p>${message}</p>
       <div class="completion-actions">
-        <button onclick="window.location.href='/subject/${encodeURIComponent(subjectName)}'" class="button">
-          Return to Subject
-        </button>
         <button onclick="window.location.href='/'" class="button">
-          Return to Dashboard
+          Tillbaka till Huvudsidan
+        </button>
+        <button onclick="window.location.href='/subject/${encodeURIComponent(subjectName)}'" class="button">
+          Tillbaka till Ämnet
         </button>
       </div>
     `;
@@ -245,8 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         break;
       case 'Escape':
-        // Return to subject page
-        window.location.href = `/subject/${encodeURIComponent(subjectName)}`;
+        // Return to dashboard
+        window.location.href = '/';
         break;
     }
   });
@@ -256,13 +256,13 @@ document.addEventListener('DOMContentLoaded', () => {
   helpDiv.className = 'keyboard-help';
   helpDiv.innerHTML = `
     <div class="help-toggle" onclick="this.parentElement.classList.toggle('expanded')">
-      ⌨️ Shortcuts
+      ⌨️ Genvägar
     </div>
     <div class="help-content">
-      <p><kbd>Space</kbd> - Show/Hide Answer</p>
-      <p><kbd>1-4</kbd> - Rate Flashcard</p>
-      <p><kbd>←</kbd> - Previous Card</p>
-      <p><kbd>Esc</kbd> - Return to Subject</p>
+      <p><kbd>Space</kbd> - Visa/Göm Svar</p>
+      <p><kbd>1-4</kbd> - Betygsätt Flashcard</p>
+      <p><kbd>←</kbd> - Tidigare Kort</p>
+      <p><kbd>Esc</kbd> - Tillbaka till Huvudsida</p>
     </div>
   `;
   document.body.appendChild(helpDiv);
@@ -271,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (questions && questions.length > 0) {
     showCard(currentCardIndex);
   } else {
-    questionDiv.innerHTML = '<p>❌ No flashcards available.</p>';
+    questionDiv.innerHTML = '<p>❌ Inga flashcards tillgängliga.</p>';
     showAnswerBtn.style.display = 'none';
     progressDiv.style.display = 'none';
   }
