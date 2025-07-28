@@ -19,9 +19,9 @@
   
   <!-- Subject Selection -->
   <div class="form-group">
-    <label for="subject">Subject:</label>
+    <label for="subject">Ämne:</label>
     <select name="subject" id="subject" required>
-      <option value="">Select a subject</option>
+      <option value="">Välj ett ämne</option>
       {% for subject in subjects %}
         <option value="{{ subject }}">{{ subject }}</option>
       {% endfor %}
@@ -30,28 +30,28 @@
 
   <!-- Lesson Selection -->
   <div class="form-group" id="lesson-group" style="display: none;">
-    <label for="selected_lesson">Select Lesson (optional):</label>
+    <label for="selected_lesson">Välj Lektion (frivilligt)</label>
     <select name="selected_lesson" id="selected_lesson">
-      <option value="">No lesson selected</option>
+      <option value="">Ingen lektion är vald</option>
     </select>
-    <small class="help-text">Choose a lesson to base the quiz on its transcribed content</small>
+    <small class="help-text">Välj en lektion för att basera quizet på lektionens transkription</small>
   </div>
 
   <!-- Quiz Type Selection -->
   <div class="form-group">
-    <label>Quiz Type:</label>
+    <label>Quiz Typ:</label>
     <div class="quiz-type-options">
       <label class="radio-option">
         <input type="radio" name="quiz-drop" value="ten" required>
-        <span>10 Questions</span>
+        <span>10 Frågor</span>
       </label>
       <label class="radio-option">
         <input type="radio" name="quiz-drop" value="twenty-five" required>
-        <span>25 Questions</span>
+        <span>25 Frågor</span>
       </label>
       <label class="radio-option">
         <input type="radio" name="quiz-drop" value="fifty" required>
-        <span>50 Questions</span>
+        <span>50 Frågor</span>
       </label>
       <label class="radio-option">
         <input type="radio" name="quiz-drop" value="extended-response" required>
@@ -64,14 +64,69 @@
     </div>
   </div>
 
+  <!-- Creation Method Selection -->
+  <div class="form-group">
+    <label>Metod:</label>
+    <div class="creation-method-options">
+      <label class="radio-option">
+        <input type="radio" name="creation_method" value="ai" id="creation_method_ai" checked>
+        <span>AI Genererad</span>
+      </label>
+      <label class="radio-option">
+        <input type="radio" name="creation_method" value="manual" id="creation_method_manual">
+        <span>Skriv Dina Egna Frågor</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- AI Generation Options (shown by default) -->
+  <div id="ai-options" class="creation-section">
+    <!-- File Upload -->
+    <div class="form-group">
+      <label for="data1">Ladda Upp Filer (frivilligt):</label>
+      <input type="file" name="data1" id="data1" multiple accept=".pdf,.txt,.doc,.docx">
+      <small class="help-text">Accepterar: PDF, TXT, DOC, DOCX</small>
+    </div>
+
+    <!-- Use Documents Checkbox -->
+    <div class="form-group">
+      <label class="checkbox-label">
+        <input type="checkbox" name="use_documents" id="use_documents" checked>
+        <span class="checkbox-text">
+          Använd ämnets kunkapsplan/kunkapsmål/begreppslista
+          <small class="help-text">
+            Include begrippslista, kunskapskrav, and kunskapsmål in quiz generation
+          </small>
+        </span>
+      </label>
+    </div>
+
+    <!-- Quiz Description for AI -->
+    <div class="form-group">
+      <label for="quiz-description">AI Instruktioner (frivilligt))</label>
+      <textarea name="quiz-description" id="quiz-description" placeholder="Describe what this quiz should cover..."></textarea>
+    </div>
+  </div>
+
+  <!-- Manual Question Creation -->
+  <div id="manual-options" class="creation-section" style="display: none;">
+    <div class="form-group">
+      <label>Quiz Frågor</label>
+      <div id="questions-container">
+        <!-- Questions will be dynamically added here -->
+      </div>
+      <button type="button" id="add-question-btn" class="add-question-btn">+ Add Question</button>
+    </div>
+  </div>
+
   <!-- Personal Quiz Checkbox -->
   <div class="form-group">
     <label class="checkbox-label">
       <input type="checkbox" name="is_personal" id="is_personal">
       <span class="checkbox-text">
-        Create as personal quiz
+        Skapa Personligt Quiz
         <small class="help-text">
-          Personal quizzes are only visible to you. Uncheck to create a quiz for all subject members.
+          Personliga quizzes är endast synliga för dig. Avmarkera för att skapa quizet åt ämnets medlemmar.
         </small>
       </span>
     </label>
@@ -79,34 +134,8 @@
 
   <!-- Quiz Title -->
   <div class="form-group">
-    <label for="quiz_title">Quiz Title (optional):</label>
+    <label for="quiz_title">Quiz Titel (frivilligt):</label>
     <input type="text" name="quiz_title" id="quiz_title" placeholder="Leave blank for auto-generated title">
-  </div>
-
-  <!-- Quiz Description -->
-  <div class="form-group">
-    <label for="quiz-description">Description (optional):</label>
-    <textarea name="quiz-description" id="quiz-description" placeholder="Describe what this quiz covers..."></textarea>
-  </div>
-
-  <!-- File Upload -->
-  <div class="form-group">
-    <label for="data1">Upload Files (optional):</label>
-    <input type="file" name="data1" id="data1" multiple accept=".pdf,.txt,.doc,.docx">
-    <small class="help-text">Supported formats: PDF, TXT, DOC, DOCX</small>
-  </div>
-
-  <!-- Use Documents Checkbox -->
-  <div class="form-group">
-    <label class="checkbox-label">
-      <input type="checkbox" name="use_documents" id="use_documents" checked>
-      <span class="checkbox-text">
-        Use subject's requirement documents
-        <small class="help-text">
-          Include begrippslista, kunskapskrav, and kunskapsmål in quiz generation
-        </small>
-      </span>
-    </label>
   </div>
 
   <!-- Create Flashcards Checkbox -->
@@ -114,9 +143,9 @@
     <label class="checkbox-label">
       <input type="checkbox" name="create_flashcards" id="create_flashcards" checked>
       <span class="checkbox-text">
-        Create flashcards from quiz questions
+        Skapa flashcards utifrån quiz-frågor
         <small class="help-text">
-          Automatically generate flashcards for spaced repetition
+          Generera flashcards automatiskt för spaced-repetition
         </small>
       </span>
     </label>
@@ -124,7 +153,7 @@
 
   <!-- Submit Button -->
   <div class="form-group">
-    <button type="submit" class="submit-btn">Create Quiz</button>
+    <button type="submit" class="submit-btn">Skapa Quiz</button>
   </div>
 
 </form>
@@ -139,6 +168,179 @@ document.addEventListener('DOMContentLoaded', function() {
   const useDocumentsCheckbox = document.getElementById('use_documents');
   const flashcardsCheckbox = document.getElementById('create_flashcards');
   
+  // New elements for manual questions
+  const creationMethodRadios = document.querySelectorAll('input[name="creation_method"]');
+  const aiOptions = document.getElementById('ai-options');
+  const manualOptions = document.getElementById('manual-options');
+  const questionsContainer = document.getElementById('questions-container');
+  const addQuestionBtn = document.getElementById('add-question-btn');
+  const quizTypeRadios = document.querySelectorAll('input[name="quiz-drop"]');
+  
+  let currentQuestionCount = 0;
+  let maxQuestions = 10; // Default
+  
+  // Handle creation method change
+  creationMethodRadios.forEach(radio => {
+    radio.addEventListener('change', function() {
+      if (this.value === 'ai') {
+        aiOptions.style.display = 'block';
+        manualOptions.style.display = 'none';
+        lessonGroup.style.display = subjectSelect.value ? 'block' : 'none';
+      } else {
+        aiOptions.style.display = 'none';
+        manualOptions.style.display = 'block';
+        lessonGroup.style.display = 'none';
+        initializeManualQuestions();
+      }
+    });
+  });
+  
+  // Handle quiz type change to update max questions
+  quizTypeRadios.forEach(radio => {
+    radio.addEventListener('change', function() {
+      switch(this.value) {
+        case 'ten':
+          maxQuestions = 10;
+          break;
+        case 'twenty-five':
+          maxQuestions = 25;
+          break;
+        case 'fifty':
+          maxQuestions = 50;
+          break;
+        default:
+          maxQuestions = 10;
+      }
+      
+      // If manual mode is active, update questions
+      if (document.getElementById('creation_method_manual').checked) {
+        updateManualQuestions();
+      }
+    });
+  });
+  
+  function initializeManualQuestions() {
+    questionsContainer.innerHTML = '';
+    currentQuestionCount = 0;
+    updateManualQuestions();
+  }
+  
+  function updateManualQuestions() {
+    // Add questions up to maxQuestions
+    while (currentQuestionCount < maxQuestions) {
+      addManualQuestion();
+    }
+    
+    // Remove excess questions if maxQuestions decreased
+    while (currentQuestionCount > maxQuestions) {
+      removeLastQuestion();
+    }
+    
+    updateAddButton();
+  }
+  
+  function addManualQuestion() {
+    currentQuestionCount++;
+    
+    const questionDiv = document.createElement('div');
+    questionDiv.className = 'question-pair';
+    questionDiv.dataset.questionIndex = currentQuestionCount;
+    
+    questionDiv.innerHTML = `
+      <div class="question-header">
+        <h4>Question ${currentQuestionCount}</h4>
+        ${currentQuestionCount > 1 ? '<button type="button" class="remove-question-btn">×</button>' : ''}
+      </div>
+      <div class="question-input-group">
+        <label for="manual_question_${currentQuestionCount}">Question:</label>
+        <textarea name="manual_questions[${currentQuestionCount - 1}][question]" 
+                  id="manual_question_${currentQuestionCount}" 
+                  placeholder="Enter your question here..." 
+                  required></textarea>
+      </div>
+      <div class="answer-input-group">
+        <label for="manual_answer_${currentQuestionCount}">Answer:</label>
+        <textarea name="manual_questions[${currentQuestionCount - 1}][answer]" 
+                  id="manual_answer_${currentQuestionCount}" 
+                  placeholder="Enter the answer here..." 
+                  required></textarea>
+      </div>
+    `;
+    
+    questionsContainer.appendChild(questionDiv);
+    
+    // Add remove functionality for removable questions
+    const removeBtn = questionDiv.querySelector('.remove-question-btn');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function() {
+        removeQuestion(questionDiv);
+      });
+    }
+    
+    updateAddButton();
+  }
+  
+  function removeQuestion(questionDiv) {
+    const index = parseInt(questionDiv.dataset.questionIndex);
+    questionDiv.remove();
+    currentQuestionCount--;
+    
+    // Renumber remaining questions
+    renumberQuestions();
+    updateAddButton();
+  }
+  
+  function removeLastQuestion() {
+    const lastQuestion = questionsContainer.lastElementChild;
+    if (lastQuestion) {
+      lastQuestion.remove();
+      currentQuestionCount--;
+    }
+  }
+  
+  function renumberQuestions() {
+    const questionDivs = questionsContainer.querySelectorAll('.question-pair');
+    questionDivs.forEach((div, index) => {
+      const newNumber = index + 1;
+      div.dataset.questionIndex = newNumber;
+      
+      // Update header
+      const header = div.querySelector('h4');
+      header.textContent = `Question ${newNumber}`;
+      
+      // Update input names and IDs
+      const questionTextarea = div.querySelector('textarea[name*="[question]"]');
+      const answerTextarea = div.querySelector('textarea[name*="[answer]"]');
+      const questionLabel = div.querySelector('label[for*="manual_question"]');
+      const answerLabel = div.querySelector('label[for*="manual_answer"]');
+      
+      questionTextarea.name = `manual_questions[${index}][question]`;
+      questionTextarea.id = `manual_question_${newNumber}`;
+      answerTextarea.name = `manual_questions[${index}][answer]`;
+      answerTextarea.id = `manual_answer_${newNumber}`;
+      questionLabel.setAttribute('for', `manual_question_${newNumber}`);
+      answerLabel.setAttribute('for', `manual_answer_${newNumber}`);
+      
+      // Show/hide remove button
+      const removeBtn = div.querySelector('.remove-question-btn');
+      if (removeBtn) {
+        removeBtn.style.display = newNumber === 1 ? 'none' : 'inline-block';
+      }
+    });
+  }
+  
+  function updateAddButton() {
+    addQuestionBtn.style.display = currentQuestionCount < maxQuestions ? 'inline-block' : 'none';
+    addQuestionBtn.textContent = `+ Add Question (${currentQuestionCount}/${maxQuestions})`;
+  }
+  
+  // Add question button handler
+  addQuestionBtn.addEventListener('click', function() {
+    if (currentQuestionCount < maxQuestions) {
+      addManualQuestion();
+    }
+  });
+  
   // Hantera ämnesval - ladda lektioner
   subjectSelect.addEventListener('change', async function() {
     const selectedSubject = this.value;
@@ -149,48 +351,50 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    try {
-      // Hämta subject_id baserat på subject name
-      const response = await fetch(`/api/subjects/by-name/${encodeURIComponent(selectedSubject)}`);
-      if (!response.ok) throw new Error('Failed to fetch subject');
-      
-      const subjectData = await response.json();
-      const subjectId = subjectData.subject_id;
-      
-      // Hämta lektioner för detta ämne
-      const lessonsResponse = await fetch(`/api/lessons/${subjectId}`);
-      if (!lessonsResponse.ok) throw new Error('Failed to fetch lessons');
-      
-      const lessonsData = await lessonsResponse.json();
-      
-      // Uppdatera lesson dropdown
-      lessonSelect.innerHTML = '<option value="">No lesson selected</option>';
-      
-      if (lessonsData.lessons && lessonsData.lessons.length > 0) {
-        lessonsData.lessons.forEach(lesson => {
-          // Visa endast lektioner som har transkription
-          if (lesson.transcription_status === 'completed' && lesson.transcription) {
-            const option = document.createElement('option');
-            option.value = lesson.id;
-            option.textContent = `${lesson.title} (${lesson.lesson_date})`;
-            lessonSelect.appendChild(option);
-          }
-        });
+    // Only show lesson selection for AI mode
+    if (document.getElementById('creation_method_ai').checked) {
+      try {
+        // Hämta subject_id baserat på subject name
+        const response = await fetch(`/api/subjects/by-name/${encodeURIComponent(selectedSubject)}`);
+        if (!response.ok) throw new Error('Failed to fetch subject');
         
-        lessonGroup.style.display = 'block';
-      } else {
+        const subjectData = await response.json();
+        const subjectId = subjectData.subject_id;
+        
+        // Hämta lektioner för detta ämne
+        const lessonsResponse = await fetch(`/api/lessons/${subjectId}`);
+        if (!lessonsResponse.ok) throw new Error('Failed to fetch lessons');
+        
+        const lessonsData = await lessonsResponse.json();
+        
+        // Uppdatera lesson dropdown
+        lessonSelect.innerHTML = '<option value="">No lesson selected</option>';
+        
+        if (lessonsData.lessons && lessonsData.lessons.length > 0) {
+          lessonsData.lessons.forEach(lesson => {
+            // Visa endast lektioner som har transkription
+            if (lesson.transcription_status === 'completed' && lesson.transcription) {
+              const option = document.createElement('option');
+              option.value = lesson.id;
+              option.textContent = `${lesson.title} (${lesson.lesson_date})`;
+              lessonSelect.appendChild(option);
+            }
+          });
+          
+          lessonGroup.style.display = 'block';
+        } else {
+          lessonGroup.style.display = 'none';
+        }
+        
+      } catch (error) {
+        console.error('Error loading lessons:', error);
         lessonGroup.style.display = 'none';
       }
-      
-    } catch (error) {
-      console.error('Error loading lessons:', error);
-      lessonGroup.style.display = 'none';
     }
   });
   
   // Visa/dölj information baserat på om det är personligt quiz
   personalCheckbox.addEventListener('change', function() {
-    const helpTexts = document.querySelectorAll('.help-text');
     const isPersonal = this.checked;
     
     // Uppdatera hjälptext för flashcards
@@ -225,6 +429,41 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Visa initial behörighetsinformation
   showPermissionInfo(personalCheckbox.checked);
+  
+  // Form validation before submit
+  document.querySelector('.quiz-form').addEventListener('submit', function(e) {
+    if (document.getElementById('creation_method_manual').checked) {
+      // Validate manual questions
+      const questionInputs = document.querySelectorAll('textarea[name*="[question]"]');
+      const answerInputs = document.querySelectorAll('textarea[name*="[answer]"]');
+      
+      let hasEmptyFields = false;
+      
+      questionInputs.forEach((input, index) => {
+        if (!input.value.trim()) {
+          hasEmptyFields = true;
+          input.style.borderColor = 'red';
+        } else {
+          input.style.borderColor = '';
+        }
+      });
+      
+      answerInputs.forEach((input, index) => {
+        if (!input.value.trim()) {
+          hasEmptyFields = true;
+          input.style.borderColor = 'red';
+        } else {
+          input.style.borderColor = '';
+        }
+      });
+      
+      if (hasEmptyFields) {
+        e.preventDefault();
+        alert('Please fill in all question and answer fields.');
+        return false;
+      }
+    }
+  });
 });
 </script>
 
@@ -260,10 +499,12 @@ document.addEventListener('DOMContentLoaded', function() {
   resize: vertical;
 }
 
-.quiz-type-options {
+.quiz-type-options,
+.creation-method-options {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-bottom: 15px;
 }
 
 .radio-option {
@@ -281,13 +522,21 @@ document.addEventListener('DOMContentLoaded', function() {
   background-color: #f8f9fa;
 }
 
+.radio-option input[type="radio"]:checked + span {
+  color: #007bff;
+  font-weight: 600;
+}
+
 .radio-option input[type="radio"] {
   margin-right: 8px;
 }
 
-.radio-option input[type="radio"]:checked + span {
-  color: #007bff;
-  font-weight: 600;
+.creation-section {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #f8f9fa;
 }
 
 .checkbox-label {
@@ -321,6 +570,79 @@ document.addEventListener('DOMContentLoaded', function() {
   border-radius: 4px;
   font-size: 12px;
   color: #0c5460;
+}
+
+/* Manual Questions Styling */
+.question-pair {
+  margin-bottom: 25px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: white;
+}
+
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.question-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.remove-question-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-question-btn:hover {
+  background: #c82333;
+}
+
+.question-input-group,
+.answer-input-group {
+  margin-bottom: 15px;
+}
+
+.question-input-group label,
+.answer-input-group label {
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+.question-input-group textarea,
+.answer-input-group textarea {
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.add-question-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.add-question-btn:hover {
+  background: #218838;
 }
 
 .submit-btn {
@@ -361,5 +683,4 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 </style>
 </body>
-  
-</html> 
+</html>
