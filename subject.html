@@ -37,6 +37,7 @@
   max-height: 650px; /* Ökad höjd */
   overflow-y: auto;
   padding-right: 10px;
+  grid-auto-rows: 1fr;
 }
 
 .quiz-grid::-webkit-scrollbar {
@@ -68,6 +69,7 @@
   display: flex;
   flex-direction: column;
   height: auto;
+  justify-content: space-between;
 }
 
 .quiz-card:hover {
@@ -2059,25 +2061,25 @@
     
     <div class="share-status">
       <div class="status-indicator {{ 'active' if subject.is_shared else 'inactive' }}"></div>
-      <span>Sharing is {{ 'enabled' if subject.is_shared else 'disabled' }}</span>
+      <span> Delning är {{ 'aktiverad' if subject.is_shared else 'inaktiverad' }}</span>
     </div>
     
     {% if subject.is_shared %}
     <div class="share-code-display">
-      <label>Share Code:</label>
+      <label>Delningskod:</label>
       <div class="share-code" id="share-code-display">{{ subject.share_code }}</div>
-      <button class="copy-button" onclick="copyShareCode()">Copy</button>
+      <button class="copy-button" onclick="copyShareCode()">Kopiera</button>
     </div>
     {% endif %}
     
     <div style="margin-top: 15px;">
       <button class="toggle-sharing" onclick="toggleSharing()">
-        {{ 'Disable Sharing' if subject.is_shared else 'Enable Sharing' }}
+        {{ 'Inaktivera Delning' if subject.is_shared else 'Enable Sharing' }}
       </button>
       
       {% if subject.is_shared %}
       <button class="regenerate-code" onclick="regenerateCode()">
-        Regenerate Code
+        Regenerera Kod
       </button>
       {% endif %}
     </div>
@@ -2272,7 +2274,7 @@
   {% if user_role not in ['owner', 'admin'] %}
   <div class="shared-files-section">
     <div class="files-section-title">
-      📁 Shared Files
+      Delade Filer
       <span id="file-stats"></span>
     </div>
 
@@ -2287,7 +2289,7 @@
   <!-- Shared Files Section for owners/admins -->
   <div class="shared-files-section">
     <div class="files-section-title">
-      📁 Shared Files
+      📁 Delade Filer
       <span id="file-stats"></span>
     </div>
 
@@ -2296,10 +2298,10 @@
     <div class="file-upload-area" id="file-upload-area">
       <input type="file" id="file-upload-input" class="file-upload-input" multiple>
       <label for="file-upload-input" class="file-upload-label">
-        Choose Files or Drag & Drop
+        Välj fil eller Dra och Släpp
       </label>
       <div style="margin-top: 10px; color: #6c757d;">
-        (Max 50MB per file)
+        (Max 50MB per fil)
       </div>
       <textarea id="file-description" class="file-description-input" placeholder="Description"></textarea>
       <div id="upload-progress" class="upload-progress" style="display: none;">
@@ -2489,7 +2491,7 @@
       
       try {
         await navigator.clipboard.writeText(shareCode);
-        copyButton.textContent = 'Copied!';
+        copyButton.textContent = 'Kopierad!';
         copyButton.classList.add('copied');
         
         setTimeout(() => {
@@ -3093,7 +3095,7 @@
         
         if (data.status === 'success') {
           document.getElementById('members-count').textContent = 
-            `👥 ${data.total_members} member${data.total_members !== 1 ? 's' : ''}`;
+            `👥 ${data.total_members} medlemmar${data.total_members !== 1 ? 's' : ''}`;
         }
       } catch (error) {
         console.error('Error loading member count:', error);
@@ -3146,7 +3148,7 @@
               <span class="file-download-count">↓ ${file.download_count}</span>
             </div>
             <div class="file-meta">
-              ${file.file_size} • Uploaded by ${file.uploader} • ${file.created_at}
+              ${file.file_size} • Uppladdat av ${file.uploader} • ${file.created_at}
             </div>
             ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
           </div>
@@ -3397,7 +3399,7 @@
             const statsDiv = document.getElementById('file-stats-details');
             if (statsDiv) {
               statsDiv.innerHTML = `
-                📊 Total files: ${data.total_files} • Total downloads: ${data.total_downloads}
+                📊 Antal filer: ${data.total_files} • Antal nedladdningar: ${data.total_downloads}
               `;
               statsDiv.style.display = 'block';
             }
@@ -5045,7 +5047,7 @@ window.debugTranscription = debugTranscription;
               <span class="file-download-count">↓ ${file.download_count}</span>
             </div>
             <div class="file-meta">
-              ${file.file_size} • Uploaded by ${file.uploader} • ${file.created_at}
+              ${file.file_size} • Uppladdat av  ${file.uploader} • ${file.created_at}
             </div>
             ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
           </div>
