@@ -1,3 +1,7 @@
+
+//index_script.js:
+
+
 document.addEventListener('DOMContentLoaded', () => {
   // ----------- Part 0: Fetch the entire repetition schedule -----------
   let schedule = {};
