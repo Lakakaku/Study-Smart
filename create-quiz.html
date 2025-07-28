@@ -491,6 +491,7 @@ document.addEventListener('DOMContentLoaded', function() {
   resize: vertical;
 }
 
+
 .quiz-type-options,
 .creation-method-options {
   display: flex;
@@ -508,6 +509,19 @@ document.addEventListener('DOMContentLoaded', function() {
   cursor: pointer;
   transition: all 0.2s ease;
 }
+
+
+#quiz_title {
+  height: 45px;
+  /* ta bort width:100% här */
+  padding: 0 15px;
+  font-size: 1rem;
+  
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
 
 .radio-option:hover {
   border-color: #007bff;
