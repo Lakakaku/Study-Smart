@@ -706,15 +706,25 @@ document.addEventListener('DOMContentLoaded', () => {
     eventsDisplay.style.display = 'block';
   }
 
-
+  async function showConfirm(title, message) {
+    const dialog = document.getElementById('confirmDialog');
+    document.getElementById('dialogTitle').textContent = title;
+    document.getElementById('dialogMessage').innerHTML = message;
+    dialog.showModal();
+    return new Promise(resolve => {
+      dialog.addEventListener('close', () => {
+        resolve(dialog.returnValue === 'default'); // default är OK-knappen
+      }, { once: true });
+    });
+  }
 
   // Function to handle leaving a quiz (for members only)
   window.leaveQuiz = async function(subject, topic, quizId) {
-      const confirmMessage = `Are you sure you want to leave the quiz "${topic}" from ${subject}?\n\nThis will:\n- Remove all your flashcards for this quiz\n- Remove it from your spaced repetition schedule\n- This action cannot be undone`;
-      
-      if (!confirm(confirmMessage)) {
-          return;
-      }
+    const msg = `
+      Vill du lämna quizet "<strong>${topic}</strong>" i ämnet "<strong>${subject}</strong>"?<br>
+      Detta kommer ta bort flashcards och repetitionsschema.`;
+    const ok = await showConfirm('Är du säker?', msg);
+    if (!ok) return;
       
       try {
           const response = await fetch('/api/leave_quiz', {
@@ -3075,11 +3085,45 @@ function leaveSubject(subjectId) {
 
 
 
+    #confirmDialog {
+      border: none;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      font-family: sans-serif;
+    }
+    #confirmBtn {
+      background: #4f46e5;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      margin-left: 0.5rem;
+    }
+    #cancelBtn {
+      background: transparent;
+      border: none;
+      padding: 0.5rem 1rem;
+      color: #4b5563;
+    }
 
 
 
 
 
   </style>
+
+
+
+  <dialog id="confirmDialog">
+    <form method="dialog">
+      <h2 id="dialogTitle">Är du säker?</h2>
+      <p id="dialogMessage"></p>
+      <menu>
+        <button id="cancelBtn">Avbryt</button>
+        <button id="confirmBtn">OK</button>
+      </menu>
+    </form>
+  </dialog>
 </body>
 </html>
