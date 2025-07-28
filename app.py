@@ -2970,65 +2970,202 @@ def generate_quiz_description(quiz):
         
         content_sample = "\n".join(questions_and_answers)
         
-        # Mer detaljerad prompt för längre beskrivning
-        prompt = f"""Analysera detta quiz och skriv en informativ beskrivning på svenska som hjälper studenter förstå vad quizet täcker. Beskrivningen ska vara 150-250 tecken lång.
+        # FÖRBÄTTRAD PROMPT - mer fokuserad och specifik
+        prompt = f"""Skriv en informativ beskrivning på svenska för detta quiz. Beskrivningen ska vara exakt 150-220 tecken lång och beskriva vad quizet täcker.
 
-Quiz-information:
-- Typ: {quiz.quiz_type.replace('-', ' ').title()}
-- Totalt antal frågor: {question_count}
-- Exempel på innehåll:
-
+QUIZ-INNEHÅLL:
 {content_sample}
 
-Skriv en beskrivning som:
-1. Förklarar vilka ämnesområden/topics som behandlas
-2. Nämner vad studenten kommer att lära sig/öva på
-3. Ger en känsla för svårighetsgrad och fokus
-4. Är engagerande och informativ
+Antal frågor: {question_count}
+Quiz-typ: {quiz.quiz_type.replace('-', ' ').title()}
 
-Exempel på bra beskrivningar:
-- "Tränar grundläggande algebraiska ekvationer och problemlösning med fokus på andragradsekvationer och grafiska tolkningar."
-- "Täcker cellbiologi, fotosyntespocessen och ekosystems energiflöden med betoning på praktiska laborationsresultat."
+INSTRUKTIONER:
+- Skriv ENDAST beskrivningen, inget annat
+- Fokusera på vilka ämnesområden som behandlas
+- Nämn vad studenten kommer att lära sig
+- Använd enkla, tydliga ord
+- Längd: 150-220 tecken
 
-Svara endast med beskrivningen, inget annat."""
+EXEMPEL PÅ BRA BESKRIVNINGAR:
+"Tränar grundläggande algebraiska ekvationer och problemlösning med fokus på andragradsekvationer och grafiska tolkningar."
+"Täcker cellbiologi, fotosyntespocessen och ekosystems energiflöden med betoning på praktiska laborationsresultat."
+
+Svara endast med beskrivningen:"""
         
         response = requests.post(
             "https://ai.hackclub.com/chat/completions",
-            json={"messages": [{"role": "user", "content": prompt}]},
+            json={
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 100,  # Begränsa svar-längd
+                "temperature": 0.7
+            },
             headers={"Content-Type": "application/json"},
             timeout=30
         )
         
         if response.ok:
             ai_response = response.json().get("choices", [])[0].get("message", {}).get("content", "")
-            # Rensa beskrivningen
-            description = ai_response.strip().replace('\n', ' ').replace('"', '')
             
-            # Säkerställ rimlig längd (150-300 tecken)
+            # RENSA SVARET från AI-artefakter
+            description = ai_response.strip()
+            
+            # Ta bort vanliga AI-prefixer och suffixer
+            prefixes_to_remove = [
+                "här är beskrivningen:",
+                "beskrivning:",
+                "quiz-beskrivning:",
+                "description:",
+                "här är en beskrivning:",
+                "beskrivningen är:",
+                "svaret är:",
+                "resultatet är:"
+            ]
+            
+            for prefix in prefixes_to_remove:
+                if description.lower().startswith(prefix):
+                    description = description[len(prefix):].strip()
+            
+            # Ta bort citattecken och onödiga tecken
+            description = description.replace('"', '').replace("'", "").replace('\n', ' ')
+            
+            # Ta bort AI-meta-text som "think" eller andra artefakter
+            if description.lower().startswith('<think>'):
+                # Hitta slutet på think-blocket och ta bort det
+                think_end = description.lower().find('</think>')
+                if think_end != -1:
+                    description = description[think_end + 8:].strip()
+                else:
+                    # Om inget slutmärke, ta bara bort början
+                    description = description[7:].strip()
+            
+            # Ta bort andra vanliga AI-artefakter
+            artifacts_to_remove = ['<think>', '</think>', '```', '---', '***']
+            for artifact in artifacts_to_remove:
+                description = description.replace(artifact, '').strip()
+            
+            # Ta bort text efter punkter som indikerar meta-kommentarer
+            meta_indicators = [
+                'observera att',
+                'notera att',
+                'kom ihåg att',
+                'viktigt att',
+                'tänk på att',
+                'detta är',
+                'beskrivningen'
+            ]
+            
+            words = description.split('.')
+            if len(words) > 1:
+                first_sentence = words[0].strip()
+                # Kontrollera om första meningen är ren beskrivning
+                if not any(indicator in first_sentence.lower() for indicator in meta_indicators):
+                    description = first_sentence
+            
+            # Säkerställ längd (150-250 tecken)
             if len(description) < 100:
-                # Om för kort, lägg till antal frågor info
-                description += f" Innehåller {question_count} frågor för grundlig träning."
-            elif len(description) > 300:
-                description = description[:297] + "..."
+                description += f" Innehåller {question_count} träningsfrågor för kunskapsförbättring."
+            elif len(description) > 250:
+                description = description[:247] + "..."
+            
+            # Final validering - se till att beskrivningen är meningsfull
+            if (len(description) < 50 or 
+                description.lower().startswith('okej') or 
+                description.lower().startswith('låt mig') or
+                'ai' in description.lower() or
+                'generera' in description.lower()):
+                raise Exception("AI generated meta-text instead of description")
                 
-            return description
+            return description.strip()
         else:
             raise Exception(f"API call failed with status {response.status_code}")
             
     except Exception as e:
         print(f"[ERROR] Failed to generate description for quiz {quiz.id}: {e}")
         # Förbättrad fallback beskrivning
-        question_count = len(quiz.get_questions()) if quiz.questions else 0
+        return generate_smart_fallback_description(quiz)
+
+
+def generate_smart_fallback_description(quiz):
+    """Generera en smart fallback-beskrivning baserat på frågorna"""
+    try:
+        questions = quiz.get_questions()
+        if not questions:
+            return f"{quiz.quiz_type.replace('-', ' ').title()} quiz - Inga frågor tillgängliga"
+        
+        question_count = len(questions)
         quiz_type_readable = quiz.quiz_type.replace('-', ' ').title()
         
-        if question_count == 0:
-            return f"{quiz_type_readable} quiz - Inga frågor tillgängliga än"
-        elif question_count <= 10:
-            return f"{quiz_type_readable} med {question_count} frågor för snabb kunskapsträning och repetition"
-        elif question_count <= 25:
-            return f"{quiz_type_readable} med {question_count} frågor för omfattande kunskapstest och fördjupad träning"
+        # Analysera frågorna för att hitta nyckelord och teman
+        question_texts = [q['question'].lower() for q in questions[:5]]
+        combined_text = " ".join(question_texts)
+        
+        # Definiera ämnesområden och deras nyckelord
+        subject_areas = {
+            'biologi': ['cell', 'dna', 'protein', 'organism', 'evolution', 'ecosystem', 'photosynthesis', 
+                       'membrane', 'mitosis', 'genetics', 'species', 'bacteria', 'virus', 'enzyme'],
+            'matematik': ['equation', 'formula', 'calculate', 'solve', 'function', 'graph', 'derivative', 
+                         'integral', 'algebra', 'geometry', 'statistics', 'probability', 'logarithm'],
+            'historia': ['year', 'period', 'war', 'revolution', 'century', 'empire', 'king', 'democracy',
+                        'treaty', 'battle', 'civilization', 'ancient', 'medieval', 'renaissance'],
+            'kemi': ['atom', 'molecule', 'element', 'compound', 'reaction', 'acid', 'base', 'ion',
+                    'periodic', 'bond', 'solution', 'ph', 'electron', 'neutron'],
+            'fysik': ['force', 'energy', 'mass', 'velocity', 'acceleration', 'gravity', 'wave',
+                     'light', 'electricity', 'magnetic', 'nuclear', 'quantum', 'momentum'],
+            'geografi': ['continent', 'country', 'capital', 'mountain', 'river', 'climate', 'population',
+                        'culture', 'economy', 'environment', 'urban', 'rural'],
+            'svenska': ['verb', 'noun', 'adjective', 'sentence', 'grammar', 'literature', 'author',
+                       'poem', 'novel', 'writing', 'language', 'syntax']
+        }
+        
+        # Hitta matchande ämnesområden
+        detected_subjects = []
+        for subject, keywords in subject_areas.items():
+            matches = sum(1 for keyword in keywords if keyword in combined_text)
+            if matches >= 2:  # Kräv minst 2 matchningar
+                detected_subjects.append((subject, matches))
+        
+        # Sortera efter antal matchningar
+        detected_subjects.sort(key=lambda x: x[1], reverse=True)
+        
+        # Bygg beskrivning baserat på detekterade ämnen
+        if detected_subjects:
+            primary_subject = detected_subjects[0][0]
+            
+            subject_descriptions = {
+                'biologi': f"Täcker grundläggande biologiska koncept och processer",
+                'matematik': f"Tränar matematiska beräkningar och problemlösning",
+                'historia': f"Behandlar historiska händelser och tidsperioder",
+                'kemi': f"Fokuserar på kemiska reaktioner och ämnesegenskaper",
+                'fysik': f"Undersöker fysikaliska lagar och fenomen",
+                'geografi': f"Utforskar geografiska fakta och platser",
+                'svenska': f"Tränar språkkunskap och grammatik"
+            }
+            
+            base_desc = subject_descriptions.get(primary_subject, "Täcker viktiga kunskapsområden")
+            
+            # Lägg till information om omfattning
+            if question_count <= 10:
+                scope = "för snabb repetition och grundläggande förståelse"
+            elif question_count <= 25:
+                scope = "för omfattande träning och fördjupad kunskap"
+            else:
+                scope = "för grundlig genomgång och expertutbildning"
+                
+            return f"{base_desc} med {question_count} frågor {scope}."
+            
         else:
-            return f"{quiz_type_readable} med {question_count} frågor för fullständig genomgång och fördjupad kunskapsbearbeitung"
+            # Generisk men informativ beskrivning
+            if question_count <= 10:
+                return f"Kompakt {quiz_type_readable.lower()} med {question_count} välformulerade frågor för effektiv kunskapsträning"
+            elif question_count <= 25:
+                return f"Omfattande {quiz_type_readable.lower()} med {question_count} frågor för djupgående ämnesförståelse"
+            else:
+                return f"Heltäckande {quiz_type_readable.lower()} med {question_count} frågor för fullständig kunskapsgenomgång"
+                
+    except Exception as e:
+        print(f"[ERROR] Fallback description generation failed: {e}")
+        question_count = len(quiz.get_questions()) if quiz.questions else 0
+        return f"{quiz.quiz_type.replace('-', ' ').title()} med {question_count} frågor för kunskapsträning"
 
 
 
@@ -3106,60 +3243,41 @@ def migrate_add_display_description():
 
 def generate_quiz_description_sync(quiz):
     """
-    Generera beskrivning synkront (för migration) - uppdaterad version
+    Synkron version för migration - använder samma förbättrade logik
+    """
+    return generate_quiz_description(quiz)
+
+
+# Hjälpfunktion för att regenerera alla beskrivningar
+def regenerate_all_descriptions():
+    """
+    Kör denna för att regenerera alla quiz-beskrivningar med den nya logiken
     """
     try:
-        questions = quiz.get_questions()
+        all_quizzes = Quiz.query.all()
+        updated_count = 0
+        failed_count = 0
         
-        if not questions or len(questions) == 0:
-            return f"{quiz.quiz_type.replace('-', ' ').title()} quiz med 0 frågor"
+        for quiz in all_quizzes:
+            try:
+                print(f"[INFO] Regenerating description for quiz {quiz.id}: {quiz.title}")
+                new_description = generate_quiz_description(quiz)
+                quiz.display_description = new_description
+                db.session.add(quiz)
+                updated_count += 1
+                print(f"[SUCCESS] Updated quiz {quiz.id}: {new_description[:50]}...")
+            except Exception as e:
+                print(f"[ERROR] Failed to update quiz {quiz.id}: {e}")
+                failed_count += 1
         
-        question_count = len(questions)
+        db.session.commit()
+        print(f"[COMPLETE] Updated {updated_count} descriptions, {failed_count} failed")
+        return updated_count, failed_count
         
-        # Ta flera exempel frågor för bättre analys
-        sample_questions = questions[:3]
-        questions_text = []
-        
-        for q in sample_questions:
-            q_text = q['question'][:120] + "..." if len(q['question']) > 120 else q['question']
-            questions_text.append(f"Q: {q_text}")
-        
-        content = "\n".join(questions_text)
-        
-        prompt = f"""Skriv en informativ beskrivning på svenska (150-220 tecken) som förklarar vad detta quiz täcker och vad studenten kommer att lära sig:
-
-{content}
-
-Quiz: {quiz.quiz_type} med {question_count} frågor
-
-Fokusera på ämnesområden och lärandemål. Svara endast med beskrivningen."""
-        
-        response = requests.post(
-            "https://ai.hackclub.com/chat/completions",
-            json={"messages": [{"role": "user", "content": prompt}]},
-            headers={"Content-Type": "application/json"},
-            timeout=25
-        )
-        
-        if response.ok:
-            ai_response = response.json().get("choices", [])[0].get("message", {}).get("content", "")
-            description = ai_response.strip().replace('\n', ' ').replace('"', '')
-            
-            # Säkerställ längd
-            if len(description) < 100:
-                description += f" {question_count} frågor för träning."
-            elif len(description) > 250:
-                description = description[:247] + "..."
-                
-            return description
-        else:
-            raise Exception(f"API call failed with status {response.status_code}")
-            
     except Exception as e:
-        print(f"[ERROR] Failed to generate description for quiz {quiz.id}: {e}")
-        question_count = len(quiz.get_questions()) if quiz.questions else 0
-        quiz_type_readable = quiz.quiz_type.replace('-', ' ').title()
-        return f"{quiz_type_readable} med {question_count} frågor för kunskapsträning och repetition"
+        print(f"[ERROR] Batch regeneration failed: {e}")
+        db.session.rollback()
+        return 0, 0
 
 def generate_fallback_description(quiz):
     """Generera en bättre fallback-beskrivning baserat på frågorna"""
