@@ -86,7 +86,7 @@
       <label class="checkbox-label">
         <input type="checkbox" name="use_documents" id="use_documents" checked>
         <span class="checkbox-text">
-          Använd kunskapsplan/kunkapsmål/begreppslista
+          Basera quizet på uppladdade kunskapsplaner
           <small class="help-text">
           </small>
         </span>
@@ -126,7 +126,7 @@
 
   <!-- Quiz Title -->
   <div class="form-group">
-    <label for="quiz_title">Quiz Titel:</label>
+    <label for="quiz_title">Titel:</label>
     <input type="text" name="quiz_title" id="quiz_title">
   </div>
 
@@ -647,6 +647,29 @@ document.addEventListener('DOMContentLoaded', function() {
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s ease;
+}
+
+
+/* Se till att ai-options kör kolumnlayout och stretchar barnen i bredd */
+#ai-options {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Alla textarea i ai-options får max‑bredd 100 % och box‑sizing */
+#ai-options textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box; /* padding och border räknas in i width */
+  display: block;         /* säkerställer att den bryter rad */
+}
+
+/* Om du använder en särskild klass (t.ex. .input-description), kan du göra så här: */
+#ai-options .input-description {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .submit-btn:hover {
