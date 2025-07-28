@@ -5381,36 +5381,43 @@ def get_due_flashcards_today():
 
 
 
-@app.route('/subject/<subject_name>/delete_quiz/<int:quiz_index>', methods=['POST'])
+@app.route('/subject/<subject_name>/delete_quiz/<int:quiz_id>', methods=['POST'])
 @login_required
-def delete_quiz(subject_name, quiz_index):
+def delete_quiz(subject_name, quiz_id):
+    """
+    Förbättrad quiz-radering som använder quiz ID istället för index
+    """
     try:
         # Hämta subject
         subject_obj = Subject.query.filter_by(name=subject_name).first()
         if not subject_obj:
             flash("Subject not found.", "error")
             return redirect(url_for('index'))
-
-        # Kolla att användaren är medlem eller ägare
+        
+        # Kolla att användaren är medlem eller ägare av ämnet
         if not current_user.is_member_of_subject(subject_obj.id) and current_user.id != subject_obj.creator_id:
             flash('Du har inte tillgång till detta ämne', 'error')
             return redirect(url_for('index'))
-
-        # Hämta quiz via subject och offset
-        quiz_to_delete = Quiz.query.filter_by(subject_id=subject_obj.id).offset(quiz_index).first()
-
+        
+        # Hämta quiz direkt via ID istället för offset
+        quiz_to_delete = Quiz.query.filter_by(
+            id=quiz_id,
+            subject_id=subject_obj.id
+        ).first()
+        
         if not quiz_to_delete:
             flash("Quiz not found.", "error")
             return redirect(url_for('subject', subject_name=subject_name))
-
-        # Säkerhetskontroll: Är användaren skapare?
-        if quiz_to_delete.user_id != current_user.id:
-            flash("Du kan bara ta bort dina egna quiz.", "error")
+        
+        # Säkerhetskontroll: Endast skapare av quiz kan radera det
+        # ELLER ägare av ämnet kan radera alla quiz i sitt ämne
+        if quiz_to_delete.user_id != current_user.id and current_user.id != subject_obj.creator_id:
+            flash("Du kan bara ta bort dina egna quiz, eller som ägare av ämnet kan du ta bort alla quiz.", "error")
             return redirect(url_for('subject', subject_name=subject_name))
-
+        
         # Ta bort associerade flashcards INNAN vi tar bort quiz
         delete_flashcards_for_quiz(quiz_to_delete)
-
+        
         # Ta bort associerade filer om de finns
         files = quiz_to_delete.files
         if isinstance(files, str):
@@ -5426,21 +5433,20 @@ def delete_quiz(subject_name, quiz_index):
                         os.remove(file_path)
                 except Exception as e:
                     print(f"Warning: Could not delete file {file_path}: {e}")
-
-        # OK – ta bort quiz
+        
+        # Ta bort quiz
         quiz_title = quiz_to_delete.title
         db.session.delete(quiz_to_delete)
         db.session.commit()
+        
         flash(f"Quiz '{quiz_title}' borttaget.", "success")
-
+        
     except Exception as e:
         print(f"[ERROR] Failed to delete quiz: {e}")
         flash("Ett fel uppstod vid borttagning.", "error")
         db.session.rollback()
-
+    
     return redirect(url_for('subject', subject_name=subject_name))
-
-
 
 
 @app.route('/subject/<subject_name>/flashcards')
