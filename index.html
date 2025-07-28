@@ -58,10 +58,10 @@
     </svg>
 
     <form method="POST" action="{{ url_for('logout') }}" style="display: inline;">
-      <button type="submit" class="logout-btn">LOG OUT</button>
+      <button type="submit" class="logout-btn">LOGGA UT</button>
     </form>
 
-    <button id="btn-2" class="head-btn">CALENDAR</button>
+    <button id="btn-2" class="head-btn">KALENDER</button>
 
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="user_icon" role="img" aria-label="User Icon">
       <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
@@ -181,7 +181,7 @@
         <!-- Show message if no subjects -->
         {% if not owned_subjects and not shared_subjects %}
           <div class="no-subjects-message">
-            <p>No subjects yet. Create your first subject or join an existing one!</p>
+            <p>Inga ämnen här. Skapa ditt första ämne eller anslut till ett!</p>
           </div>
         {% endif %}
       </div>
@@ -190,7 +190,7 @@
     <div class="right-container">
       <div class="right-quiz-btn-container">
         <a href="{{ url_for('create_quiz') }}">
-          <button id="right-quiz-btn">Create Quiz</button>
+          <button id="right-quiz-btn">Skapa Quiz</button>
         </a>
       </div>
       <div class="products-header" id="date-header">
@@ -212,18 +212,18 @@
   <div id="subjects-detail-modal" class="modal">
     <div class="modal-content">
       <span class="close">&times;</span>
-      <h2>Subject Management</h2>
+      <h2>Ämnes Management</h2>
       
       <!-- Owned Subjects -->
       {% if owned_subjects %}
       <div class="subjects-section">
-        <h3>My Subjects</h3>
+        <h3>Mina Ämnen</h3>
         <div class="subjects-grid">
           {% for subject in owned_subjects %}
           <div class="subject-card owned-subject">
             <div class="subject-header">
               <h4>{{ subject.name }}</h4>
-              <span class="subject-role owner">Owner</span>
+              <span class="subject-role owner">Skapare</span>
             </div>
             <div class="subject-stats">
               <span class="stat">{{ subject.quiz_count }} quizzes</span>
@@ -238,7 +238,7 @@
                 {% if subject.is_shared %}Disable Sharing{% else %}Enable Sharing{% endif %}
               </button>
               {% if subject.is_shared %}
-              <button class="btn btn-info" onclick="showShareCode('{{ subject.share_code }}')">Show Code</button>
+              <button class="btn btn-info" onclick="showShareCode('{{ subject.share_code }}')">Visa Kod</button>
               {% endif %}
             </div>
           </div>
@@ -250,13 +250,13 @@
       <!-- Shared Subjects -->
       {% if shared_subjects %}
       <div class="subjects-section">
-        <h3>Shared Subjects</h3>
+        <h3>Delad Ämnen</h3>
         <div class="subjects-grid">
           {% for subject in shared_subjects %}
           <div class="subject-card shared-subject">
             <div class="subject-header">
               <h4>{{ subject.name }}</h4>
-              <span class="subject-role member">Member</span>
+              <span class="subject-role member">Medlem</span>
             </div>
             <div class="subject-stats">
               <span class="stat">{{ subject.quiz_count }} quizzes</span>
@@ -266,8 +266,8 @@
               {% endif %}
             </div>
             <div class="subject-actions">
-              <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Open</a>
-              <button class="btn btn-danger" onclick="leaveSubject({{ subject.id }})">Leave</button>
+              <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Öppna</a>
+              <button class="btn btn-danger" onclick="leaveSubject({{ subject.id }})">Lämna</button>
             </div>
           </div>
           {% endfor %}
@@ -277,7 +277,7 @@
 
       {% if not owned_subjects and not shared_subjects %}
       <div class="no-subjects">
-        <p>No subjects yet. Create your first subject or join an existing one!</p>
+        <p>Inga ämnen än. Skapa ditt första eller anslut till ett!</p>
       </div>
       {% endif %}
     </div>
@@ -287,8 +287,8 @@
   <div id="share-code-modal" class="modal">
     <div class="modal-content">
       <span class="close">&times;</span>
-      <h3>Share Code</h3>
-      <p>Share this code with others so they can join your subject:</p>
+      <h3>Delningskod</h3>
+      <p>Dela denna kod med andra så att de kan ansluta sig:</p>
       <div class="share-code-display">
         <input type="text" id="share-code-text" readonly>
         <button onclick="copyShareCode()">Copy</button>
@@ -347,7 +347,7 @@
   <div id="calendar-modal" class="modal">
     <div class="calendar-content">
       <span class="calendar-close">&times;</span>
-      <h2>Calendar</h2>
+      <h2>Kalender</h2>
 
       <div class="calendar-header">
         <button id="prev-month-btn">&lt;</button>
@@ -359,7 +359,7 @@
         <table id="calendar-table">
           <thead>
             <tr>
-              <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+              <th>Må</th><th>Ti</th><th>On</th><th>To</th><th>Fr</th><th>Lö</th><th>Sö</th>
             </tr>
           </thead>
           <tbody id="calendar-body">
@@ -368,7 +368,7 @@
 
         <div id="events-display" class="events-display" style="display: none;">
           <div class="events-header">
-            <h3 id="selected-date-title">Events for [Date]</h3>
+            <h3 id="selected-date-title">Händelser under [Date]</h3>
             <button id="close-events-display" class="close-events-btn">&times;</button>
           </div>
           <div id="events-list" class="events-list">
@@ -381,13 +381,13 @@
 
   <div id="add-event-modal" class="modal-a">
   <button id="add-event-modal-close">&times;</button>
-  <h2 id="add-event-title">Add event</h2>
+  <h2 id="add-event-title">Lägg till händelse</h2>
 
   <!-- Subject Dropdown -->
   <div class="form-group">
-    <label for="subject-select">Choose a subject:</label>
+    <label for="subject-select">Välj ett Ämne:</label>
     <select id="subject-select" required class="subject-select">
-      <option value="" disabled selected hidden>Select a subject</option>
+      <option value="" disabled selected hidden>Välj ett Ämne</option>
       {% for subject in owned_subjects %}
         <option value="{{ subject.name }}" data-user-role="owner">{{ subject.name }}</option>
       {% endfor %}
@@ -399,41 +399,40 @@
 
   <!-- Test Type Dropdown -->
   <div class="form-group">
-    <label for="test-type-select">Choose test type:</label>
+    <label for="test-type-select">Välj typ av test</label>
     <select id="test-type-select" required class="test-type-select">
-      <option value="" disabled selected hidden>Select test type</option>
-      <option value="test">Test</option>
-      <option value="assessment">Assessment</option>
-      <option value="exam">Exam</option>
+      <option value="" disabled selected hidden>Välj typ av test</option>
+      <option value="assessment">Inlämning</option>
+      <option value="exam">Prov</option>
       <option value="quiz">Quiz</option>
     </select>
   </div>
   
   <!-- Event Title Input -->
   <div class="form-group">
-    <label for="event-title">Event Title:</label>
-    <input type="text" id="event-title" placeholder="Enter event title" required>
+    <label for="event-title">Titel</label>
+    <input type="text" id="event-title" required>
   </div>
   
   <!-- Event Description Textarea -->
   <div class="form-group">
-    <label for="event-description">Description (optional):</label>
-    <textarea id="event-description" placeholder="Enter event description" rows="3"></textarea>
+    <label for="event-description">Beskrivning:</label>
+    <textarea id="event-description" rows="3"></textarea>
   </div>
 
   <!-- Share with Members Checkbox (endast för ägare) -->
   <div class="form-group" id="share-option-group" style="display: none;">
     <label class="checkbox-label">
       <input type="checkbox" id="share-with-members">
-      Share this event with all members of the subject
-      <span class="checkbox-info">Members will see this event in their calendars</span>
+      Dela denna händelse med alla medlemmar av ämnet
+      <span class="checkbox-info">Medlemmar kommer se händelsen i sina kalendrar</span>
     </label>
   </div>
   
   <!-- Action Buttons -->
   <div class="form-actions">
-    <button type="button" id="save-event-btn" class="save-btn">Save Event</button>
-    <button type="button" id="cancel-event-btn" class="cancel-btn">Cancel</button>
+    <button type="button" id="save-event-btn" class="save-btn">Spara Händelse</button>
+    <button type="button" id="cancel-event-btn" class="cancel-btn">Avbryt</button>
   </div>
 </div>
 
