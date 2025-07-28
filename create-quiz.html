@@ -53,14 +53,7 @@
         <input type="radio" name="quiz-drop" value="fifty" required>
         <span>50 Frågor</span>
       </label>
-      <label class="radio-option">
-        <input type="radio" name="quiz-drop" value="extended-response" required>
-        <span>Extended Response</span>
-      </label>
-      <label class="radio-option">
-        <input type="radio" name="quiz-drop" value="exam" required>
-        <span>Exam</span>
-      </label>
+      
     </div>
   </div>
 
@@ -93,9 +86,8 @@
       <label class="checkbox-label">
         <input type="checkbox" name="use_documents" id="use_documents" checked>
         <span class="checkbox-text">
-          Använd ämnets kunkapsplan/kunkapsmål/begreppslista
+          Använd kunskapsplan/kunkapsmål/begreppslista
           <small class="help-text">
-            Include begrippslista, kunskapskrav, and kunskapsmål in quiz generation
           </small>
         </span>
       </label>
@@ -103,8 +95,8 @@
 
     <!-- Quiz Description for AI -->
     <div class="form-group">
-      <label for="quiz-description">AI Instruktioner (frivilligt))</label>
-      <textarea name="quiz-description" id="quiz-description" placeholder="Describe what this quiz should cover..."></textarea>
+      <label for="quiz-description">AI Instruktioner:</label>
+      <textarea name="quiz-description" id="quiz-description" placeholder=""></textarea>
     </div>
   </div>
 
@@ -134,8 +126,8 @@
 
   <!-- Quiz Title -->
   <div class="form-group">
-    <label for="quiz_title">Quiz Titel (frivilligt):</label>
-    <input type="text" name="quiz_title" id="quiz_title" placeholder="Leave blank for auto-generated title">
+    <label for="quiz_title">Quiz Titel:</label>
+    <input type="text" name="quiz_title" id="quiz_title">
   </div>
 
   <!-- Create Flashcards Checkbox -->
@@ -248,21 +240,21 @@ document.addEventListener('DOMContentLoaded', function() {
     
     questionDiv.innerHTML = `
       <div class="question-header">
-        <h4>Question ${currentQuestionCount}</h4>
+        <h4>Fråga ${currentQuestionCount}</h4>
         ${currentQuestionCount > 1 ? '<button type="button" class="remove-question-btn">×</button>' : ''}
       </div>
       <div class="question-input-group">
-        <label for="manual_question_${currentQuestionCount}">Question:</label>
+        <label for="manual_question_${currentQuestionCount}">Fråga:</label>
         <textarea name="manual_questions[${currentQuestionCount - 1}][question]" 
                   id="manual_question_${currentQuestionCount}" 
-                  placeholder="Enter your question here..." 
+                  placeholder="Skriv frågan här"..." 
                   required></textarea>
       </div>
       <div class="answer-input-group">
-        <label for="manual_answer_${currentQuestionCount}">Answer:</label>
+        <label for="manual_answer_${currentQuestionCount}">Svar:</label>
         <textarea name="manual_questions[${currentQuestionCount - 1}][answer]" 
                   id="manual_answer_${currentQuestionCount}" 
-                  placeholder="Enter the answer here..." 
+                  placeholder="Skriv svaret här..." 
                   required></textarea>
       </div>
     `;
@@ -331,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   function updateAddButton() {
     addQuestionBtn.style.display = currentQuestionCount < maxQuestions ? 'inline-block' : 'none';
-    addQuestionBtn.textContent = `+ Add Question (${currentQuestionCount}/${maxQuestions})`;
+    addQuestionBtn.textContent = `+ Lägg till fråga (${currentQuestionCount}/${maxQuestions})`;
   }
   
   // Add question button handler
