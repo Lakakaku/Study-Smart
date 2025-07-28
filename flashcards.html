@@ -1,75 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Flashcards - {{ subject_name }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/flashcards_styles.css') }}" />
+<meta charset="UTF-8" />
+<title>Flashcards - {{ subject_name }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/flashcards_styles.css') }}" />
 </head>
 <body>
-  <a href="{{ url_for('subject', subject_name=subject_name) }}" class="return-button">← Return</a>
-
-  <div class="flashcard-container">
-    <div id="flashcard" class="card">
-      <div id="question"></div>
-      <button id="show-answer-btn" class="button">Show Answer</button>
-      <div id="answer"></div>
-
-      <div id="rating-section">
-        <p>Rate your confidence (1 = forgot, 4 = knew it):</p>
-        <div class="rating-buttons">
-          <button class="rating-btn" data-value="1">1</button>
-          <button class="rating-btn" data-value="2">2</button>
-          <button class="rating-btn" data-value="3">3</button>
-          <button class="rating-btn" data-value="4">4</button>
-        </div>
-        <button id="back-to-question-btn" class="button">← Back to Question</button>
-      </div>
-    </div>
-
-    <div class="navigation-buttons">
-      <button id="prev-btn" class="button">← Previous</button>
-    </div>
-  </div>
-
-  <script>
-    const subjectName = {{ subject_name|tojson }};
-    const quizTitle = {{ quiz_title|tojson }};
-    const questions = {{ questions|tojson }};
-  </script>
-  <script src="{{ url_for('static', filename='js/flashcards.js') }}">
-    function handleComplete() {
-        if (typeof window.handleQuizCompletion === 'function') {
-            const responses = [];
-        
-            for (let i = 0; i < totalQuestions; i++) {
-                if (questionResponses[i]) {
-                    responses.push({
-                        question: questionResponses[i].question,
-                        rating: questionResponses[i].rating,
-                        time_taken: questionResponses[i].timeTaken
-                    });
-                }
-            }
-        
-            console.log('[DEBUG] Sending responses:', responses);
-        
-            // Använd den globala funktionen från index.html
-            window.handleQuizCompletion(subjectName, quizTitle, responses)
-                .then(data => {
-                    console.log('[SUCCESS] Quiz completion handled:', data);
-                // Gå tillbaka till huvudsidan efter framgångsrik uppdatering
-                    setTimeout(() => {
-                        window.location.href = '/';
-                    }, 2000);
-                })
-                .catch(error => {
-                    console.error('[ERROR] Failed to handle quiz completion:', error);
-                });
-        } else {
-            console.log('[WARNING] handleQuizCompletion function not found');
-            alert('Quiz completed locally!');
-        }
-    }
-  </script>
+<a href="{{ url_for('index') }}" class="return-button">← Tillbaka</a>
+<div class="flashcard-container">
+<div id="flashcard" class="card">
+<div id="question"></div>
+<button id="show-answer-btn" class="button">Visa Svar</button>
+<div id="answer"></div>
+<div id="rating-section">
+<p>Betygsätt din säkerhet (1 = glömt, 4 = visste det)</p>
+<div class="rating-buttons">
+<button class="rating-btn" data-value="1">1</button>
+<button class="rating-btn" data-value="2">2</button>
+<button class="rating-btn" data-value="3">3</button>
+<button class="rating-btn" data-value="4">4</button>
+</div>
+<button id="back-to-question-btn" class="button">← Tillbaka till Frågan</button>
+</div>
+</div>
+<div class="navigation-buttons">
+<button id="prev-btn" class="button">← Tidigare</button>
+</div>
+</div>
+<script>
+const subjectName = {{ subject_name|tojson }};
+const quizTitle = {{ quiz_title|tojson }};
+const questions = {{ questions|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/flashcards.js') }}">
+function handleComplete() {
+if (typeof window.handleQuizCompletion === 'function') {
+const responses = [];
+for (let i = 0; i < totalQuestions; i++) {
+if (questionResponses[i]) {
+responses.push({
+question: questionResponses[i].question,
+rating: questionResponses[i].rating,
+time_taken: questionResponses[i].timeTaken
+ });
+ }
+ }
+console.log('[DEBUG] Sending responses:', responses);
+// Använd den globala funktionen från index.html
+window.handleQuizCompletion(subjectName, quizTitle, responses)
+ .then(data => {
+console.log('[SUCCESS] Quiz completion handled:', data);
+// Gå tillbaka till huvudsidan efter framgångsrik uppdatering
+setTimeout(() => {
+window.location.href = '/';
+ }, 2000);
+ })
+ .catch(error => {
+console.error('[ERROR] Failed to handle quiz completion:', error);
+ });
+ } else {
+console.log('[WARNING] handleQuizCompletion function not found');
+alert('Quiz completed locally!');
+ }
+ }
+</script>
 </body>
 </html>
