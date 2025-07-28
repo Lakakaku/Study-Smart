@@ -2765,7 +2765,11 @@
                         documentItem.remove();
                         
                         // Check if no documents remain
-                        const remainingDocs = document.querySelectorAll('.document-item').length;
+                        const remainingDocs = Array.from(
+                          document.querySelectorAll('.document-item')
+                        ).map(el => ({ doc_type: el.dataset.docType }));
+                        updateDocTypeOptions(remainingDocs);
+                        // Uppdatera dropdownen
                         if (remainingDocs === 0) {
                             const container = document.getElementById('documents-container');
                             if (container) {
@@ -4802,97 +4806,7 @@ window.debugTranscription = debugTranscription;
         });
     }
 
-    // Remove krav document
-    async function removeKravDocument(docType, docId = null) {
-        const confirmMessage = `Are you sure you want to remove the ${docType} document?`;
-        if (!confirm(confirmMessage)) {
-            return;
-        }
-        
-        try {
-            showKravStatus(`Removing ${docType}...`, 'info');
-            
-            const requestData = {
-                subject: currentSubject,
-                type: docType
-            };
-            
-            if (docId) {
-                requestData.document_id = docId;
-            }
-            
-            const response = await fetch('/remove_krav_pdf', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestData)
-            });
-            
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                showKravStatus(`${docType} removed successfully!`, 'success');
-                
-                // Remove the document item from DOM
-                const documentItem = document.querySelector(`[data-doc-type="${docType}"]`);
-                if (documentItem) {
-                    documentItem.style.transition = 'opacity 0.3s ease';
-                    documentItem.style.opacity = '0';
-                    
-                    setTimeout(() => {
-                        documentItem.remove();
-                        
-                        // Check if no documents remain
-                        const remainingDocs = document.querySelectorAll('.document-item').length;
-                        if (remainingDocs === 0) {
-                            const container = document.getElementById('documents-container');
-                            if (container) {
-                                container.innerHTML = '<p>Inga dokument uppladdade än.</p>';
-                            }
-                        }
-                    }, 300);
-                }
-                
-            } else {
-                throw new Error(data.message || 'Removal failed');
-            }
-            
-        } catch (error) {
-            console.error('Krav document removal error:', error);
-            showKravStatus(`Removal failed: ${error.message}`, 'error');
-        }
-    }
-
-    // Load existing krav documents
-    async function loadExistingKravDocuments() {
-        try {
-            const response = await fetch(`/api/krav_documents/${encodeURIComponent(currentSubject)}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                updateKravDocumentsDisplay(data.documents || []);
-            } else {
-                console.error('Failed to load krav documents:', data.message);
-                // If API endpoint doesn't exist, try to use the initial data from template
-                if (typeof initialDocuments !== 'undefined') {
-                    updateKravDocumentsDisplay(initialDocuments);
-                }
-            }
-            
-        } catch (error) {
-            console.error('Error loading krav documents:', error);
-            // Fallback to initial data if available
-            if (typeof initialDocuments !== 'undefined') {
-                updateKravDocumentsDisplay(initialDocuments);
-            }
-        }
-    }
+    
 
     // Refresh krav documents display
     async function refreshKravDocuments() {
