@@ -2869,7 +2869,52 @@
         }).join('');
         
         container.innerHTML = documentsHtml;
+        updateDocTypeOptions(documents);
     }
+
+
+    /**
+     * Uppdaterar alternativen i dokument-typen baserat på vilka dokument som redan finns.
+     * @param {Array} documents - Array av dokument-objekt med fältet doc_type.
+     */
+    function updateDocTypeOptions(documents) {
+        const selector = document.getElementById('document-type');
+        if (!selector) return;
+
+        // Tillåtna typer
+        const allowedTypes = [
+            { value: 'begrippslista', label: 'Begreppslista' },
+            { value: 'kunskapskrav', label: 'Kunskapskrav' },
+            { value: 'kunskapsmal',   label: 'Kunskapsmål' }
+        ];
+
+        // Rensa gamla options
+        selector.innerHTML = '';
+
+        // Lägg bara till typer som inte finns i documents
+        allowedTypes.forEach(typeObj => {
+            const exists = documents.some(doc => doc.doc_type === typeObj.value);
+            if (!exists) {
+                const opt = document.createElement('option');
+                opt.value = typeObj.value;
+                opt.textContent = typeObj.label;
+                selector.appendChild(opt);
+            }
+        });
+
+        // Om inga typer är kvar, disablea både select och upload-input
+        const pdfInput = document.getElementById('pdf-upload');
+        if (selector.options.length === 0) {
+            selector.disabled = true;
+            if (pdfInput) pdfInput.disabled = true;
+        } else {
+            selector.disabled = false;
+            if (pdfInput) pdfInput.disabled = false;
+        }
+    }
+
+
+
 
     // Show krav status messages
     function showKravStatus(message, type = 'info') {
@@ -4854,56 +4899,7 @@ window.debugTranscription = debugTranscription;
         await loadExistingKravDocuments();
     }
 
-    // Update krav documents display
-    function updateKravDocumentsDisplay(documents) {
-        const container = document.getElementById('documents-container');
-        if (!container) return;
-        
-        if (!documents || documents.length === 0) {
-            container.innerHTML = '<p>Inga dokument uppladdade än.</p>';
-            return;
-        }
-        
-        const documentsHtml = documents.map(doc => {
-            // Create the file URL - try multiple possible URL patterns
-            let fileUrl = '';
-            if (doc.file_url) {
-                fileUrl = doc.file_url;
-            } else if (doc.doc_type && currentSubject) {
-                // Fallback to the pattern used in the template
-                fileUrl = `/static/uploads/krav/${currentUserId}/${encodeURIComponent(currentSubject)}/${doc.doc_type}.pdf`;
-            }
-            
-            return `
-                <div class="document-item" data-doc-type="${escapeHtml(doc.doc_type)}">
-                    ${userRole === 'owner' || userRole === 'admin' ? `
-                        <button class="remove-document"
-                                data-doc-type="${escapeHtml(doc.doc_type)}"
-                                data-doc-id="${doc.id || ''}">×</button>
-                    ` : ''}
-                    <div class="document-header">
-                        <span class="document-title">
-                            ${escapeHtml(doc.doc_type.charAt(0).toUpperCase() + doc.doc_type.slice(1))}
-                        </span>
-                    </div>
-                    <div class="document-preview">
-                        <iframe
-                            src="${escapeHtml(fileUrl)}"
-                            width="100%"
-                            height="300px"
-                            style="border:1px solid #ccc;"
-                            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                        </iframe>
-                        <div style="display:none; padding:20px; text-align:center; color:#666; border:1px solid #ccc;">
-                            Document could not be loaded
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-        container.innerHTML = documentsHtml;
-    }
+   
 
     // Show krav status messages
     function showKravStatus(message, type = 'info') {
@@ -4968,6 +4964,10 @@ window.debugTranscription = debugTranscription;
     document.addEventListener('DOMContentLoaded', function() {
         if (typeof userRole !== 'undefined' && (userRole === 'owner' || userRole === 'admin')) {
             initializeKravDocuments();
+            if (typeof initialDocuments !== 'undefined') {
+             updateDocTypeOptions(initialDocuments);
+            }
+
         }
     });
 
