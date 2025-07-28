@@ -2092,6 +2092,7 @@
       {% if quizzes %}
         <div class="quiz-grid">
           
+          <!-- Uppdaterad HTML för quiz-korten -->
           {% for quiz in quizzes %}
           <div class="quiz-card">
             <div class="quiz-header">
@@ -2125,7 +2126,7 @@
             </div>
             {% endif %}
 
-            <!-- Quiz info och actions - alla inuti kortet -->
+            <!-- Quiz info och actions -->
             <div class="quiz-info">
               <small class="created-info">
                 Skapad {{ quiz.created_at[:10] if quiz.created_at else 'Okänt datum' }}
@@ -2134,13 +2135,13 @@
                 {% endif %}
               </small>
 
-              <!-- Delete-knappen (endast för quiz-ägaren) -->
+              <!-- Delete-knappen - ändrad för att använda quiz ID -->
               <div class="quiz-actions">
-                {% if quiz.user_id == current_user.id %}
+                {% if quiz.user_id == current_user.id or user_role == 'owner' %}
                 <form method="POST"
                       action="{{ url_for('delete_quiz',
                                         subject_name=subject_name,
-                                        quiz_index=loop.index0) }}"
+                                        quiz_id=quiz.id) }}"
                       class="delete-form"
                       onsubmit="return confirm('Är du säker på att du vill ta bort detta quiz?');">
                     <button type="submit" class="quiz-action-btn delete">Ta bort</button>
