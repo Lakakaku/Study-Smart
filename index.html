@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   
-  // Update the loadQuizzesForDate function to include leave quiz buttons
+  // Update the loadQuizzesForDate function to only show Leave Quiz for shared quizzes
   async function loadQuizzesForDate() {
       // Hämta alltid senaste schemat
       await fetchSchedule();
@@ -483,7 +483,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   questions: [],
                   user_role: e.user_role || 'unknown',
                   is_shared_subject: e.is_shared_subject || false,
-                  quiz_id: e.quiz_id || null
+                  quiz_id: e.quiz_id || null,
+                  is_personal_quiz: e.is_personal_quiz || false // Add this field
               };
           }
           
@@ -506,15 +507,24 @@ document.addEventListener('DOMContentLoaded', () => {
           const card = document.createElement('div');
           card.className = 'quiz-card';
           
-          // Determine if user can leave this quiz (members of shared subjects only)
-          const canLeave = qz.user_role === 'member' && qz.is_shared_subject;
+          // FIXED: Only allow leaving shared quizzes, not personal ones
+          // Members can only leave quizzes that are:
+          // 1. From shared subjects (is_shared_subject = true)
+          // 2. Created by subject owner (not personal quizzes, is_personal_quiz = false)
+          // 3. User is a member (not owner)
+          const canLeave = qz.user_role === 'member' && 
+                          qz.is_shared_subject && 
+                          !qz.is_personal_quiz && 
+                          qz.quiz_id; // Must have a valid quiz_id
+          
+          console.log(`[DEBUG] Quiz: ${qz.topic}, canLeave: ${canLeave}, user_role: ${qz.user_role}, is_shared_subject: ${qz.is_shared_subject}, is_personal_quiz: ${qz.is_personal_quiz}, quiz_id: ${qz.quiz_id}`);
           
           card.innerHTML = `
               <h3>${qz.subject} – ${qz.topic}</h3>
               <p>${qz.count} question${qz.count > 1 ? 's' : ''}</p>
               <div class="quiz-actions">
                   <a href="${link}"><button class="start-quiz-btn">Start Quiz</button></a>
-                  ${canLeave ? `<button class="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this quiz">Leave Quiz</button>` : ''}
+                  ${canLeave ? `<button class="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this shared quiz">Leave Quiz</button>` : ''}
               </div>
           `;
           container.appendChild(card);
