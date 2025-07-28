@@ -2,6 +2,8 @@
 <!-- index.html: -->
 
 
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,6 +12,38 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/index_styles.css') }}" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js" defer></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <style>
+    /* SweetAlert2 custom styling */
+    .my-swal-popup {
+      border-radius: 12px;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+    }
+    .my-confirm-btn {
+      background-color: #4f46e5;
+      color: white;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-weight: 600;
+    }
+    .my-cancel-btn {
+      color: #6b7280;
+      background-color: #f3f4f6;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-weight: 600;
+    }
+    .my-delete-btn {
+      background-color: #dc2626;
+      color: white;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-weight: 600;
+    }
+  </style>
+
 </head>
 
 <body>
@@ -116,9 +150,9 @@
             </a>
             
             <!-- Delete button with proper event handling -->
-            <form method="POST" action="{{ url_for('delete_subject') }}" class="delete-form" onsubmit="return confirmDelete('{{ subject.name }}')">
+            <form method="POST" action="{{ url_for('delete_subject') }}" class="delete-form" onsubmit="return false;">
               <input type="hidden" name="subject" value="{{ subject.name }}" />
-              <button type="submit" class="delete-subject-btn" title="Remove subject" onclick="event.stopPropagation();">×</button>
+              <button type="button" class="delete-subject-btn" title="Remove subject" onclick="event.stopPropagation(); confirmDelete('{{ subject.name }}', this.closest('form'));">×</button>
             </form>
           </div>
         {% endfor %}
@@ -140,8 +174,8 @@
             </a>
             
             <!-- Leave button with proper event handling -->
-            <form method="POST" action="{{ url_for('leave_subject', subject_id=subject.id) }}" class="delete-form" onsubmit="return confirmLeave('{{ subject.name }}')">
-              <button type="submit" class="leave-subject-btn" title="Leave subject" onclick="event.stopPropagation();">⤷</button>
+            <form method="POST" action="{{ url_for('leave_subject', subject_id=subject.id) }}" class="delete-form" onsubmit="return false;">
+              <button type="button" class="leave-subject-btn" title="Leave subject" onclick="event.stopPropagation(); confirmLeave('{{ subject.name }}', this.closest('form'));">⤷</button>
             </form>
           </div>
         {% endfor %}
@@ -706,25 +740,32 @@ document.addEventListener('DOMContentLoaded', () => {
     eventsDisplay.style.display = 'block';
   }
 
-  async function showConfirm(title, message) {
-    const dialog = document.getElementById('confirmDialog');
-    document.getElementById('dialogTitle').textContent = title;
-    document.getElementById('dialogMessage').innerHTML = message;
-    dialog.showModal();
-    return new Promise(resolve => {
-      dialog.addEventListener('close', () => {
-        resolve(dialog.returnValue === 'default'); // default är OK-knappen
-      }, { once: true });
-    });
-  }
+
 
   // Function to handle leaving a quiz (for members only)
   window.leaveQuiz = async function(subject, topic, quizId) {
-    const msg = `
-      Vill du lämna quizet "<strong>${topic}</strong>" i ämnet "<strong>${subject}</strong>"?<br>
-      Detta kommer ta bort flashcards och repetitionsschema.`;
-    const ok = await showConfirm('Är du säker?', msg);
-    if (!ok) return;
+      const result = await Swal.fire({
+        title: 'Är du säker?',
+        html: `
+          Vill du lämna quizet "<strong>${topic}</strong>" i ämnet "<strong>${subject}</strong>"?<br><br>
+          <ul style="text-align:left">
+            <li>Alla dina flashcards försvinner</li>
+            <li>Det tas bort från din repetitionsplan</li>
+            <li>Åtgärden går inte att ångra</li>
+          </ul>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ja, lämna',
+        cancelButtonText: 'Nej, stanna kvar',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn',
+          cancelButton: 'my-cancel-btn'
+        }
+      });
+
+      if (!result.isConfirmed) return;
       
       try {
           const response = await fetch('/api/leave_quiz', {
@@ -742,25 +783,42 @@ document.addEventListener('DOMContentLoaded', () => {
           const data = await response.json();
           
           if (response.ok && data.status === 'success') {
-              alert(data.message);
+              await Swal.fire({
+                title: 'Klart!',
+                text: data.message,
+                icon: 'success',
+                customClass: {
+                  popup: 'my-swal-popup',
+                  confirmButton: 'my-confirm-btn'
+                }
+              });
               // Refresh the page to update the quiz list
               await fetchSchedule();
               await loadQuizzesForDate();
           } else {
-              alert(data.error || 'Failed to leave quiz');
+              await Swal.fire({
+                title: 'Fel!',
+                text: data.error || 'Failed to leave quiz',
+                icon: 'error',
+                customClass: {
+                  popup: 'my-swal-popup',
+                  confirmButton: 'my-confirm-btn'
+                }
+              });
           }
       } catch (error) {
           console.error('Error leaving quiz:', error);
-          alert('Network error occurred while leaving quiz');
+          await Swal.fire({
+            title: 'Fel!',
+            text: 'Network error occurred while leaving quiz',
+            icon: 'error',
+            customClass: {
+              popup: 'my-swal-popup',
+              confirmButton: 'my-confirm-btn'
+            }
+          });
       }
   };
-
-  
-
-
-
-
-
 
   window.toggleEventSharing = async function(eventId, isCurrentlyShared) {
     try {
@@ -770,18 +828,42 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await response.json();
       if (response.ok && data.status === 'success') {
-        alert(data.message);
+        await Swal.fire({
+          title: 'Klart!',
+          text: data.message,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
         await loadEvents();
         renderCalendar(currentDate);
         if (eventsDisplay.style.display === 'block' && selectedDate) {
           displayEventsForDate(selectedDate);
         }
       } else {
-        alert(data.error || 'Failed to update sharing settings');
+        await Swal.fire({
+          title: 'Fel!',
+          text: data.error || 'Failed to update sharing settings',
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
       }
     } catch (error) {
       console.error('Error toggling event sharing:', error);
-      alert('Network error occurred while updating sharing settings');
+      await Swal.fire({
+        title: 'Fel!',
+        text: 'Network error occurred while updating sharing settings',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
     }
   };
 
@@ -802,7 +884,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   window.deleteEvent = async function(id) {
-    if (!confirm('Delete this event?')) return;
+    const result = await Swal.fire({
+      title: 'Ta bort event?',
+      text: 'Är du säker på att du vill ta bort detta event?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ja, ta bort',
+      cancelButtonText: 'Avbryt',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-delete-btn',
+        cancelButton: 'my-cancel-btn'
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
       const response = await fetch(`/api/events/${id}`, { 
         method: 'DELETE',
@@ -810,18 +907,42 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await response.json();
       if (response.ok && data.status === 'success') {
-        alert(data.message);
+        await Swal.fire({
+          title: 'Borttaget!',
+          text: data.message,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
         await loadEvents();
         renderCalendar(currentDate);
         if (eventsDisplay.style.display === 'block' && selectedDate) {
           displayEventsForDate(selectedDate);
         }
       } else {
-        alert(data.error || 'Failed to delete event');
+        await Swal.fire({
+          title: 'Fel!',
+          text: data.error || 'Failed to delete event',
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
       }
     } catch (error) {
       console.error('Error deleting event:', error);
-      alert('Network error occurred while deleting event');
+      await Swal.fire({
+        title: 'Fel!',
+        text: 'Network error occurred while deleting event',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
     }
   };
 
@@ -975,7 +1096,15 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(data => {
       console.log('[DEBUG] Response:', data);
       if (data.status === 'success') {
-        alert(`Quiz completed! Updated ${data.updated_count} questions.`);
+        Swal.fire({
+          title: 'Quiz slutfört!',
+          text: `Uppdaterade ${data.updated_count} frågor.`,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
         if (data.resolved_subject && data.resolved_topic) {
           console.log(`[DEBUG] Used subject: ${data.resolved_subject}, topic: ${data.resolved_topic}`);
         }
@@ -984,13 +1113,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return data;
       } else {
-        alert('Error: ' + (data.error || 'Unknown error'));
+        Swal.fire({
+          title: 'Fel!',
+          text: data.error || 'Unknown error',
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
         throw new Error(data.error || 'Unknown error');
       }
     })
     .catch(error => {
       console.error('Error:', error);
-      alert('Network error occurred');
+      Swal.fire({
+        title: 'Fel!',
+        text: 'Network error occurred',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
       throw error;
     });
   };
@@ -1026,15 +1171,40 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(response => response.json())
     .then(data => {
       if (data.status === 'success') {
-        alert(data.message);
-        location.reload(); // Reload page to show new subject
+        Swal.fire({
+          title: 'Klart!',
+          text: data.message,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        }).then(() => {
+          location.reload(); // Reload page to show new subject
+        });
       } else {
-        alert(data.message);
+        Swal.fire({
+          title: 'Fel!',
+          text: data.message,
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
       }
     })
     .catch(error => {
       console.error('Error:', error);
-      alert('An error occurred while creating the subject');
+      Swal.fire({
+        title: 'Fel!',
+        text: 'An error occurred while creating the subject',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
     });
   });
 
@@ -1056,15 +1226,40 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(response => response.json())
     .then(data => {
       if (data.status === 'success') {
-        alert(data.message);
-        location.reload(); // Reload page to show new subject
+        Swal.fire({
+          title: 'Klart!',
+          text: data.message,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        }).then(() => {
+          location.reload(); // Reload page to show new subject
+        });
       } else {
-        alert(data.message);
+        Swal.fire({
+          title: 'Fel!',
+          text: data.message,
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
       }
     })
     .catch(error => {
       console.error('Error:', error);
-      alert('An error occurred while joining the subject');
+      Swal.fire({
+        title: 'Fel!',
+        text: 'An error occurred while joining the subject',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
     });
   });
 
@@ -1074,43 +1269,6 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-  
-      const form = this.closest('form');
-      if (form) {
-      if (this.classList.contains('delete-subject-btn')) {
-          const subjectName = form.querySelector('input[name="subject"]').value;
-          if (confirmDelete(subjectName)) {
-            form.submit();
-          }
-        } else if (this.classList.contains('leave-subject-btn')) {
-          // For leave buttons, use AJAX instead of form submission
-          const formAction = form.action;
-          const subjectId = formAction.split('/').pop();
-      
-          if (confirm('Are you sure you want to leave this subject?')) {
-            fetch(formAction, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              }
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (data.status === 'success') {
-                alert(data.message);
-                // Reload the page to show updated subject list
-                window.location.reload();
-              } else {
-                alert(data.message);
-              }
-            })
-            .catch(error => {
-              console.error('Error:', error);
-              alert('An error occurred while leaving the subject');
-            });
-          }
-        }
-      }
     });
   });
 
@@ -1149,63 +1307,107 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ----------- Additional Functions from index.html -----------
 
-// Exempel på hur JavaScript bör hantera add_subject response
-function addSubject() {
-  const subjectName = document.getElementById('subject-name').value.trim();
-  const isShared = document.getElementById('is-shared').checked;
-
-  if (!subjectName) {
-    alert('Please enter a subject name');
-    return;
-  }
-
-  fetch('/add_subject', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: subjectName, is_shared: isShared })
-  })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        addSubjectToDOM(data.subject);
-        document.getElementById('subject-name').value = '';
-        document.getElementById('is-shared').checked = false;
-        showMessage(data.message, 'success');
-      } else {
-        showMessage(data.message, 'error');
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      showMessage('Failed to create subject', 'error');
-    });
-}
-
-function addSubjectToDOM(subject) {
-  const ownedSubjectsContainer = document.getElementById('owned-subjects');
-  const subjectHTML = `
-    <div class="subject-card" data-subject-id="${subject.id}">
-      <h3><a href="/subject/${subject.name}">${subject.name}</a></h3>
-      <div class="subject-stats">
-        <p>Quizzes: ${subject.quiz_count}</p>
-        <p>Flashcards: ${subject.flashcard_count}</p>
-        <p>Due: ${subject.due_flashcards}</p>
-        <p>Role: ${subject.user_role}</p>
-      </div>
-      ${subject.is_shared ? `<p class="share-code">Share Code: ${subject.share_code}</p>` : ''}
-    </div>
-  `;
-  ownedSubjectsContainer.insertAdjacentHTML('beforeend', subjectHTML);
-}
-
 // Function to confirm leaving a subject
-function confirmLeave(subjectName) {
-  return confirm(`Are you sure you want to leave the subject "${subjectName}"?`);
+async function confirmLeave(subjectName, form) {
+  const result = await Swal.fire({
+    title: 'Lämna ämne?',
+    html: `
+      Är du säker på att du vill lämna ämnet "<strong>${subjectName}</strong>"?<br><br>
+      <ul style="text-align:left">
+        <li>Du kommer inte längre ha tillgång till quiz och flashcards</li>
+        <li>Din progress i detta ämne försvinner</li>
+        <li>Du kan alltid gå med igen om du har koden</li>
+      </ul>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ja, lämna',
+    cancelButtonText: 'Nej, stanna kvar',
+    customClass: {
+      popup: 'my-swal-popup',
+      confirmButton: 'my-confirm-btn',
+      cancelButton: 'my-cancel-btn'
+    }
+  });
+
+  if (!result.isConfirmed) return;
+
+  // For leave buttons, use AJAX instead of form submission
+  const formAction = form.action;
+  
+  try {
+    const response = await fetch(formAction, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      await Swal.fire({
+        title: 'Klart!',
+        text: data.message,
+        icon: 'success',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+      // Reload the page to show updated subject list
+      window.location.reload();
+    } else {
+      await Swal.fire({
+        title: 'Fel!',
+        text: data.message,
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    await Swal.fire({
+      title: 'Fel!',
+      text: 'An error occurred while leaving the subject',
+      icon: 'error',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-confirm-btn'
+      }
+    });
+  }
 }
 
 // Function to confirm deleting a subject
-function confirmDelete(subjectName) {
-  return confirm(`Are you sure you want to delete the subject "${subjectName}"? This action cannot be undone.`);
+async function confirmDelete(subjectName, form) {
+  const result = await Swal.fire({
+    title: 'Ta bort ämne?',
+    html: `
+      Är du säker på att du vill ta bort ämnet "<strong>${subjectName}</strong>"?<br><br>
+      <ul style="text-align:left">
+        <li>Alla quiz och flashcards kommer att försvinna</li>
+        <li>Alla medlemmar kommer att förlora tillgång</li>
+        <li>Denna åtgärd kan inte ångras</li>
+      </ul>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ja, ta bort',
+    cancelButtonText: 'Avbryt',
+    customClass: {
+      popup: 'my-swal-popup',
+      confirmButton: 'my-delete-btn',
+      cancelButton: 'my-cancel-btn'
+    }
+  });
+
+  if (result.isConfirmed) {
+    form.submit();
+  }
 }
 
 // Tab functionality for create/join modal
@@ -1224,26 +1426,130 @@ function showTab(tabName) {
 }
 
 // Handle sharing functionality
-function toggleSharing(subjectId, isCurrentlyShared) {
-  fetch(`/api/subject/${subjectId}/share`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  })
-  .then(response => response.json())
-  .then(data => {
+async function toggleSharing(subjectId, isCurrentlyShared) {
+  try {
+    const response = await fetch(`/api/subject/${subjectId}/share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    const data = await response.json();
+    
     if (data.status === 'success') {
-      alert(data.message);
+      await Swal.fire({
+        title: 'Klart!',
+        text: data.message,
+        icon: 'success',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
       location.reload();
     } else {
-      alert(data.message);
+      await Swal.fire({
+        title: 'Fel!',
+        text: data.message,
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
     }
-  })
-  .catch(error => {
+  } catch (error) {
     console.error('Error:', error);
-    alert('An error occurred while updating sharing settings');
-  });
+    await Swal.fire({
+      title: 'Fel!',
+      text: 'An error occurred while updating sharing settings',
+      icon: 'error',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-confirm-btn'
+      }
+    });
+  }
+}
+
+// Funktion för att ta bort quiz och uppdatera kalender
+async function deleteQuizAndRefresh(quizId, subjectName) {
+    const result = await Swal.fire({
+      title: 'Ta bort quiz?',
+      html: `
+        Är du säker på att du vill ta bort detta quiz från "<strong>${subjectName}</strong>"?<br><br>
+        <ul style="text-align:left">
+          <li>Alla frågor och svar kommer att försvinna</li>
+          <li>Flashcards för detta quiz tas bort</li>
+          <li>Denna åtgärd kan inte ångras</li>
+        </ul>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ja, ta bort',
+      cancelButtonText: 'Avbryt',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-delete-btn',
+        cancelButton: 'my-cancel-btn'
+      }
+    });
+
+    if (!result.isConfirmed) return;
+    
+    try {
+        const response = await fetch(`/api/quiz/${quizId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Visa framgång
+            await Swal.fire({
+              title: 'Borttaget!',
+              text: data.message,
+              icon: 'success',
+              customClass: {
+                popup: 'my-swal-popup',
+                confirmButton: 'my-confirm-btn'
+              }
+            });
+            
+            // Uppdatera kalendern
+            refreshCalendarData();
+            
+            // Uppdatera aktuell sida om vi är på subject-sidan
+            if (window.location.pathname.includes('/subject/')) {
+                location.reload();
+            }
+        } else {
+            await Swal.fire({
+              title: 'Fel!',
+              text: 'Fel vid borttagning: ' + data.message,
+              icon: 'error',
+              customClass: {
+                popup: 'my-swal-popup',
+                confirmButton: 'my-confirm-btn'
+              }
+            });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        await Swal.fire({
+          title: 'Fel!',
+          text: 'Ett fel uppstod vid borttagning av quiz',
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+    }
 }
 
 // Lägg till denna funktion för att uppdatera kalendern
@@ -1255,43 +1561,6 @@ function refreshCalendarData() {
     // Uppdatera quiz-data för kalender
     loadQuizzesForDate(getCurrentSelectedDate());
 }
-
-// Funktion för att ta bort quiz och uppdatera kalender
-function deleteQuizAndRefresh(quizId, subjectName) {
-    if (!confirm('Är du säker på att du vill ta bort detta quiz?')) {
-        return;
-    }
-    
-    fetch(`/api/quiz/${quizId}`, {
-        method: 'DELETE',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            // Visa framgång
-            alert(data.message);
-            
-            // Uppdatera kalendern
-            refreshCalendarData();
-            
-            // Uppdatera aktuell sida om vi är på subject-sidan
-            if (window.location.pathname.includes('/subject/')) {
-                location.reload();
-            }
-        } else {
-            alert('Fel vid borttagning: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Ett fel uppstod vid borttagning av quiz');
-    });
-}
-
-
 
 function updateQuizzesList(quizzes) {
     const container = document.getElementById('quizzes-container');
@@ -1326,38 +1595,108 @@ function showShareCode(code) {
   document.getElementById('share-code-modal').style.display = 'block';
 }
 
-function copyShareCode() {
+async function copyShareCode() {
   const shareCodeText = document.getElementById('share-code-text');
   shareCodeText.select();
-  document.execCommand('copy');
-  alert('Share code copied to clipboard!');
+  try {
+    await navigator.clipboard.writeText(shareCodeText.value);
+    await Swal.fire({
+      title: 'Kopierat!',
+      text: 'Share code copied to clipboard!',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false,
+      customClass: {
+        popup: 'my-swal-popup'
+      }
+    });
+  } catch (err) {
+    // Fallback for older browsers
+    document.execCommand('copy');
+    await Swal.fire({
+      title: 'Kopierat!',
+      text: 'Share code copied to clipboard!',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false,
+      customClass: {
+        popup: 'my-swal-popup'
+      }
+    });
+  }
 }
 
-function leaveSubject(subjectId) {
-  if (confirm('Are you sure you want to leave this subject?')) {
-    fetch(`/leave_subject/${subjectId}`, {
+async function leaveSubject(subjectId) {
+  const result = await Swal.fire({
+    title: 'Lämna ämne?',
+    html: `
+      Är du säker på att du vill lämna detta ämne?<br><br>
+      <ul style="text-align:left">
+        <li>Du kommer inte längre ha tillgång till quiz och flashcards</li>
+        <li>Din progress i detta ämne försvinner</li>
+        <li>Du kan alltid gå med igen om du har koden</li>
+      </ul>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ja, lämna',
+    cancelButtonText: 'Nej, stanna kvar',
+    customClass: {
+      popup: 'my-swal-popup',
+      confirmButton: 'my-confirm-btn',
+      cancelButton: 'my-cancel-btn'
+    }
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    const response = await fetch(`/leave_subject/${subjectId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       }
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        alert(data.message);
-        // Redirect to index page
-        if (data.redirect) {
-          window.location.href = data.redirect;
-        } else {
-          window.location.href = '/';
+    });
+    
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      await Swal.fire({
+        title: 'Klart!',
+        text: data.message,
+        icon: 'success',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
         }
+      });
+      // Redirect to index page
+      if (data.redirect) {
+        window.location.href = data.redirect;
       } else {
-        alert(data.message);
+        window.location.href = '/';
       }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      alert('An error occurred while leaving the subject');
+    } else {
+      await Swal.fire({
+        title: 'Fel!',
+        text: data.message,
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    await Swal.fire({
+      title: 'Fel!',
+      text: 'An error occurred while leaving the subject',
+      icon: 'error',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-confirm-btn'
+      }
     });
   }
 }
@@ -3085,45 +3424,11 @@ function leaveSubject(subjectId) {
 
 
 
-    #confirmDialog {
-      border: none;
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-      font-family: sans-serif;
-    }
-    #confirmBtn {
-      background: #4f46e5;
-      color: white;
-      border: none;
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      margin-left: 0.5rem;
-    }
-    #cancelBtn {
-      background: transparent;
-      border: none;
-      padding: 0.5rem 1rem;
-      color: #4b5563;
-    }
 
 
 
 
 
   </style>
-
-
-
-  <dialog id="confirmDialog">
-    <form method="dialog">
-      <h2 id="dialogTitle">Är du säker?</h2>
-      <p id="dialogMessage"></p>
-      <menu>
-        <button id="cancelBtn">Avbryt</button>
-        <button id="confirmBtn">OK</button>
-      </menu>
-    </form>
-  </dialog>
 </body>
 </html>
