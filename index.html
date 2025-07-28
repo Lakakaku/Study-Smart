@@ -453,60 +453,72 @@ document.addEventListener('DOMContentLoaded', () => {
       currentDate.toLocaleDateString(undefined, opts);
   }
 
+  
+  // Update the loadQuizzesForDate function to include leave quiz buttons
   async function loadQuizzesForDate() {
-    // 1) Hämta alltid senaste schemat
-    await fetchSchedule();
+      // Hämta alltid senaste schemat
+      await fetchSchedule();
 
-    const key = formatKey(currentDate);
-    const entries = schedule[key] || [];
-    const container = document.getElementById('quizzes-container');
-    container.innerHTML = ''; // Rensa ut
+      const key = formatKey(currentDate);
+      const entries = schedule[key] || [];
+      const container = document.getElementById('quizzes-container');
+      container.innerHTML = ''; // Rensa ut
 
-    console.log(`[DEBUG] Loading quizzes for date: ${key}, found ${entries.length} entries`);
+      console.log(`[DEBUG] Loading quizzes for date: ${key}, found ${entries.length} entries`);
 
-    if (entries.length === 0) {
-      container.innerHTML = '<p>No repetitions scheduled for this date.</p>';
-      return;
-    }
-
-    // Förbättrad grupp-logik som räknar faktiska frågor
-    const grouped = {};
-    entries.forEach(e => {
-      const id = `${e.subject}|||${e.topic}`;
-      if (!grouped[id]) {
-        grouped[id] = { 
-          subject: e.subject, 
-          topic: e.topic, 
-          count: 0,
-          questions: [] // Lägg till array för att hålla koll på alla frågor
-        };
+      if (entries.length === 0) {
+          container.innerHTML = '<p>No repetitions scheduled for this date.</p>';
+          return;
       }
-      
-      // Om det finns questions-array i entry, räkna dem
-      if (e.questions && Array.isArray(e.questions)) {
-        grouped[id].count += e.questions.length;
-        grouped[id].questions.push(...e.questions);
-      } else {
-        // Fallback för äldre format
-        grouped[id].count++;
-      }
-    });
 
-    console.log('[DEBUG] Grouped quizzes:', grouped);
+      // Förbättrad grupp-logik som räknar faktiska frågor
+      const grouped = {};
+      entries.forEach(e => {
+          const id = `${e.subject}|||${e.topic}`;
+          if (!grouped[id]) {
+              grouped[id] = { 
+                  subject: e.subject, 
+                  topic: e.topic, 
+                  count: 0,
+                  questions: [],
+                  user_role: e.user_role || 'unknown',
+                  is_shared_subject: e.is_shared_subject || false,
+                  quiz_id: e.quiz_id || null
+              };
+          }
+          
+          // Om det finns questions-array i entry, räkna dem
+          if (e.questions && Array.isArray(e.questions)) {
+              grouped[id].count += e.questions.length;
+              grouped[id].questions.push(...e.questions);
+          } else {
+              // Fallback för äldre format
+              grouped[id].count++;
+          }
+      });
 
-    Object.values(grouped).forEach(qz => {
-      const link = `/daily_quiz/${key}/` +
-                   encodeURIComponent(qz.subject) + '/' +
-                   encodeURIComponent(qz.topic);
-      const card = document.createElement('div');
-      card.className = 'quiz-card';
-      card.innerHTML = `
-        <h3>${qz.subject} – ${qz.topic}</h3>
-        <p>${qz.count} question${qz.count > 1 ? 's' : ''}</p>
-        <a href="${link}"><button>Start Quiz</button></a>
-      `;
-      container.appendChild(card);
-    });
+      console.log('[DEBUG] Grouped quizzes:', grouped);
+
+      Object.values(grouped).forEach(qz => {
+          const link = `/daily_quiz/${key}/` +
+                      encodeURIComponent(qz.subject) + '/' +
+                      encodeURIComponent(qz.topic);
+          const card = document.createElement('div');
+          card.className = 'quiz-card';
+          
+          // Determine if user can leave this quiz (members of shared subjects only)
+          const canLeave = qz.user_role === 'member' && qz.is_shared_subject;
+          
+          card.innerHTML = `
+              <h3>${qz.subject} – ${qz.topic}</h3>
+              <p>${qz.count} question${qz.count > 1 ? 's' : ''}</p>
+              <div class="quiz-actions">
+                  <a href="${link}"><button class="start-quiz-btn">Start Quiz</button></a>
+                  ${canLeave ? `<button class="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this quiz">Leave Quiz</button>` : ''}
+              </div>
+          `;
+          container.appendChild(card);
+      });
   }
 
   // Datum‐knapparna
@@ -683,6 +695,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     eventsDisplay.style.display = 'block';
   }
+
+
+
+  // Function to handle leaving a quiz (for members only)
+  window.leaveQuiz = async function(subject, topic, quizId) {
+      const confirmMessage = `Are you sure you want to leave the quiz "${topic}" from ${subject}?\n\nThis will:\n- Remove all your flashcards for this quiz\n- Remove it from your spaced repetition schedule\n- This action cannot be undone`;
+      
+      if (!confirm(confirmMessage)) {
+          return;
+      }
+      
+      try {
+          const response = await fetch('/api/leave_quiz', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                  subject: subject,
+                  topic: topic,
+                  quiz_id: quizId
+              })
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok && data.status === 'success') {
+              alert(data.message);
+              // Refresh the page to update the quiz list
+              await fetchSchedule();
+              await loadQuizzesForDate();
+          } else {
+              alert(data.error || 'Failed to leave quiz');
+          }
+      } catch (error) {
+          console.error('Error leaving quiz:', error);
+          alert('Network error occurred while leaving quiz');
+      }
+  };
+
+  
+
+
+
+
+
 
   window.toggleEventSharing = async function(eventId, isCurrentlyShared) {
     try {
@@ -1213,17 +1271,7 @@ function deleteQuizAndRefresh(quizId, subjectName) {
     });
 }
 
-// Uppdatera funktionen som laddar quiz för kalender
-function loadQuizzesForDate(date) {
-    fetch(`/api/quizzes/${date}`)
-        .then(response => response.json())
-        .then(data => {
-            updateQuizzesList(data.quizzes);
-        })
-        .catch(error => {
-            console.error('Error loading quizzes:', error);
-        });
-}
+
 
 function updateQuizzesList(quizzes) {
     const container = document.getElementById('quizzes-container');
@@ -1547,6 +1595,170 @@ function leaveSubject(subjectId) {
       color: inherit;
       text-decoration: none;
       cursor: pointer;
+    }
+
+    /* Lägg till dessa CSS-stilar i din index_styles.css */
+
+    /* Quiz card actions container */
+    .quiz-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 10px;
+        flex-wrap: wrap;
+    }
+
+    /* Start quiz button styling */
+    .start-quiz-btn {
+        background: linear-gradient(135deg, #4CAF50, #45a049);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+    }
+
+    .start-quiz-btn:hover {
+        background: linear-gradient(135deg, #45a049, #3d8b40);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(76, 175, 80, 0.4);
+    }
+
+    /* Leave quiz button styling */
+    .leave-quiz-btn {
+        background: linear-gradient(135deg, #f44336, #d32f2f);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
+    }
+
+    .leave-quiz-btn:hover {
+        background: linear-gradient(135deg, #d32f2f, #b71c1c);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(244, 67, 54, 0.4);
+    }
+
+    .leave-quiz-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
+    }
+
+    /* Quiz card styling updates */
+    .quiz-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #4CAF50;
+        transition: all 0.3s ease;
+    }
+
+    .quiz-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .quiz-card h3 {
+        margin: 0 0 8px 0;
+        color: #333;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .quiz-card p {
+        margin: 0 0 12px 0;
+        color: #666;
+        font-size: 14px;
+    }
+
+    /* Member quiz indicator */
+    .quiz-card.member-quiz {
+        border-left-color: #2196F3;
+    }
+
+    .quiz-card.member-quiz h3::after {
+        content: " (Member)";
+        font-size: 12px;
+        color: #2196F3;
+        font-weight: normal;
+    }
+
+    /* Responsive design for mobile */
+    @media (max-width: 600px) {
+        .quiz-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .start-quiz-btn,
+        .leave-quiz-btn {
+            width: 100%;
+            margin-bottom: 5px;
+            padding: 12px 16px;
+            font-size: 16px;
+        }
+        
+        .quiz-card {
+            padding: 15px;
+        }
+    }
+
+    /* Confirmation dialog styling (if you want to customize browser confirm) */
+    .custom-confirm {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    }
+
+    .custom-confirm-content {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        max-width: 400px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .custom-confirm-buttons {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+
+    .confirm-btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    .confirm-btn.confirm {
+        background: #f44336;
+        color: white;
+    }
+
+    .confirm-btn.cancel {
+        background: #e0e0e0;
+        color: #333;
     }
 
     .notes-label {
