@@ -433,7 +433,14 @@
   color: #6c757d;
 }
 
-
+/* Shared files section */
+.shared-files-section {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+}
 
 .files-section-title {
   font-size: 1.1em;
@@ -824,6 +831,57 @@
   flex-wrap: wrap;
   min-height: 80px;
   order: -1; /* TILLAGD - gör att nyare lektioner hamnar högst upp */
+}
+
+
+
+.send-message-button:hover {
+  background: #218838 !important;
+}
+
+.message-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 15px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: #f8f9fa;
+  border-left: 4px solid #17a2b8;
+}
+
+.message-info {
+  display: flex;
+  align-items: flex-start;
+  flex: 1;
+  gap: 12px;
+}
+
+.message-icon {
+  font-size: 20px;
+  margin-top: 2px;
+}
+
+.message-content {
+  flex: 1;
+}
+
+.message-text {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 5px;
+  word-wrap: break-word;
+}
+
+.message-meta {
+  font-size: 0.9em;
+  color: #6c757d;
+}
+
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .lesson-item:hover {
@@ -1397,19 +1455,6 @@
     .remove-document:hover {
         background-color: #c0392b;
     }
-    /* Responsivt: behåll fokus på texten även på små skärmar */
-    @media (max-width: 768px) {
-      .shared-files-section .file-item {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 20px;
-      }
-
-      .shared-files-section .file-meta {
-        text-align: right;        /* Flytta metadata åt sidan */
-        width: 100%;
-      }
-    }
 
     /* Shared Files Section Styling */
     .shared-files-section {
@@ -1419,60 +1464,6 @@
         margin: 20px 0;
         border: 1px solid #e9ecef;
     }
-
-    /* Shared Files Section: Gör filkorten större */
-    .shared-files-section .file-item {
-      padding: 24px;               /* Öka inre marginal */
-      gap: 16px;                   /* Mer luft mellan element */
-      min-height: 120px;           /* Höjden ökas för större kort */
-    }
-
-    /* Filnamn och ikoner: gör rubriken tydligare */
-    .shared-files-section .file-name {
-      font-size: 1.3em;            /* Större titel */
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-
-    /* Filbeskrivning: större och mer utrymme */
-    .shared-files-section .file-description {
-      font-size: 1.1em;            /* Lyft fram texten */
-      color: #333;                 /* Mörkare för bättre kontrast */
-      margin-top: 12px;
-      margin-bottom: 12px;
-      line-height: 1.6;
-    }
-
-    /* Metadata (datum, uppladdare) – tona ner */
-    .shared-files-section .file-meta {
-      font-size: 0.8em;            /* Mindre textstorlek */
-      color: #999;                 /* Ljusare färg */
-      margin-bottom: 0;            /* Flytta närmare botten */
-    }
-
-    /* Flytta metadata längst ner i kortet */
-    .shared-files-section .file-info {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .shared-files-section .file-actions {
-      margin-top: auto;            /* Tryck uppåt, så meta hamnar under beskrivningen */
-    }
-
-    /* Justera download- och delete-knapparna */
-    .shared-files-section .download-btn,
-    .shared-files-section .delete-file-btn {
-      padding: 10px 18px;          /* Större klickyta */
-      font-size: 0.95em;
-    }
-
-    /* Exempel på hur man kan dölja ”vem som publicerade” om det finns */
-    .shared-files-section .file-meta .uploader {
-      display: none;
-    }
-
-
 
     .files-section-title {
         font-size: 1.4em;
@@ -2360,6 +2351,9 @@
       <label for="file-upload-input" class="file-upload-label">
         Välj fil eller Dra och Släpp
       </label>
+      <button id="send-message-btn" class="send-message-button" style="margin-top: 10px; background: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer;">
+        Skicka Meddelande
+      </button>
       <div style="margin-top: 10px; color: #6c757d;">
         (Max 50MB per fil)
       </div>
@@ -2370,8 +2364,6 @@
       <div id="upload-status" class="upload-status" style="display: none;"></div>
     </div>
     {% endif %}
-
-    
 
     <!-- File List -->
     <div class="file-list" id="file-list">
@@ -3184,13 +3176,14 @@
     }
 
 
+    // ÄNDRING 5: Modifiera displayFiles funktionen för att visa meddelanden
     function displayFiles(files) {
       const fileList = document.getElementById('file-list');
       const noFilesMessage = document.getElementById('no-files-message');
       
       if (files.length === 0) {
         noFilesMessage.style.display = 'block';
-        noFilesMessage.textContent = 'No files have been shared yet.';
+        noFilesMessage.textContent = 'Inga filer eller meddelanden har delats än.';
         fileList.innerHTML = '';
         return;
       }
@@ -3200,25 +3193,45 @@
       
       files.forEach(file => {
         const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
+        fileItem.className = file.is_message ? 'message-item' : 'file-item';
         fileItem.setAttribute('data-file-id', file.id);
-        fileItem.innerHTML = `
-          <div class="file-info">
-            <div class="file-name">
-              ${file.filename}
-              <span class="file-extension">${file.extension.toUpperCase()}</span>
-              <span class="file-download-count">↓ ${file.download_count}</span>
+        
+        if (file.is_message) {
+          // Visa som meddelande
+          fileItem.innerHTML = `
+            <div class="message-info">
+              <div class="message-icon">💬</div>
+              <div class="message-content">
+                <div class="message-text">${file.description || file.filename}</div>
+                <div class="message-meta">
+                  Meddelande från ${file.uploader} • ${file.created_at}
+                </div>
+              </div>
             </div>
-            <div class="file-meta">
-              ${file.file_size} • Uppladdat av ${file.uploader} • ${file.created_at}
+            <div class="message-actions">
+              ${file.can_delete ? `<button class="delete-file-btn" onclick="deleteFile(${file.id})">×</button>` : ''}
             </div>
-            ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
-          </div>
-          <div class="file-actions">
-            <a href="/download_shared_file/${file.id}" class="download-btn">Ladda Ner</a>
-            ${file.can_delete ? `<button class="delete-file-btn" onclick="deleteFile(${file.id})">×</button>` : ''}
-          </div>
-        `;
+          `;
+        } else {
+          // Visa som fil (befintlig kod)
+          fileItem.innerHTML = `
+            <div class="file-info">
+              <div class="file-name">
+                ${file.filename}
+                <span class="file-extension">${file.extension.toUpperCase()}</span>
+                <span class="file-download-count">↓ ${file.download_count}</span>
+              </div>
+              <div class="file-meta">
+                ${file.file_size} • Uppladdat av ${file.uploader} • ${file.created_at}
+              </div>
+              ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
+            </div>
+            <div class="file-actions">
+              <a href="/download_shared_file/${file.id}" class="download-btn">Ladda Ner</a>
+              ${file.can_delete ? `<button class="delete-file-btn" onclick="deleteFile(${file.id})">×</button>` : ''}
+            </div>
+          `;
+        }
         fileList.appendChild(fileItem);
       });
     }
@@ -3326,9 +3339,73 @@
 
       // Gemensam hanterare för både drag & drop + filval
       function handleFiles(files) {
-        if (uploadInProgress || files.length === 0) return;
+        if (uploadInProgress) return;
+        
+        // Om inga filer valts men det finns en beskrivning, skicka som meddelande
+        const description = descriptionInput.value.trim();
+        if (files.length === 0 && description) {
+          sendMessageOnly(description);
+          return;
+        }
+        
+        if (files.length === 0) return;
         startUpload(files);
       }
+  
+
+      // ÄNDRING 3: Lägg till ny funktion för att skicka endast meddelanden
+      async function sendMessageOnly(message) {
+        if (!message.trim()) {
+          showUploadStatus('Skriv ett meddelande först', 'error');
+          return;
+        }
+
+        uploadInProgress = true;
+        showUploadStatus('Skickar meddelande...', 'info');
+
+        try {
+          const response = await fetch('/send_message_only', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              subject: currentSubject,
+              message: message
+            })
+          });
+
+          const data = await response.json();
+
+          if (data.status === 'success') {
+            showUploadStatus('Meddelande skickat!', 'success');
+            
+            // Rensa beskrivning
+            descriptionInput.value = '';
+            
+            // Uppdatera fillistan
+            await loadSharedFiles();
+          } else {
+            throw new Error(data.message || 'Kunde inte skicka meddelande');
+          }
+        } catch (error) {
+          console.error('Error sending message:', error);
+          showUploadStatus('Fel vid skickande: ' + error.message, 'error');
+        } finally {
+          uploadInProgress = false;
+        }
+      }
+
+
+      // ÄNDRING 4: Lägg till event listener för "Skicka meddelande" knappen
+      document.getElementById('send-message-btn').addEventListener('click', () => {
+        const description = descriptionInput.value.trim();
+        if (description) {
+          sendMessageOnly(description);
+        } else {
+          showUploadStatus('Skriv ett meddelande först', 'error');
+        }
+      });
 
       // Drag‑over och drag‑leave
       uploadArea.addEventListener('dragover', e => {
@@ -5083,44 +5160,7 @@ window.debugTranscription = debugTranscription;
     }
 
 
-    function displayFiles(files) {
-      const fileList = document.getElementById('file-list');
-      const noFilesMessage = document.getElementById('no-files-message');
-      
-      if (files.length === 0) {
-        noFilesMessage.style.display = 'block';
-        noFilesMessage.textContent = 'No files have been shared yet.';
-        fileList.innerHTML = '';
-        return;
-      }
-      
-      noFilesMessage.style.display = 'none';
-      fileList.innerHTML = '';
-      
-      files.forEach(file => {
-        const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
-        fileItem.setAttribute('data-file-id', file.id);
-        fileItem.innerHTML = `
-          <div class="file-info">
-            <div class="file-name">
-              ${file.filename}
-              <span class="file-extension">${file.extension.toUpperCase()}</span>
-              <span class="file-download-count">↓ ${file.download_count}</span>
-            </div>
-            <div class="file-meta">
-              ${file.file_size} • Uppladdat av  ${file.uploader} • ${file.created_at}
-            </div>
-            ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
-          </div>
-          <div class="file-actions">
-            <a href="/download_shared_file/${file.id}" class="download-btn">Ladda Ner</a>
-            ${file.can_delete ? `<button class="delete-file-btn" onclick="deleteFile(${file.id})">×</button>` : ''}
-          </div>
-        `;
-        fileList.appendChild(fileItem);
-      });
-    }
+    
 
     function showNoFilesMessage(message) {
       const noFilesMessage = document.getElementById('no-files-message');
@@ -5223,11 +5263,7 @@ window.debugTranscription = debugTranscription;
       let uploadInProgress = false;
       let abortController  = null;
 
-      // Gemensam hanterare för både drag & drop + filval
-      function handleFiles(files) {
-        if (uploadInProgress || files.length === 0) return;
-        startUpload(files);
-      }
+      
 
       // Drag‑over och drag‑leave
       uploadArea.addEventListener('dragover', e => {
