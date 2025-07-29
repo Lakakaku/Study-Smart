@@ -193,7 +193,11 @@ class SharedFile(db.Model):
     download_count = db.Column(db.Integer, default=0)  # Statistik
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+    # I din SharedFile model, lägg till:
+    is_message = db.Column(db.Boolean, default=False)  # För att skilja meddelanden från filer
+    original_filename = db.Column(db.String(255))  # Lägg till denna också om den saknas
+    file_extension = db.Column(db.String(10))  # Lägg till denna också om den saknas
+    file_path = db.Column(db.String(500), nullable=True)  # Ändra till nullable=True för meddelanden
     # Relationships - ta bort backref eftersom de redan hanteras från Subject och User modellerna
     # subject = db.relationship('Subject') - hanteras från Subject-sidan
     # uploader = db.relationship('User') - hanteras från User-sidan
@@ -2030,6 +2034,54 @@ def get_lessons(subject_id):
     except Exception as e:
         print(f"Error in get_lessons: {str(e)}")  # Debug
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+
+
+@app.route('/send_message_only', methods=['POST'])
+@login_required
+def send_message_only():
+    try:
+        data = request.get_json()
+        subject_name = data.get('subject')
+        message = data.get('message', '').strip()
+        
+        if not subject_name or not message:
+            return jsonify({'status': 'error', 'message': 'Ämne och meddelande krävs'})
+        
+        # Hitta ämnet
+        subject = Subject.query.filter_by(name=subject_name).first()
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Ämne hittades inte'})
+        
+        # Kontrollera behörighet - endast ägaren kan skicka meddelanden
+        if subject.user_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Ingen behörighet'})
+        
+        # Skapa meddelande som en "fil" utan faktisk fil
+        shared_file = SharedFile(
+            subject_id=subject.id,
+            user_id=current_user.id,
+            filename='message',  # Placeholder filename
+            original_filename='message',
+            file_path='',  # Tom path för meddelanden
+            file_size=0,
+            file_extension='',
+            file_type='message',
+            description=message,
+            is_message=True
+        )
+        
+        db.session.add(shared_file)
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'message': 'Meddelande skickat'})
+        
+    except Exception as e:
+        print(f"Error sending message: {e}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Serverfel'})
+
 
 @app.route('/stream_lesson/<int:lesson_id>')
 @login_required
