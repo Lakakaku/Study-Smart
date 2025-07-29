@@ -470,19 +470,13 @@
   display: none;
 }
 
-.file-upload-label {
-  background: #007bff;
-  color: white;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
-}
 
-.file-upload-label:hover {
+
+.file-upload-label:hover,
+.send-message-button:hover {
   background: #0056b3;
 }
+
 
 .file-description-input {
   width: 100%;
@@ -835,9 +829,7 @@
 
 
 
-.send-message-button:hover {
-  background: #218838 !important;
-}
+
 
 .message-item {
   display: flex;
@@ -1506,21 +1498,28 @@
         display: none;
     }
 
-    .file-upload-label {
-        display: inline-block;
-        background: #007bff;
-        color: white;
-        padding: 12px 24px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 500;
-        transition: background-color 0.2s;
+    .file-upload-label,
+    .send-message-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 40px;           /* samma höjd för båda */
+      line-height: 40px;      /* centrerar texten vertikalt */
+      padding: 0 20px;        /* bara horisontell padding */
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+      box-sizing: border-box; /* säkerställer att höjden räknas korrekt */
+      margin:5px;
+      font-size: 16px;
     }
 
-    .file-upload-label:hover {
-        background: #0056b3;
-    }
-
+    
     .file-description-input {
         width: 100%;
         min-height: 80px;
@@ -2351,7 +2350,7 @@
       <label for="file-upload-input" class="file-upload-label">
         Välj fil eller Dra och Släpp
       </label>
-      <button id="send-message-btn" class="send-message-button" style="margin-top: 10px; background: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer;">
+      <button id="send-message-btn" class="send-message-button">
         Skicka Meddelande
       </button>
       <div style="margin-top: 10px; color: #6c757d;">
@@ -3179,7 +3178,7 @@
     // FIXAD displayFiles funktion - meddelanden behandlas helt separat
     function displayFiles(files) {
       const fileList = document.getElementById('file-list');
-      const noFilesMessage = document.getElementById('no-files-message');
+      let noFilesMessage = document.getElementById('no-files-message');
       
       // Debug: logga vad vi får från servern
       console.log('displayFiles called with:', files);
@@ -3189,9 +3188,13 @@
         return;
       }
       
+      // Skapa no-files-message om det inte finns
       if (!noFilesMessage) {
-        console.error('no-files-message element not found');
-        return;
+        console.log('Creating no-files-message element');
+        noFilesMessage = document.createElement('div');
+        noFilesMessage.id = 'no-files-message';
+        noFilesMessage.className = 'no-files-message';
+        fileList.appendChild(noFilesMessage);
       }
       
       if (files.length === 0) {
@@ -3211,9 +3214,16 @@
         const fileItem = document.createElement('div');
         fileItem.setAttribute('data-file-id', file.id);
         
-        // VIKTIGT: Kontrollera is_message FÖRST och behandla helt separat
-        if (file.is_message === true || file.is_message === 'true' || file.filename === 'message') {
-          console.log('Rendering as MESSAGE'); // Debug
+        // VIKTIGT: Identifiera meddelanden baserat på filename = 'message' ELLER extension = ''
+        const isMessage = (
+          file.is_message === true || 
+          file.is_message === 'true' || 
+          file.filename === 'message' ||
+          (file.extension === '' && file.filename && file.filename.includes('message'))
+        );
+        
+        if (isMessage) {
+          console.log('Rendering as MESSAGE for:', file.filename); // Debug
           
           fileItem.className = 'message-item';
           fileItem.innerHTML = `
@@ -3259,6 +3269,7 @@
         fileList.appendChild(fileItem);
       });
     }
+
 
 
     function showNoFilesMessage(message) {
