@@ -1726,6 +1726,144 @@
         border-radius: 50%;
     }
 
+
+    .members-management {
+      border-top: 1px solid #e0e0e0;
+      padding-top: 15px;
+    }
+
+    .view-members-btn {
+      background: #007bff;
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+
+    .view-members-btn:hover {
+      background: #0056b3;
+    }
+
+    .members-list {
+      margin-top: 15px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #f8f9fa;
+      padding: 15px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .members-list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .members-list-header h4 {
+      margin: 0;
+      color: #333;
+    }
+
+    .member-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: white;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .member-info {
+      flex-grow: 1;
+    }
+
+    .member-name {
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .member-meta {
+      font-size: 12px;
+      color: #666;
+      display: flex;
+      gap: 15px;
+    }
+
+    .member-role {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .member-role.owner {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .member-role.admin {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+
+    .member-role.member {
+      background: #e8f5e8;
+      color: #388e3c;
+    }
+
+    .member-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .kick-member-btn {
+      background: #dc3545;
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background-color 0.2s;
+    }
+
+    .kick-member-btn:hover {
+      background: #c82333;
+    }
+
+    .kick-member-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+    }
+
+    .loading-members, .no-members {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+      font-style: italic;
+    }
+
+    .error-loading-members {
+      text-align: center;
+      padding: 20px;
+      color: #dc3545;
+      background: #f8d7da;
+      border-radius: 4px;
+      border: 1px solid #f5c6cb;
+    }
+
     .status-indicator.active {
         background: #28a745;
     }
@@ -2137,8 +2275,38 @@
     <div class="members-count" id="members-count">
       Loading member count...
     </div>
+
+    <div class="members-management" style="margin-top: 15px;">
+      <button class="view-members-btn" onclick="toggleMembersList()">
+        👥 Visa Medlemmar
+      </button>
+      
+      <div class="members-list" id="members-list" style="display: none;">
+        <div class="members-list-header">
+          <h4>Medlemmar</h4>
+          <span id="members-list-count">Laddar...</span>
+        </div>
+        <div class="members-container" id="members-container">
+          <div class="loading-members">Laddar medlemmar...</div>
+        </div>
+      </div>
+    </div>
   </div>
+
   {% endif %}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   <div class="main-layout {% if user_role not in ['owner', 'admin'] %}member-view{% endif %}">
     <div class="quiz-container">
@@ -3140,6 +3308,38 @@
       }
     }
 
+    let membersData = [];
+
+    // Toggle members list visibility
+    async function toggleMembersList() {
+      const membersList = document.getElementById('members-list');
+      
+      if (membersList.style.display === 'none' || membersList.style.display === '') {
+        // Show members list
+        membersList.style.display = 'block';
+        
+        // Load members if not already loaded
+        if (membersData.length === 0) {
+          await loadMembersList();
+        }
+        
+        // Update button text
+        const button = document.querySelector('.view-members-btn');
+        if (button) {
+          button.textContent = '👥 Dölj Medlemmar';
+        }
+      } else {
+        // Hide members list
+        membersList.style.display = 'none';
+        
+        // Update button text
+        const button = document.querySelector('.view-members-btn');
+        if (button) {
+          button.textContent = '👥 Visa Medlemmar';
+        }
+      }
+    }
+
     // Load member count
     async function loadMemberCount() {
       try {
@@ -3153,6 +3353,157 @@
       } catch (error) {
         console.error('Error loading member count:', error);
         document.getElementById('members-count').textContent = '👥 Member count unavailable';
+      }
+    }
+    
+    
+    // Load members list from server
+    async function loadMembersList() {
+      const container = document.getElementById('members-container');
+      const countSpan = document.getElementById('members-list-count');
+      
+      try {
+        container.innerHTML = '<div class="loading-members">Laddar medlemmar...</div>';
+        
+        const response = await fetch(`/api/subject/${subjectId}/members/detailed`);
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          membersData = data.members;
+          renderMembersList(membersData);
+          countSpan.textContent = `${membersData.length} medlem${membersData.length !== 1 ? 'mar' : ''}`;
+        } else {
+          throw new Error(data.message || 'Kunde inte ladda medlemmar');
+        }
+      } catch (error) {
+        console.error('Error loading members:', error);
+        container.innerHTML = `
+          <div class="error-loading-members">
+            Fel vid laddning av medlemmar: ${error.message}
+          </div>
+        `;
+        countSpan.textContent = 'Fel';
+      }
+    }
+
+    // Render members list in DOM
+    function renderMembersList(members) {
+      const container = document.getElementById('members-container');
+      
+      if (!members || members.length === 0) {
+        container.innerHTML = '<div class="no-members">Inga medlemmar hittades</div>';
+        return;
+      }
+      
+      // Sort members: owner first, then admin, then regular members
+      const sortedMembers = [...members].sort((a, b) => {
+        const roleOrder = { owner: 0, admin: 1, member: 2 };
+        return roleOrder[a.role] - roleOrder[b.role];
+      });
+      
+      const membersHtml = sortedMembers.map(member => {
+        const canKick = member.role !== 'owner' && member.id !== currentUserId;
+        const joinedDate = member.joined_at ? 
+          new Date(member.joined_at).toLocaleDateString('sv-SE') : 
+          'Okänt datum';
+        
+        return `
+          <div class="member-item" data-member-id="${member.id}">
+            <div class="member-info">
+              <div class="member-name">${escapeHtml(member.username || 'Okänt namn')}</div>
+              <div class="member-meta">
+                <span class="member-role ${member.role}">${member.role}</span>
+                <span>📅 Gick med: ${joinedDate}</span>
+                ${member.email ? `<span>📧 ${escapeHtml(member.email)}</span>` : ''}
+              </div>
+            </div>
+            <div class="member-actions">
+              ${canKick ? `
+                <button class="kick-member-btn" onclick="kickMember(${member.id}, '${escapeHtml(member.username || 'medlem')}')">
+                  Kicka
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      container.innerHTML = membersHtml;
+    }
+
+
+    // Kick member function
+    // Kick member function
+    async function kickMember(memberId, memberName) {
+      if (!confirm(`Är du säker på att du vill kicka "${memberName}" från ämnet? De kommer att förlora åtkomst omedelbart.`)) {
+        return;
+      }
+      
+      const memberItem = document.querySelector(`[data-member-id="${memberId}"]`);
+      const kickButton = memberItem?.querySelector('.kick-member-btn');
+      
+      try {
+        // Disable button during request
+        if (kickButton) {
+          kickButton.disabled = true;
+          kickButton.textContent = 'Kickar...';
+        }
+        
+        const response = await fetch('/api/subject/kick_member', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            subject_id: subjectId,
+            member_id: memberId
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          showAlert(`"${memberName}" har kickats från ämnet`, 'success');
+          
+          // Remove member from DOM with animation
+          if (memberItem) {
+            memberItem.style.transition = 'opacity 0.3s ease';
+            memberItem.style.opacity = '0';
+            
+            setTimeout(() => {
+              memberItem.remove();
+              
+              // Update member count
+              membersData = membersData.filter(m => m.id !== memberId);
+              const countSpan = document.getElementById('members-list-count');
+              if (countSpan) {
+                countSpan.textContent = `${membersData.length} medlem${membersData.length !== 1 ? 'mar' : ''}`;
+              }
+              
+              // Update main member count if visible
+              loadMemberCount();
+              
+              // Show no members message if list is empty
+              if (membersData.length === 0) {
+                const container = document.getElementById('members-container');
+                container.innerHTML = '<div class="no-members">Inga medlemmar kvar</div>';
+              }
+            }, 300);
+          }
+          
+        } else {
+          throw new Error(data.message || 'Kunde inte kicka medlem');
+        }
+        
+      } catch (error) {
+        console.error('Error kicking member:', error);
+        showAlert(`Fel vid kickning av "${memberName}": ${error.message}`, 'error');
+        
+        // Re-enable button on error
+        if (kickButton) {
+          kickButton.disabled = false;
+          kickButton.textContent = 'Kicka';
+        }
       }
     }
 
@@ -5201,7 +5552,7 @@ window.debugTranscription = debugTranscription;
       }
     }
 
-    // Load member count
+    // Update the existing loadMemberCount function to be more detailed
     async function loadMemberCount() {
       try {
         const response = await fetch(`/api/subject/${subjectId}/members`);
@@ -5209,13 +5560,14 @@ window.debugTranscription = debugTranscription;
         
         if (data.status === 'success') {
           document.getElementById('members-count').textContent = 
-            `👥 ${data.total_members} member${data.total_members !== 1 ? 's' : ''}`;
+            `👥 ${data.total_members} medlem${data.total_members !== 1 ? 'mar' : ''}`;
         }
       } catch (error) {
         console.error('Error loading member count:', error);
-        document.getElementById('members-count').textContent = '👥 Member count unavailable';
+        document.getElementById('members-count').textContent = '👥 Medlem antal ej tillgängligt';
       }
     }
+
 
     // File sharing functions
     async function loadSharedFiles() {
