@@ -2260,37 +2260,39 @@
     </div>
     {% endif %}
     
-    <div style="margin-top: 15px;">
-      <button class="toggle-sharing" onclick="toggleSharing()">
-        {{ 'Inaktivera Delning' if subject.is_shared else 'Enable Sharing' }}
-      </button>
+    <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <button class="toggle-sharing" onclick="toggleSharing()">
+          {{ 'Inaktivera Delning' if subject.is_shared else 'Enable Sharing' }}
+        </button>
+        
+        {% if subject.is_shared %}
+        <button class="regenerate-code" onclick="regenerateCode()">
+          Regenerera Kod
+        </button>
+        {% endif %}
+      </div>
       
-      {% if subject.is_shared %}
-      <button class="regenerate-code" onclick="regenerateCode()">
-        Regenerera Kod
+      <button class="view-members-btn" onclick="toggleMembersList()">
+        👥 Visa Medlemmar
       </button>
-      {% endif %}
+    </div>
+
+    <div class="members-list" id="members-list" style="display: none; margin-top: 15px;">
+      <div class="members-list-header">
+        <h4>Medlemmar</h4>
+        <span id="members-list-count">Laddar...</span>
+      </div>
+      <div class="members-container" id="members-container">
+        <div class="loading-members">Laddar medlemmar...</div>
+      </div>
     </div>
     
     <div class="members-count" id="members-count">
       Loading member count...
     </div>
 
-    <div class="members-management" style="margin-top: 15px;">
-      <button class="view-members-btn" onclick="toggleMembersList()">
-        👥 Visa Medlemmar
-      </button>
-      
-      <div class="members-list" id="members-list" style="display: none;">
-        <div class="members-list-header">
-          <h4>Medlemmar</h4>
-          <span id="members-list-count">Laddar...</span>
-        </div>
-        <div class="members-container" id="members-container">
-          <div class="loading-members">Laddar medlemmar...</div>
-        </div>
-      </div>
-    </div>
+    
   </div>
 
   {% endif %}
