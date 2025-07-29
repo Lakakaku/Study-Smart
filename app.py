@@ -1999,6 +1999,119 @@ def retry_transcription(lesson_id):
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+
+@app.route('/api/subject/<int:subject_id>/members/detailed')
+@login_required
+def get_subject_members_detailed(subject_id):
+    """Hämta detaljerad medlemslista för ett ämne"""
+    try:
+        # Kontrollera att användaren har tillgång till ämnet
+        subject = Subject.query.get_or_404(subject_id)
+        user_role = current_user.get_role_in_subject(subject_id)
+        
+        if not user_role:
+            return jsonify({'status': 'error', 'message': 'Du har inte tillgång till detta ämne'})
+        
+        # Endast ägare kan se detaljerad medlemslista
+        if user_role != 'owner':
+            return jsonify({'status': 'error', 'message': 'Endast ägare kan se medlemslistan'})
+        
+        # Hämta alla medlemmar (inkluderar ägaren)
+        members = []
+        
+        # Lägg till ägaren först
+        owner = User.query.get(subject.user_id)
+        if owner:
+            members.append({
+                'id': owner.id,
+                'username': owner.username,
+                'email': getattr(owner, 'email', None),  # Om du har email-fält
+                'role': 'owner',
+                'joined_at': subject.created_at.isoformat() if subject.created_at else None
+            })
+        
+        # Hämta alla andra medlemmar
+        subject_members = db.session.query(SubjectMember, User).join(
+            User, SubjectMember.user_id == User.id
+        ).filter(SubjectMember.subject_id == subject_id).all()
+        
+        for membership, user in subject_members:
+            members.append({
+                'id': user.id,
+                'username': user.username,
+                'email': getattr(user, 'email', None),  # Om du har email-fält
+                'role': membership.role,
+                'joined_at': membership.joined_at.isoformat() if membership.joined_at else None
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'members': members
+        })
+        
+    except Exception as e:
+        print(f"Error getting subject members: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Kunde inte hämta medlemmar'
+        })
+    
+
+
+
+
+
+@app.route('/api/subject/kick_member', methods=['POST'])
+@login_required
+def kick_subject_member():
+    """Kicka en medlem från ett ämne"""
+    try:
+        data = request.get_json()
+        subject_id = data.get('subject_id')
+        member_id = data.get('member_id')
+        
+        if not subject_id or not member_id:
+            return jsonify({'status': 'error', 'message': 'Saknade parametrar'})
+        
+        # Kontrollera att användaren är ägare av ämnet
+        subject = Subject.query.get_or_404(subject_id)
+        if subject.user_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Endast ägare kan kicka medlemmar'})
+        
+        # Kontrollera att man inte försöker kicka sig själv
+        if member_id == current_user.id:
+            return jsonify({'status': 'error', 'message': 'Du kan inte kicka dig själv'})
+        
+        # Hitta och ta bort medlemskapet
+        membership = SubjectMember.query.filter_by(
+            subject_id=subject_id, 
+            user_id=member_id
+        ).first()
+        
+        if not membership:
+            return jsonify({'status': 'error', 'message': 'Medlemmen hittades inte'})
+        
+        # Ta bort medlemskapet
+        db.session.delete(membership)
+        db.session.commit()
+        
+        # Hämta användarnamn för meddelande
+        kicked_user = User.query.get(member_id)
+        username = kicked_user.username if kicked_user else 'Okänd användare'
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'{username} har kickats från ämnet'
+        })
+        
+    except Exception as e:
+        print(f"Error kicking member: {e}")
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': 'Kunde inte kicka medlem'
+        })
+
 @app.route('/api/lessons/<int:subject_id>')
 @login_required
 def get_lessons(subject_id):
