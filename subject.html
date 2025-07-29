@@ -3176,10 +3176,23 @@
     }
 
 
-    // Modifiera displayFiles funktionen
+    // FIXAD displayFiles funktion - meddelanden behandlas helt separat
     function displayFiles(files) {
       const fileList = document.getElementById('file-list');
       const noFilesMessage = document.getElementById('no-files-message');
+      
+      // Debug: logga vad vi får från servern
+      console.log('displayFiles called with:', files);
+      
+      if (!fileList) {
+        console.error('file-list element not found');
+        return;
+      }
+      
+      if (!noFilesMessage) {
+        console.error('no-files-message element not found');
+        return;
+      }
       
       if (files.length === 0) {
         noFilesMessage.style.display = 'block';
@@ -3192,19 +3205,24 @@
       fileList.innerHTML = '';
       
       files.forEach(file => {
+        console.log('Processing file:', file); // Debug log
+        console.log('is_message:', file.is_message); // Extra debug för meddelanden
+        
         const fileItem = document.createElement('div');
-        fileItem.className = file.is_message ? 'message-item' : 'file-item';
         fileItem.setAttribute('data-file-id', file.id);
         
-        if (file.is_message) {
-          // Visa som meddelande
+        // VIKTIGT: Kontrollera is_message FÖRST och behandla helt separat
+        if (file.is_message === true || file.is_message === 'true' || file.filename === 'message') {
+          console.log('Rendering as MESSAGE'); // Debug
+          
+          fileItem.className = 'message-item';
           fileItem.innerHTML = `
             <div class="message-info">
               <div class="message-icon">💬</div>
               <div class="message-content">
-                <div class="message-text">${file.description || file.filename}</div>
+                <div class="message-text">${escapeHtml(file.description || 'Meddelande')}</div>
                 <div class="message-meta">
-                  Meddelande från ${file.uploader} • ${file.created_at}
+                  Meddelande från ${escapeHtml(file.uploader || 'Okänd')} • ${escapeHtml(file.created_at || 'Okänt datum')}
                 </div>
               </div>
             </div>
@@ -3213,18 +3231,24 @@
             </div>
           `;
         } else {
-          // Visa som fil (befintlig kod)
+          console.log('Rendering as FILE'); // Debug
+          
+          fileItem.className = 'file-item';
+          const extension = file.extension || '';
+          const downloadCount = file.download_count || 0;
+          const fileSize = file.file_size || 'Okänd storlek';
+          
           fileItem.innerHTML = `
             <div class="file-info">
               <div class="file-name">
-                ${file.filename}
-                <span class="file-extension">${file.extension.toUpperCase()}</span>
-                <span class="file-download-count">↓ ${file.download_count}</span>
+                ${escapeHtml(file.filename || 'Okänt filnamn')}
+                ${extension ? `<span class="file-extension">${escapeHtml(extension.toUpperCase())}</span>` : ''}
+                <span class="file-download-count">↓ ${downloadCount}</span>
               </div>
               <div class="file-meta">
-                ${file.file_size} • Uppladdat av ${file.uploader} • ${file.created_at}
+                ${escapeHtml(fileSize)} • Uppladdat av ${escapeHtml(file.uploader || 'Okänd')} • ${escapeHtml(file.created_at || 'Okänt datum')}
               </div>
-              ${file.description ? `<div class="file-description">${file.description}</div>` : ''}
+              ${file.description ? `<div class="file-description">${escapeHtml(file.description)}</div>` : ''}
             </div>
             <div class="file-actions">
               <a href="/download_shared_file/${file.id}" class="download-btn">Ladda Ner</a>
@@ -3235,6 +3259,7 @@
         fileList.appendChild(fileItem);
       });
     }
+
 
     function showNoFilesMessage(message) {
       const noFilesMessage = document.getElementById('no-files-message');
@@ -3368,10 +3393,17 @@
       }
   
 
-      // ÄNDRING 3: Lägg till ny funktion för att skicka endast meddelanden
+      // Uppdaterad sendMessageOnly funktion med bättre felhantering
       async function sendMessageOnly(message) {
         if (!message.trim()) {
           showUploadStatus('Skriv ett meddelande först', 'error');
+          return;
+        }
+
+        const descriptionInput = document.getElementById('file-description');
+        if (!descriptionInput) {
+          console.error('file-description element not found');
+          showUploadStatus('Kunde inte hitta meddelandefält', 'error');
           return;
         }
 
@@ -3379,6 +3411,8 @@
         showUploadStatus('Skickar meddelande...', 'info');
 
         try {
+          console.log('Sending message:', message); // Debug log
+          
           const response = await fetch('/send_message_only', {
             method: 'POST',
             headers: {
@@ -3391,6 +3425,7 @@
           });
 
           const data = await response.json();
+          console.log('Server response:', data); // Debug log
 
           if (data.status === 'success') {
             showUploadStatus('Meddelande skickat!', 'success');
@@ -3398,8 +3433,15 @@
             // Rensa beskrivning
             descriptionInput.value = '';
             
-            // Uppdatera fillistan
-            await loadSharedFiles();
+            // Uppdatera fillistan med en liten fördröjning
+            setTimeout(async () => {
+              try {
+                await loadSharedFiles();
+              } catch (error) {
+                console.error('Error reloading files after message:', error);
+              }
+            }, 500);
+            
           } else {
             throw new Error(data.message || 'Kunde inte skicka meddelande');
           }
@@ -3409,6 +3451,14 @@
         } finally {
           uploadInProgress = false;
         }
+      }
+
+      // Säkerställ att escapeHtml funktionen finns
+      function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
       }
 
 
