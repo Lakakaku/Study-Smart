@@ -636,7 +636,7 @@
   border: 1px solid #dee2e6;
   border-radius: 8px;
   padding: 20px;
-  margin: 20px 0;
+ 
   max-height: 730px; /* Ökad höjd från 600px till 730px */
   display: flex;
   flex-direction: column;
@@ -2057,7 +2057,7 @@
   <!-- Share Section - only for owners -->
   {% if user_role == 'owner' %}
   <div class="share-section">
-    <div class="share-title">📤 Dela Detta Ämne</div>
+    <div class="share-title">📤 Dela Ämnet</div>
     
     <div class="share-status">
       <div class="status-indicator {{ 'active' if subject.is_shared else 'inactive' }}"></div>
