@@ -3232,7 +3232,7 @@
               <div class="message-content">
                 <div class="message-text">${escapeHtml(file.description || 'Meddelande')}</div>
                 <div class="message-meta">
-                  Meddelande från ${escapeHtml(file.uploader || 'Okänd')} • ${escapeHtml(file.created_at || 'Okänt datum')}
+                  ${escapeHtml(file.uploader || 'Okänd')} • ${escapeHtml(file.created_at || 'Okänt datum')}
                 </div>
               </div>
             </div>
@@ -3256,7 +3256,7 @@
                 <span class="file-download-count">↓ ${downloadCount}</span>
               </div>
               <div class="file-meta">
-                ${escapeHtml(fileSize)} • Uppladdat av ${escapeHtml(file.uploader || 'Okänd')} • ${escapeHtml(file.created_at || 'Okänt datum')}
+                 ${escapeHtml(file.uploader || 'Okänd')} • ${escapeHtml(fileSize)} • ${escapeHtml(file.created_at || 'Okänt datum')}
               </div>
               ${file.description ? `<div class="file-description">${escapeHtml(file.description)}</div>` : ''}
             </div>
