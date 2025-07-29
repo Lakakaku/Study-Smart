@@ -3176,7 +3176,7 @@
     }
 
 
-    // ÄNDRING 5: Modifiera displayFiles funktionen för att visa meddelanden
+    // Modifiera displayFiles funktionen
     function displayFiles(files) {
       const fileList = document.getElementById('file-list');
       const noFilesMessage = document.getElementById('no-files-message');
@@ -3324,6 +3324,21 @@
         }
       }, hideDelay);
     }
+
+    function handleFiles(files) {
+      if (uploadInProgress) return;
+      
+      // Om inga filer valts men det finns en beskrivning, skicka som meddelande
+      const description = descriptionInput.value.trim();
+      if (files.length === 0 && description) {
+        sendMessageOnly(description);
+        return;
+      }
+      
+      if (files.length === 0) return;
+      startUpload(files);
+    }
+
 
     // COMPLETELY REWRITTEN FILE UPLOAD SYSTEM
     if (userRole === 'owner') {
