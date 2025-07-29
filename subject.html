@@ -433,14 +433,7 @@
   color: #6c757d;
 }
 
-/* Shared files section */
-.shared-files-section {
-  background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  padding: 20px;
-  margin: 20px 0;
-}
+
 
 .files-section-title {
   font-size: 1.1em;
@@ -1404,6 +1397,19 @@
     .remove-document:hover {
         background-color: #c0392b;
     }
+    /* Responsivt: behåll fokus på texten även på små skärmar */
+    @media (max-width: 768px) {
+      .shared-files-section .file-item {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 20px;
+      }
+
+      .shared-files-section .file-meta {
+        text-align: right;        /* Flytta metadata åt sidan */
+        width: 100%;
+      }
+    }
 
     /* Shared Files Section Styling */
     .shared-files-section {
@@ -1413,6 +1419,60 @@
         margin: 20px 0;
         border: 1px solid #e9ecef;
     }
+
+    /* Shared Files Section: Gör filkorten större */
+    .shared-files-section .file-item {
+      padding: 24px;               /* Öka inre marginal */
+      gap: 16px;                   /* Mer luft mellan element */
+      min-height: 120px;           /* Höjden ökas för större kort */
+    }
+
+    /* Filnamn och ikoner: gör rubriken tydligare */
+    .shared-files-section .file-name {
+      font-size: 1.3em;            /* Större titel */
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    /* Filbeskrivning: större och mer utrymme */
+    .shared-files-section .file-description {
+      font-size: 1.1em;            /* Lyft fram texten */
+      color: #333;                 /* Mörkare för bättre kontrast */
+      margin-top: 12px;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+
+    /* Metadata (datum, uppladdare) – tona ner */
+    .shared-files-section .file-meta {
+      font-size: 0.8em;            /* Mindre textstorlek */
+      color: #999;                 /* Ljusare färg */
+      margin-bottom: 0;            /* Flytta närmare botten */
+    }
+
+    /* Flytta metadata längst ner i kortet */
+    .shared-files-section .file-info {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .shared-files-section .file-actions {
+      margin-top: auto;            /* Tryck uppåt, så meta hamnar under beskrivningen */
+    }
+
+    /* Justera download- och delete-knapparna */
+    .shared-files-section .download-btn,
+    .shared-files-section .delete-file-btn {
+      padding: 10px 18px;          /* Större klickyta */
+      font-size: 0.95em;
+    }
+
+    /* Exempel på hur man kan dölja ”vem som publicerade” om det finns */
+    .shared-files-section .file-meta .uploader {
+      display: none;
+    }
+
+
 
     .files-section-title {
         font-size: 1.4em;
@@ -2310,6 +2370,8 @@
       <div id="upload-status" class="upload-status" style="display: none;"></div>
     </div>
     {% endif %}
+
+    
 
     <!-- File List -->
     <div class="file-list" id="file-list">
