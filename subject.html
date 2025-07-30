@@ -2357,6 +2357,424 @@
       }
     }
 
+
+
+    /* CSS att lägga till i din stylesheet */
+
+    .assignments-toggle-container {
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .assignments-toggle-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .assignments-toggle-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .assignments-section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e1e8ed;
+    }
+
+    .create-assignment-section h3 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .assignment-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .assignment-input, .assignment-textarea {
+      padding: 12px;
+      border: 2px solid #e1e8ed;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s ease;
+    }
+
+    .assignment-input:focus, .assignment-textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .assignment-settings {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .assignment-settings label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: #555;
+    }
+
+    .assignment-date-input {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .create-assignment-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .create-assignment-btn:hover {
+      background: #218838;
+    }
+
+    .assignment-divider {
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #e1e8ed, transparent);
+      margin: 30px 0;
+    }
+
+    .assignments-container h3 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .assignments-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .assignment-card {
+      background: #f8f9fa;
+      border: 1px solid #e1e8ed;
+      border-radius: 8px;
+      padding: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .assignment-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .assignment-header {
+      display: flex;
+      justify-content: between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .assignment-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #2c3e50;
+      margin: 0 0 8px 0;
+    }
+
+    .assignment-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: #666;
+      flex-wrap: wrap;
+    }
+
+    .assignment-description {
+      color: #555;
+      margin: 12px 0;
+      line-height: 1.5;
+    }
+
+    .assignment-status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .assignment-status.pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .assignment-status.submitted {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .assignment-status.overdue {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .assignment-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .assignment-action-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .assignment-action-btn.submit {
+      background: #007bff;
+      color: white;
+    }
+
+    .assignment-action-btn.submit:hover {
+      background: #0056b3;
+    }
+
+    .assignment-action-btn.view-submissions {
+      background: #6c757d;
+      color: white;
+    }
+
+    .assignment-action-btn.view-submissions:hover {
+      background: #545b62;
+    }
+
+    .assignment-action-btn.delete {
+      background: #dc3545;
+      color: white;
+    }
+
+    .assignment-action-btn.delete:hover {
+      background: #c82333;
+    }
+
+    /* Modal styles */
+    .submissions-modal, .submit-assignment-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .submissions-modal-content, .submit-assignment-modal-content {
+      background: white;
+      border-radius: 12px;
+      max-width: 800px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .submissions-modal-header, .submit-assignment-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid #e1e8ed;
+    }
+
+    .submissions-modal-close, .submit-assignment-modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+    }
+
+    .submissions-modal-body, .submit-assignment-modal-body {
+      padding: 24px;
+    }
+
+    .submission-item {
+      background: #f8f9fa;
+      border: 1px solid #e1e8ed;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .submission-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .submission-student {
+      font-weight: 600;
+      color: #2c3e50;
+    }
+
+    .submission-date {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .submission-files {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .submission-file {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+
+    .submission-file-name {
+      flex-grow: 1;
+      font-size: 14px;
+    }
+
+    .submission-file-download {
+      color: #007bff;
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    .submission-file-download:hover {
+      text-decoration: underline;
+    }
+
+    .assignment-submission-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .submission-comment {
+      padding: 12px;
+      border: 2px solid #e1e8ed;
+      border-radius: 8px;
+      resize: vertical;
+      font-family: inherit;
+    }
+
+    .submission-file-input {
+      display: none;
+    }
+
+    .submission-file-label {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #f8f9fa;
+      border: 2px dashed #667eea;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .submission-file-label:hover {
+      background: #e9ecef;
+      border-color: #5a67d8;
+    }
+
+    .selected-files-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .selected-file-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: #e9ecef;
+      border-radius: 6px;
+    }
+
+    .selected-file-remove {
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .submit-assignment-final-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .submit-assignment-final-btn:hover:not(:disabled) {
+      background: #218838;
+    }
+
+    .submit-assignment-final-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+    }
+
+    .loading-assignments, .loading-submissions {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .no-assignments, .no-submissions {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+      font-style: italic;
+    }
+
   </style>
 </head>
 <body>
@@ -2369,6 +2787,9 @@
       {% if user_role %}
         <span class="member-role-badge {{ user_role }}">{{ user_role.title() }}</span>
       {% endif %}
+    </div>
+    <div class="assignments-toggle-container">
+      <button id="assignments-toggle" class="assignments-toggle-btn">📝 Uppgifter</button>
     </div>
   </div>
 
@@ -2426,6 +2847,85 @@
   </div>
 
   {% endif %}
+
+
+  <!-- Lägg till denna sektion efter share-section men före main-layout -->
+  <!-- Lägg till denna sektion efter share-section men före main-layout -->
+  <div class="assignments-section" id="assignments-section" style="display: none;">
+    <!-- För ägare: Skapa uppgifter -->
+    {% if user_role == 'owner' %}
+    <div class="create-assignment-section">
+      <h3>🏗️ Skapa Uppgift</h3>
+      <div class="assignment-form">
+        <input type="text" id="assignment-title" class="assignment-input" placeholder="Uppgiftstitel *" required>
+        <textarea id="assignment-description" class="assignment-textarea" placeholder="Beskrivning av uppgiften..." rows="4"></textarea>
+        <div class="assignment-settings">
+          <label>
+            <input type="date" id="assignment-due-date" class="assignment-date-input">
+            Förfallodatum
+          </label>
+          <label>
+            <input type="checkbox" id="assignment-allow-multiple" checked>
+            Tillåt flera filer
+          </label>
+        </div>
+        <button id="create-assignment-btn" class="create-assignment-btn">Skapa Uppgift</button>
+      </div>
+    </div>
+
+    <div class="assignment-divider"></div>
+    {% endif %}
+
+    <!-- Uppgiftslista -->
+    <div class="assignments-container">
+      <h3>📋 {% if user_role == 'owner' %}Alla Uppgifter{% else %}Mina Uppgifter{% endif %}</h3>
+      <div id="assignments-list" class="assignments-list">
+        <div class="loading-assignments">Laddar uppgifter...</div>
+      </div>
+    </div>
+
+    <!-- Modal för att visa inlämningar (endast för ägare) -->
+    {% if user_role == 'owner' %}
+    <div id="submissions-modal" class="submissions-modal" style="display: none;">
+      <div class="submissions-modal-content">
+        <div class="submissions-modal-header">
+          <h2 id="submissions-modal-title">Inlämningar</h2>
+          <button class="submissions-modal-close" onclick="closeSubmissionsModal()">&times;</button>
+        </div>
+        <div class="submissions-modal-body">
+          <div id="submissions-list" class="submissions-list">
+            <div class="loading-submissions">Laddar inlämningar...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Modal för att lämna in uppgift (för medlemmar) -->
+    {% if user_role != 'owner' %}
+    <div id="submit-assignment-modal" class="submit-assignment-modal" style="display: none;">
+      <div class="submit-assignment-modal-content">
+        <div class="submit-assignment-modal-header">
+          <h2 id="submit-assignment-modal-title">Lämna in uppgift</h2>
+          <button class="submit-assignment-modal-close" onclick="closeSubmitAssignmentModal()">&times;</button>
+        </div>
+        <div class="submit-assignment-modal-body">
+          <div class="assignment-submission-form">
+            <textarea id="submission-comment" class="submission-comment" placeholder="Kommentar (valfritt)..." rows="3"></textarea>
+            <input type="file" id="submission-files" class="submission-file-input" multiple>
+            <label for="submission-files" class="submission-file-label">
+              Välj filer att lämna in
+            </label>
+            <div id="selected-files-list" class="selected-files-list"></div>
+            <button id="submit-assignment-final-btn" class="submit-assignment-final-btn" disabled>
+              Lämna in
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
 
 
 
@@ -3498,6 +3998,518 @@
         document.getElementById('members-count').textContent = '👥 Member count unavailable';
       }
     }
+
+
+
+
+
+
+
+    // JavaScript att lägga till i subject.html script-sektionen
+
+    // Uppgifts-relaterade variabler
+    let assignments = [];
+    let currentAssignmentId = null;
+    let selectedFiles = [];
+
+    // Initiera uppgiftsfunktionalitet när sidan laddas
+    document.addEventListener('DOMContentLoaded', function() {
+      initializeAssignments();
+    });
+
+    function initializeAssignments() {
+      const toggleBtn = document.getElementById('assignments-toggle');
+      const assignmentSection = document.getElementById('assignments-section');
+      
+      if (toggleBtn && assignmentSection) {
+        toggleBtn.addEventListener('click', toggleAssignmentsSection);
+      }
+
+      // Initiera formulär för ägare
+      if (userRole === 'owner') {
+        initializeAssignmentCreation();
+      }
+
+      // Initiera inlämning för medlemmar
+      if (userRole !== 'owner') {
+        initializeAssignmentSubmission();
+      }
+    }
+
+    function toggleAssignmentsSection() {
+      const section = document.getElementById('assignments-section');
+      const btn = document.getElementById('assignments-toggle');
+      
+      if (section.style.display === 'none' || section.style.display === '') {
+        section.style.display = 'block';
+        btn.textContent = '📝 Dölj Uppgifter';
+        loadAssignments();
+      } else {
+        section.style.display = 'none';
+        btn.textContent = '📝 Uppgifter';
+      }
+    }
+
+    // Ladda alla uppgifter
+    async function loadAssignments() {
+      const assignmentsList = document.getElementById('assignments-list');
+      if (!assignmentsList) return;
+
+      try {
+        assignmentsList.innerHTML = '<div class="loading-assignments">Laddar uppgifter...</div>';
+        
+        const response = await fetch(`/api/assignments/${subjectId}`);
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          assignments = data.assignments;
+          renderAssignments(assignments);
+        } else {
+          throw new Error(data.message || 'Kunde inte ladda uppgifter');
+        }
+      } catch (error) {
+        console.error('Error loading assignments:', error);
+        assignmentsList.innerHTML = `
+          <div class="no-assignments">
+            Fel vid laddning av uppgifter: ${error.message}
+          </div>
+        `;
+      }
+    }
+
+    // Rendera uppgifter i DOM
+    function renderAssignments(assignmentsList) {
+      const container = document.getElementById('assignments-list');
+      if (!container) return;
+
+      if (!assignmentsList || assignmentsList.length === 0) {
+        container.innerHTML = `
+          <div class="no-assignments">
+            ${userRole === 'owner' ? 'Inga uppgifter skapade än.' : 'Inga uppgifter tillgängliga.'}
+          </div>
+        `;
+        return;
+      }
+
+      const assignmentsHtml = assignmentsList.map(assignment => {
+        const dueDate = assignment.due_date ? 
+          new Date(assignment.due_date).toLocaleDateString('sv-SE') : null;
+        
+        const isOverdue = assignment.due_date && 
+          new Date(assignment.due_date) < new Date() && 
+          assignment.submission_status !== 'submitted';
+
+        let statusClass = 'pending';
+        let statusText = 'Väntande';
+        
+        if (assignment.submission_status === 'submitted') {
+          statusClass = 'submitted';
+          statusText = 'Inlämnad';
+        } else if (isOverdue) {
+          statusClass = 'overdue';
+          statusText = 'Försenad';
+        }
+
+        return `
+          <div class="assignment-card">
+            <div class="assignment-header">
+              <div>
+                <h4 class="assignment-title">${escapeHtml(assignment.title)}</h4>
+                <div class="assignment-meta">
+                  <span>📅 Skapad: ${new Date(assignment.created_at).toLocaleDateString('sv-SE')}</span>
+                  ${dueDate ? `<span>⏰ Förfaller: ${dueDate}</span>` : ''}
+                  ${userRole === 'owner' ? `<span>👥 ${assignment.submission_count || 0} inlämningar</span>` : ''}
+                </div>
+              </div>
+              ${userRole !== 'owner' ? `<span class="assignment-status ${statusClass}">${statusText}</span>` : ''}
+            </div>
+            
+            ${assignment.description ? `
+              <div class="assignment-description">
+                ${escapeHtml(assignment.description)}
+              </div>
+            ` : ''}
+            
+            <div class="assignment-actions">
+              ${userRole === 'owner' ? `
+                <button class="assignment-action-btn view-submissions" onclick="viewSubmissions(${assignment.id})">
+                  Visa Inlämningar (${assignment.submission_count || 0})
+                </button>
+                <button class="assignment-action-btn delete" onclick="deleteAssignment(${assignment.id})">
+                  Ta bort
+                </button>
+              ` : `
+                ${assignment.submission_status !== 'submitted' ? `
+                  <button class="assignment-action-btn submit" onclick="openSubmitAssignmentModal(${assignment.id})">
+                    ${assignment.submission_status === 'draft' ? 'Redigera Inlämning' : 'Lämna in'}
+                  </button>
+                ` : `
+                  <span style="color: #28a745; font-weight: 600;">✅ Inlämnad</span>
+                `}
+              `}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = assignmentsHtml;
+    }
+
+    // Initiera formulär för att skapa uppgifter (endast ägare)
+    function initializeAssignmentCreation() {
+      const createBtn = document.getElementById('create-assignment-btn');
+      if (createBtn) {
+        createBtn.addEventListener('click', createAssignment);
+      }
+    }
+
+    // Skapa ny uppgift
+    async function createAssignment() {
+      const titleElement = document.getElementById('assignment-title');
+      const descriptionElement = document.getElementById('assignment-description');
+      const dueDateElement = document.getElementById('assignment-due-date');
+      const allowMultipleElement = document.getElementById('assignment-allow-multiple');
+
+      const title = titleElement.value.trim();
+      const description = descriptionElement.value.trim();
+      const dueDate = dueDateElement.value;
+      const allowMultiple = allowMultipleElement.checked;
+
+      if (!title) {
+        showAlert('Uppgiftstitel krävs', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/assignments/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            subject_id: subjectId,
+            title: title,
+            description: description,
+            due_date: dueDate || null,
+            allow_multiple_files: allowMultiple
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          showAlert('Uppgift skapad!', 'success');
+          
+          // Rensa formulär
+          titleElement.value = '';
+          descriptionElement.value = '';
+          dueDateElement.value = '';
+          allowMultipleElement.checked = true;
+          
+          // Ladda om uppgifter
+          loadAssignments();
+        } else {
+          throw new Error(data.message || 'Kunde inte skapa uppgift');
+        }
+      } catch (error) {
+        console.error('Error creating assignment:', error);
+        showAlert('Fel vid skapande av uppgift: ' + error.message, 'error');
+      }
+    }
+
+    // Ta bort uppgift (endast ägare)
+    async function deleteAssignment(assignmentId) {
+      const assignment = assignments.find(a => a.id === assignmentId);
+      if (!assignment) return;
+
+      if (!confirm(`Är du säker på att du vill ta bort uppgiften "${assignment.title}"?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/assignments/delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            assignment_id: assignmentId
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          showAlert('Uppgift borttagen', 'success');
+          loadAssignments();
+        } else {
+          throw new Error(data.message || 'Kunde inte ta bort uppgift');
+        }
+      } catch (error) {
+        console.error('Error deleting assignment:', error);
+        showAlert('Fel vid borttagning: ' + error.message, 'error');
+      }
+    }
+
+    // Visa inlämningar för en uppgift (endast ägare)
+    async function viewSubmissions(assignmentId) {
+      currentAssignmentId = assignmentId;
+      const assignment = assignments.find(a => a.id === assignmentId);
+      
+      if (!assignment) return;
+
+      const modal = document.getElementById('submissions-modal');
+      const title = document.getElementById('submissions-modal-title');
+      const submissionsList = document.getElementById('submissions-list');
+
+      title.textContent = `Inlämningar för: ${assignment.title}`;
+      submissionsList.innerHTML = '<div class="loading-submissions">Laddar inlämningar...</div>';
+      modal.style.display = 'flex';
+
+      try {
+        const response = await fetch(`/api/assignments/${assignmentId}/submissions`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          renderSubmissions(data.submissions);
+        } else {
+          throw new Error(data.message || 'Kunde inte ladda inlämningar');
+        }
+      } catch (error) {
+        console.error('Error loading submissions:', error);
+        submissionsList.innerHTML = `
+          <div class="no-submissions">
+            Fel vid laddning: ${error.message}
+          </div>
+        `;
+      }
+    }
+
+    // Rendera inlämningar
+    function renderSubmissions(submissions) {
+      const container = document.getElementById('submissions-list');
+      if (!container) return;
+
+      if (!submissions || submissions.length === 0) {
+        container.innerHTML = '<div class="no-submissions">Inga inlämningar än.</div>';
+        return;
+      }
+
+      const submissionsHtml = submissions.map(submission => `
+        <div class="submission-item">
+          <div class="submission-header">
+            <span class="submission-student">${escapeHtml(submission.student_name)}</span>
+            <span class="submission-date">${new Date(submission.submitted_at).toLocaleString('sv-SE')}</span>
+          </div>
+          
+          ${submission.comment ? `
+            <div class="submission-comment">
+              <strong>Kommentar:</strong> ${escapeHtml(submission.comment)}
+            </div>
+          ` : ''}
+          
+          <div class="submission-files">
+            ${submission.files.map(file => `
+              <div class="submission-file">
+                <span class="submission-file-name">📎 ${escapeHtml(file.filename)}</span>
+                <a href="/download_submission_file/${file.id}" class="submission-file-download">
+                  Ladda ner
+                </a>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+
+      container.innerHTML = submissionsHtml;
+    }
+
+    // Stäng inlämningsmodal
+    function closeSubmissionsModal() {
+      const modal = document.getElementById('submissions-modal');
+      modal.style.display = 'none';
+      currentAssignmentId = null;
+    }
+
+    // Initiera inlämningsfunktionalitet (för medlemmar)
+    function initializeAssignmentSubmission() {
+      const fileInput = document.getElementById('submission-files');
+      const submitBtn = document.getElementById('submit-assignment-final-btn');
+
+      if (fileInput) {
+        fileInput.addEventListener('change', handleSubmissionFiles);
+      }
+
+      if (submitBtn) {
+        submitBtn.addEventListener('click', submitAssignment);
+      }
+    }
+
+    // Öppna inlämningsmodal
+    function openSubmitAssignmentModal(assignmentId) {
+      currentAssignmentId = assignmentId;
+      const assignment = assignments.find(a => a.id === assignmentId);
+      
+      if (!assignment) return;
+
+      const modal = document.getElementById('submit-assignment-modal');
+      const title = document.getElementById('submit-assignment-modal-title');
+      
+      title.textContent = `Lämna in: ${assignment.title}`;
+      
+      // Rensa formulär
+      document.getElementById('submission-comment').value = '';
+      document.getElementById('submission-files').value = '';
+      selectedFiles = [];
+      updateSelectedFilesList();
+      
+      modal.style.display = 'flex';
+    }
+
+    // Stäng inlämningsmodal
+    function closeSubmitAssignmentModal() {
+      const modal = document.getElementById('submit-assignment-modal');
+      modal.style.display = 'none';
+      currentAssignmentId = null;
+      selectedFiles = [];
+    }
+
+    // Hantera valda filer
+    function handleSubmissionFiles(event) {
+      const files = Array.from(event.target.files);
+      selectedFiles = files;
+      updateSelectedFilesList();
+      updateSubmitButtonState();
+    }
+
+    // Uppdatera lista över valda filer
+    function updateSelectedFilesList() {
+      const container = document.getElementById('selected-files-list');
+      if (!container) return;
+
+      if (selectedFiles.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const filesHtml = selectedFiles.map((file, index) => `
+        <div class="selected-file-item">
+          <span>${escapeHtml(file.name)} (${formatFileSize(file.size)})</span>
+          <button class="selected-file-remove" onclick="removeSelectedFile(${index})">
+            Ta bort
+          </button>
+        </div>
+      `).join('');
+
+      container.innerHTML = filesHtml;
+    }
+
+    // Ta bort vald fil
+    function removeSelectedFile(index) {
+      selectedFiles.splice(index, 1);
+      updateSelectedFilesList();
+      updateSubmitButtonState();
+
+      // Uppdatera file input
+      const fileInput = document.getElementById('submission-files');
+      if (fileInput) {
+        const dt = new DataTransfer();
+        selectedFiles.forEach(file => dt.items.add(file));
+        fileInput.files = dt.files;
+      }
+    }
+
+    // Uppdatera tillstånd för inlämningsknapp
+    function updateSubmitButtonState() {
+      const submitBtn = document.getElementById('submit-assignment-final-btn');
+      if (submitBtn) {
+        submitBtn.disabled = selectedFiles.length === 0;
+      }
+    }
+
+    // Lämna in uppgift
+    async function submitAssignment() {
+      if (!currentAssignmentId || selectedFiles.length === 0) {
+        showAlert('Välj minst en fil att lämna in', 'error');
+        return;
+      }
+
+      const comment = document.getElementById('submission-comment').value.trim();
+      const submitBtn = document.getElementById('submit-assignment-final-btn');
+
+      try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Lämnar in...';
+
+        const formData = new FormData();
+        formData.append('assignment_id', currentAssignmentId);
+        formData.append('comment', comment);
+
+        selectedFiles.forEach((file, index) => {
+          formData.append(`files`, file);
+        });
+
+        const response = await fetch('/api/assignments/submit', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          showAlert('Uppgift inlämnad!', 'success');
+          closeSubmitAssignmentModal();
+          loadAssignments(); // Ladda om för att visa uppdaterat status
+        } else {
+          throw new Error(data.message || 'Kunde inte lämna in uppgift');
+        }
+      } catch (error) {
+        console.error('Error submitting assignment:', error);
+        showAlert('Fel vid inlämning: ' + error.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Lämna in';
+      }
+    }
+
+    // Hjälpfunktion för filstorlek
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Stäng modaler vid klick utanför
+    document.addEventListener('click', function(e) {
+      const submissionsModal = document.getElementById('submissions-modal');
+      const submitModal = document.getElementById('submit-assignment-modal');
+      
+      if (e.target === submissionsModal) {
+        closeSubmissionsModal();
+      }
+      
+      if (e.target === submitModal) {
+        closeSubmitAssignmentModal();
+      }
+    });
+
+    // Stäng modaler med Escape
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const submissionsModal = document.getElementById('submissions-modal');
+        const submitModal = document.getElementById('submit-assignment-modal');
+        
+        if (submissionsModal && submissionsModal.style.display === 'flex') {
+          closeSubmissionsModal();
+        }
+        
+        if (submitModal && submitModal.style.display === 'flex') {
+          closeSubmitAssignmentModal();
+        }
+      }
+    });
     
     
     // Load members list from server
