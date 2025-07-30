@@ -2526,6 +2526,9 @@
           <label for="lesson-upload-input" class="lesson-upload-label">
             Välj Video/Ljudfil eller Drag & Drop
           </label>
+          <div id="lesson-file-name" class="file-name-display" style="margin-top:4px; font-style:italic; color:#555;">
+            <!-- Här kommer filnamnet att visas -->
+          </div>
       
           <button id="upload-lesson-btn" class="upload-lesson-button" disabled>
             Ladda upp Lektion
@@ -4157,6 +4160,8 @@
     });
 
     function initializeLessonUpload() {
+
+      
       const titleInput = document.getElementById('lesson-title');
       const dateInput = document.getElementById('lesson-date');
       const fileInput = document.getElementById('lesson-upload-input');
@@ -4188,16 +4193,20 @@
       uploadArea.addEventListener('dragleave', () => {
         uploadArea.classList.remove('drag-over');
       });
+
+      fileInput.addEventListener('change', e => {
+        const files = Array.from(e.target.files);
+        updateLessonFileNameDisplay(files);
+        checkFormValidity();
+      });
   
-      uploadArea.addEventListener('drop', (e) => {
+      uploadArea.addEventListener('drop', e => {
         e.preventDefault();
         uploadArea.classList.remove('drag-over');
-    
         const files = Array.from(e.dataTransfer.files);
-        if (files.length > 0) {
-          fileInput.files = e.dataTransfer.files;
-          checkFormValidity();
-        }
+        fileInput.files = e.dataTransfer.files; // så FormData plockar upp dem
+        updateLessonFileNameDisplay(files);
+        checkFormValidity();
       });
   
       // Upload button click handler
@@ -4330,6 +4339,8 @@
                 progressBar.style.width = '0%';
             }, 3000);
         }
+      document.getElementById('lesson-file-name').textContent = '';
+
     }
 
 
@@ -4342,7 +4353,18 @@
 
 
 
-
+    function updateLessonFileNameDisplay(files) {
+      const nameDiv = document.getElementById('lesson-file-name');
+      if (!files || files.length === 0) {
+        nameDiv.textContent = ''; 
+      } else if (files.length === 1) {
+        nameDiv.textContent = `Fil vald: ${files[0].name}`;
+      } else {
+        const names = Array.from(files).map(f => f.name).join(', ');
+        nameDiv.textContent = `Filer valda: ${names}`;
+      }
+    }
+      
 
 
 
