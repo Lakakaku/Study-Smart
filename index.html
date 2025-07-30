@@ -612,6 +612,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+
+
+
+
+  // Calendar modal close button
+  calendarCloseBtn?.addEventListener('click', () => {
+    calendarModal.style.display = 'none';
+    // Also hide events display when closing calendar
+    eventsDisplay.style.display = 'none';
+  });
+
+  // Add event modal close button  
+  addEventModalClose?.addEventListener('click', () => {
+    addEventModal.style.display = 'none';
+    clearEventForm();
+  });
+  // Events display close button
+  closeEventsDisplay?.addEventListener('click', () => {
+    eventsDisplay.style.display = 'none';
+  });
+
+
+
+  // Update the window click handler to properly handle modal closing
+  window.addEventListener('click', e => {
+    // Calendar modal
+    if (e.target === calendarModal) {
+      calendarModal.style.display = 'none';
+      eventsDisplay.style.display = 'none';
+    }
+    
+    // Add event modal
+    if (e.target === addEventModal) {
+      addEventModal.style.display = 'none';
+      clearEventForm();
+    }
+    
+    // Subject modal
+    if (e.target === subjectModal) {
+      subjectModal.style.display = 'none';
+    }
+  });
+
+
   async function saveEvent(eventData) {
     try {
       const resp = await fetch('/api/events', {
@@ -997,9 +1041,10 @@ document.addEventListener('DOMContentLoaded', () => {
         dayDiv.appendChild(hdr);
 
         const dayEvents = getEventsForDate(d);
-        const scheduledQuizzes = schedule[formatKey(d)] || [];
+        // REMOVED: const scheduledQuizzes = schedule[formatKey(d)] || [];
 
-        if (dayEvents.length > 0 || scheduledQuizzes.length > 0) {
+        // Only show indicators for events, not for scheduled quizzes
+        if (dayEvents.length > 0) {
           const indicator = document.createElement('div');
           indicator.className = 'event-indicator';
 
@@ -1012,9 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (sharedEvents.length > 0) {
             indicator.classList.add('has-shared-events');
           }
-          if (scheduledQuizzes.length > 0) {
-            indicator.classList.add('has-repetitions');
-          }
+          // REMOVED: Quiz indicator logic
 
           let tooltipText = '';
           if (ownEvents.length > 0) {
@@ -1023,9 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (sharedEvents.length > 0) {
             tooltipText += (tooltipText ? ', ' : '') + `${sharedEvents.length} shared event(s)`;
           }
-          if (scheduledQuizzes.length > 0) {
-            tooltipText += (tooltipText ? ', ' : '') + `${scheduledQuizzes.length} repetition(s)`;
-          }
+          // REMOVED: Quiz tooltip logic
 
           indicator.title = tooltipText;
           dayDiv.appendChild(indicator);
