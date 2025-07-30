@@ -2313,11 +2313,12 @@
   <div class="main-layout {% if user_role not in ['owner', 'admin'] %}member-view{% endif %}">
     <div class="quiz-container">
       <h3>🎯 Quizzes</h3>
+      <!-- Uppdaterad HTML för quiz-sektionen med sortering -->
       {% if quizzes %}
         <div class="quiz-grid">
           
-          <!-- Uppdaterad HTML för quiz-korten -->
-          {% for quiz in quizzes %}
+          <!-- Uppdaterad HTML för quiz-korten med sortering: nyaste först -->
+          {% for quiz in quizzes|sort(attribute='created_at', reverse=true) %}
           <div class="quiz-card">
             <div class="quiz-header">
               <div class="quiz-title">
@@ -2377,7 +2378,7 @@
           {% endfor %}
 
         </div>
-        {% else %}
+      {% else %}
         <p>No quizzes available for this subject yet.</p>
       {% endif %}
     </div>
