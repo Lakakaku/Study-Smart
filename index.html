@@ -574,6 +574,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ----------- Part 2: Calendar modal and event handling -----------
+
+  let calendarCurrentDate = new Date(); // Add this variable to track calendar's current month/year
+
   const calendarBtn = document.getElementById('btn-2');
   const calendarModal = document.getElementById('calendar-modal');
   const calendarCloseBtn = calendarModal?.querySelector('.calendar-close');
@@ -625,22 +628,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Update the calendar button click handler:
   calendarBtn?.addEventListener('click', () => {
     calendarModal.style.display = 'block';
-    renderCalendar(new Date());
+    calendarCurrentDate = new Date(); // Reset to current month when opening
+    renderCalendar(calendarCurrentDate);
   });
 
-  calendarCloseBtn?.addEventListener('click', () => {
-    calendarModal.style.display = 'none';
+  // Update the month navigation buttons:
+  prevMonthBtn?.addEventListener('click', () => {
+    calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() - 1);
+    renderCalendar(calendarCurrentDate);
   });
 
-  addEventModalClose?.addEventListener('click', () => { 
-    addEventModal.style.display = 'none'; 
-    clearEventForm(); 
-  });
-
-  closeEventsDisplay?.addEventListener('click', () => {
-    eventsDisplay.style.display = 'none';
+  nextMonthBtn?.addEventListener('click', () => {
+    calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + 1);
+    renderCalendar(calendarCurrentDate);
   });
 
   saveEventBtn?.addEventListener('click', async () => {
@@ -954,17 +957,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  prevMonthBtn?.addEventListener('click', () => {
-    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-    renderCalendar(newDate);
-  });
+  
 
-  nextMonthBtn?.addEventListener('click', () => {
-    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    renderCalendar(newDate);
-  });
-
+  // Update the renderCalendar function to use the tracking variable:
   window.renderCalendar = date => {
+    calendarCurrentDate = new Date(date); // Update the tracking variable
     monthYearSpan.textContent = `${date.toLocaleString('default',{month:'long'})} ${date.getFullYear()}`;
     calendarBody.innerHTML = '';
 
@@ -1002,7 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dayEvents = getEventsForDate(d);
         const scheduledQuizzes = schedule[formatKey(d)] || [];
 
-        if (dayEvents.length > 0) {
+        if (dayEvents.length > 0 || scheduledQuizzes.length > 0) {
           const indicator = document.createElement('div');
           indicator.className = 'event-indicator';
 
