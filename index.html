@@ -553,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <p>${qz.count} question${qz.count > 1 ? 's' : ''}</p>
               <div class="quiz-actions">
                   <a href="${link}"><button class="start-quiz-btn">Start Quiz</button></a>
-                  ${canLeave ? `<button class="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this shared quiz">Leave Quiz</button>` : ''}
+                  ${canLeave ? `<button class="leave-quiz-btn" id="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this shared quiz">✖</button>` : ''}
               </div>
           `;
           container.appendChild(card);
@@ -2239,7 +2239,21 @@ async function leaveSubject(subjectId) {
       gap: 0.75rem;
       align-items: center;
       flex-wrap: wrap;
+      flex-direction: row; 
     }
+
+    .quiz-actions .start-quiz-btn {
+      width: 100px;          /* exakt samma bredd */
+    }
+
+    .leave-quiz-btn {
+      font-size: 1.2rem; /* eller större */
+      padding: 0.5rem 0.75rem;
+      line-height: 1;
+    }
+
+   
+
 
     .start-quiz-btn {
       background: linear-gradient(135deg, var(--accent-color) 0%, #059669 100%);
@@ -3020,9 +3034,14 @@ async function leaveSubject(subjectId) {
         padding: 1rem;
       }
 
-      .quiz-actions {
-        flex-direction: column;
-        gap: 0.5rem;
+      #leave-quiz-btn {
+        width: 40px;       /* Exakt bredd */
+        height: 40px;      /* Exakt höjd */
+        font-size: 1.2rem; /* Anpassa efter om du har ett kryss */
+        padding: 0;        /* Tar bort eventuell extra inre marginal */
+        text-align: center;
+        line-height: 1;
+        
       }
 
       .start-quiz-btn,
