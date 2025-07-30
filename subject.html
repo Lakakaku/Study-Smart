@@ -2775,6 +2775,457 @@
       font-style: italic;
     }
 
+
+
+
+
+    /* CSS för kommentarfunktionalitet och modaler */
+
+    /* Submission fil-åtgärder */
+    .submission-file-actions {
+      display: flex;
+      gap: 8px;
+      margin-left: 10px;
+    }
+
+    .submission-file-view,
+    .submission-file-download {
+      padding: 4px 8px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .submission-file-view {
+      background-color: #007bff;
+      color: white;
+    }
+
+    .submission-file-view:hover {
+      background-color: #0056b3;
+      color: white;
+    }
+
+    .submission-file-download {
+      background-color: #28a745;
+      color: white;
+    }
+
+    .submission-file-download:hover {
+      background-color: #1e7e34;
+      color: white;
+    }
+
+    /* Kommentarsräknare */
+    .submission-comment-count {
+      font-size: 12px;
+      color: #6c757d;
+      background-color: #f8f9fa;
+      padding: 2px 6px;
+      border-radius: 12px;
+    }
+
+    /* Kommentarssektion */
+    .comment-section {
+      margin-top: 15px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      border-left: 3px solid #007bff;
+    }
+
+    .comment-form {
+      margin-bottom: 20px;
+    }
+
+    .comment-form textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 14px;
+    }
+
+    .add-comment-btn {
+      margin-top: 10px;
+      padding: 8px 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.2s ease;
+    }
+
+    .add-comment-btn:hover {
+      background-color: #0056b3;
+    }
+
+    /* Kommentarlista */
+    .comments-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .comment-item {
+      background-color: white;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .comment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .comment-author {
+      font-weight: 600;
+      color: #495057;
+    }
+
+    .comment-date {
+      font-size: 12px;
+      color: #6c757d;
+    }
+
+    .comment-text {
+      margin-bottom: 10px;
+      line-height: 1.5;
+      color: #212529;
+    }
+
+    .comment-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .edit-comment-btn,
+    .delete-comment-btn {
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .edit-comment-btn {
+      background-color: #ffc107;
+      color: #212529;
+    }
+
+    .edit-comment-btn:hover {
+      background-color: #e0a800;
+    }
+
+    .delete-comment-btn {
+      background-color: #dc3545;
+      color: white;
+    }
+
+    .delete-comment-btn:hover {
+      background-color: #c82333;
+    }
+
+    /* Kommentar redigeringsform */
+    .comment-edit-form {
+      margin-top: 10px;
+    }
+
+    .comment-edit-form textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 14px;
+    }
+
+    .edit-form-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .save-edit-btn,
+    .cancel-edit-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .save-edit-btn {
+      background-color: #28a745;
+      color: white;
+    }
+
+    .save-edit-btn:hover {
+      background-color: #1e7e34;
+    }
+
+    .cancel-edit-btn {
+      background-color: #6c757d;
+      color: white;
+    }
+
+    .cancel-edit-btn:hover {
+      background-color: #545b62;
+    }
+
+    /* Kommentera-knapp för submissions */
+    .submission-action-btn.comment {
+      background-color: #17a2b8;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.2s ease;
+    }
+
+    .submission-action-btn.comment:hover {
+      background-color: #138496;
+    }
+
+    /* Visa Feedback-knapp för studenter */
+    .assignment-action-btn.view-feedback {
+      background-color: #6f42c1;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      display: inline-block;
+      transition: background-color 0.2s ease;
+    }
+
+    .assignment-action-btn.view-feedback:hover {
+      background-color: #5a32a3;
+      color: white;
+    }
+
+    /* Min inlämning modal */
+    .my-submission-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .my-submission-modal-content {
+      background-color: white;
+      border-radius: 8px;
+      max-width: 800px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .my-submission-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-bottom: 1px solid #e9ecef;
+      background-color: #f8f9fa;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .my-submission-modal-header h2 {
+      margin: 0;
+      color: #495057;
+    }
+
+    .my-submission-modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #6c757d;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+
+    .my-submission-modal-close:hover {
+      background-color: #e9ecef;
+      color: #495057;
+    }
+
+    .my-submission-modal-body {
+      padding: 20px;
+    }
+
+    .my-submission-info {
+      margin-bottom: 30px;
+    }
+
+    .my-submission-date {
+      font-size: 14px;
+      color: #6c757d;
+      margin-bottom: 15px;
+    }
+
+    .my-submission-comment {
+      margin-bottom: 20px;
+    }
+
+    .my-comment-text {
+      background-color: #f8f9fa;
+      padding: 10px;
+      border-radius: 6px;
+      border-left: 3px solid #007bff;
+      margin-top: 8px;
+    }
+
+    .my-submission-files h4 {
+      margin-bottom: 10px;
+      color: #495057;
+    }
+
+    .my-submission-file {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      margin-bottom: 5px;
+    }
+
+    .my-submission-file-name {
+      color: #495057;
+    }
+
+    /* Lärarfeedback sektion */
+    .teacher-feedback-section {
+      border-top: 1px solid #e9ecef;
+      padding-top: 20px;
+    }
+
+    .teacher-feedback-section h3 {
+      margin-bottom: 15px;
+      color: #495057;
+    }
+
+    .teacher-comment-item {
+      background-color: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-left: 3px solid #28a745;
+    }
+
+    .teacher-comment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .teacher-comment-author {
+      font-weight: 600;
+      color: #28a745;
+    }
+
+    .teacher-comment-date {
+      font-size: 12px;
+      color: #6c757d;
+    }
+
+    .teacher-comment-text {
+      line-height: 1.5;
+      color: #212529;
+    }
+
+    .no-teacher-comments {
+      text-align: center;
+      color: #6c757d;
+      font-style: italic;
+      padding: 20px;
+    }
+
+    /* Laddningsmeddelanden */
+    .loading-comments {
+      text-align: center;
+      color: #6c757d;
+      font-style: italic;
+      padding: 20px;
+    }
+
+    .error-loading-comments {
+      text-align: center;
+      color: #dc3545;
+      padding: 20px;
+      background-color: #f8d7da;
+      border-radius: 4px;
+      border: 1px solid #f5c6cb;
+    }
+
+    .no-comments {
+      text-align: center;
+      color: #6c757d;
+      font-style: italic;
+      padding: 15px;
+    }
+
+    /* Responsiv design */
+    @media (max-width: 768px) {
+      .my-submission-modal-content {
+        width: 95%;
+        margin: 10px;
+      }
+      
+      .comment-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+      }
+      
+      .comment-actions,
+      .edit-form-actions {
+        flex-wrap: wrap;
+      }
+      
+      .submission-file-actions {
+        flex-direction: column;
+        gap: 4px;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -4028,6 +4479,8 @@
       // Initiera formulär för ägare
       if (userRole === 'owner') {
         initializeAssignmentCreation();
+        // LÄGG TILL DENNA RAD:
+        setDefaultDueDate();
       }
 
       // Initiera inlämning för medlemmar
@@ -4077,7 +4530,7 @@
       }
     }
 
-    // Rendera uppgifter i DOM
+    // Uppdatera renderAssignments för att visa kommentarer för studenter
     function renderAssignments(assignmentsList) {
       const container = document.getElementById('assignments-list');
       if (!container) return;
@@ -4144,7 +4597,9 @@
                     ${assignment.submission_status === 'draft' ? 'Redigera Inlämning' : 'Lämna in'}
                   </button>
                 ` : `
-                  <span style="color: #28a745; font-weight: 600;">✅ Inlämnad</span>
+                  <button class="assignment-action-btn view-feedback" onclick="viewMySubmission(${assignment.id})">
+                    Visa Feedback
+                  </button>
                 `}
               `}
             </div>
@@ -4251,6 +4706,83 @@
       }
     }
 
+    // Visa modal med studentens inlämning
+    function showMySubmissionModal(submission) {
+      // Skapa modal dynamiskt
+      const modalHtml = `
+        <div id="student-submission-modal" class="submissions-modal" style="display: flex;">
+          <div class="submissions-modal-content">
+            <div class="submissions-modal-header">
+              <h2>Min Inlämning</h2>
+              <button class="submissions-modal-close" onclick="closeStudentSubmissionModal()">&times;</button>
+            </div>
+            <div class="submissions-modal-body">
+              <div class="student-submission-details">
+                <p><strong>Inlämnad:</strong> ${new Date(submission.submitted_at).toLocaleString('sv-SE')}</p>
+                ${submission.comment ? `<p><strong>Min kommentar:</strong> ${escapeHtml(submission.comment)}</p>` : ''}
+                
+                <div class="submission-files">
+                  <h4>Inlämnade filer:</h4>
+                  ${submission.files.map(file => `
+                    <div class="submission-file">
+                      <span class="submission-file-name">📎 ${escapeHtml(file.filename)}</span>
+                    </div>
+                  `).join('')}
+                </div>
+                
+                <div class="teacher-comments-section">
+                  <h4>Kommentarer från lärare:</h4>
+                  <div class="teacher-comments-list">
+                    ${submission.teacher_comments.length > 0 ? 
+                      submission.teacher_comments.map(comment => `
+                        <div class="teacher-comment-item">
+                          <div class="comment-header">
+                            <span class="comment-author">${escapeHtml(comment.teacher_name)}</span>
+                            <span class="comment-date">
+                              ${new Date(comment.created_at).toLocaleString('sv-SE')}
+                              ${comment.updated_at !== comment.created_at ? ' (redigerad)' : ''}
+                            </span>
+                          </div>
+                          <div class="comment-text">${escapeHtml(comment.comment)}</div>
+                        </div>
+                      `).join('') : 
+                      '<p class="no-teacher-comments">Inga kommentarer från lärare än.</p>'
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Ta bort befintlig modal om den finns
+      const existingModal = document.getElementById('student-submission-modal');
+      if (existingModal) {
+        existingModal.remove();
+      }
+      
+      // Lägg till ny modal
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    // Visa min inlämning med kommentarer (för studenter)
+    async function viewMySubmission(assignmentId) {
+      try {
+        const response = await fetch(`/api/my_submissions/${assignmentId}`);
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.submission) {
+          // Skapa en modal för att visa inlämningen och kommentarer
+          showMySubmissionModal(data.submission);
+        } else {
+          showAlert('Ingen inlämning hittades', 'error');
+        }
+      } catch (error) {
+        console.error('Error loading my submission:', error);
+        showAlert('Fel vid laddning av inlämning: ' + error.message, 'error');
+      }
+    }
     // Visa inlämningar för en uppgift (endast ägare)
     async function viewSubmissions(assignmentId) {
       currentAssignmentId = assignmentId;
@@ -4285,7 +4817,27 @@
       }
     }
 
-    // Rendera inlämningar
+
+
+    function setDefaultDueDate() {
+      const dueDateInput = document.getElementById('assignment-due-date');
+      
+      if (dueDateInput) {
+        // Skapa dagens datum i YYYY-MM-DD format
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        
+        const todayString = `${year}-${month}-${day}`;
+        
+        // Sätt dagens datum som standardvärde
+        dueDateInput.value = todayString;
+      }
+    }
+
+
+    // Uppdatera renderSubmissions för att inkludera comment_count
     function renderSubmissions(submissions) {
       const container = document.getElementById('submissions-list');
       if (!container) return;
@@ -4296,15 +4848,16 @@
       }
 
       const submissionsHtml = submissions.map(submission => `
-        <div class="submission-item">
+        <div class="submission-item" data-submission-id="${submission.id}">
           <div class="submission-header">
             <span class="submission-student">${escapeHtml(submission.student_name)}</span>
             <span class="submission-date">${new Date(submission.submitted_at).toLocaleString('sv-SE')}</span>
+            <span class="submission-comment-count">💬 ${submission.comment_count || 0} kommentarer</span>
           </div>
           
           ${submission.comment ? `
             <div class="submission-comment">
-              <strong>Kommentar:</strong> ${escapeHtml(submission.comment)}
+              <strong>Elevens kommentar:</strong> ${escapeHtml(submission.comment)}
             </div>
           ` : ''}
           
@@ -4312,11 +4865,34 @@
             ${submission.files.map(file => `
               <div class="submission-file">
                 <span class="submission-file-name">📎 ${escapeHtml(file.filename)}</span>
-                <a href="/download_submission_file/${file.id}" class="submission-file-download">
-                  Ladda ner
-                </a>
+                <div class="submission-file-actions">
+                  <a href="/view_submission_file/${file.id}" class="submission-file-view" target="_blank">
+                    Öppna
+                  </a>
+                  <a href="/download_submission_file/${file.id}" class="submission-file-download">
+                    Ladda ner
+                  </a>
+                </div>
               </div>
             `).join('')}
+          </div>
+          
+          <div class="submission-actions">
+            <button class="submission-action-btn comment" onclick="openCommentSection(${submission.id})">
+              Kommentera
+            </button>
+          </div>
+          
+          <!-- Kommentarssektion -->
+          <div class="comment-section" id="comment-section-${submission.id}" style="display: none;">
+            <div class="comment-form">
+              <textarea id="comment-input-${submission.id}" placeholder="Skriv din kommentar här..." rows="3"></textarea>
+              <button onclick="addComment(${submission.id})" class="add-comment-btn">Lägg till kommentar</button>
+            </div>
+            
+            <div class="comments-list" id="comments-list-${submission.id}">
+              <div class="loading-comments">Laddar kommentarer...</div>
+            </div>
           </div>
         </div>
       `).join('');
@@ -4329,6 +4905,14 @@
       const modal = document.getElementById('submissions-modal');
       modal.style.display = 'none';
       currentAssignmentId = null;
+    }
+
+    // Stäng studentens inlämningsmodal
+    function closeStudentSubmissionModal() {
+      const modal = document.getElementById('student-submission-modal');
+      if (modal) {
+        modal.remove();
+      }
     }
 
     // Initiera inlämningsfunktionalitet (för medlemmar)
@@ -4344,6 +4928,316 @@
         submitBtn.addEventListener('click', submitAssignment);
       }
     }
+
+
+
+    // Ladda kommentarer för en inlämning
+    async function loadComments(submissionId) {
+      const commentsList = document.getElementById(`comments-list-${submissionId}`);
+      
+      try {
+        commentsList.innerHTML = '<div class="loading-comments">Laddar kommentarer...</div>';
+        
+        const response = await fetch(`/api/submission/${submissionId}/comments`);
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          renderComments(submissionId, data.comments);
+        } else {
+          throw new Error(data.message || 'Kunde inte ladda kommentarer');
+        }
+      } catch (error) {
+        console.error('Error loading comments:', error);
+        commentsList.innerHTML = `
+          <div class="error-loading-comments">
+            Fel vid laddning av kommentarer: ${error.message}
+          </div>
+        `;
+      }
+    }
+
+
+
+    // Rendera kommentarer
+    // Rendera kommentarer
+    function renderComments(submissionId, comments) {
+      const commentsList = document.getElementById(`comments-list-${submissionId}`);
+      
+      if (!comments || comments.length === 0) {
+        commentsList.innerHTML = '<div class="no-comments">Inga kommentarer än.</div>';
+        return;
+      }
+      
+      const commentsHtml = comments.map(comment => {
+        const isUpdated = comment.updated_at !== comment.created_at;
+        
+        return `
+          <div class="comment-item" data-comment-id="${comment.id}">
+            <div class="comment-header">
+              <span class="comment-author">${escapeHtml(comment.teacher_name)}</span>
+              <span class="comment-date">
+                ${new Date(comment.created_at).toLocaleString('sv-SE')}
+                ${isUpdated ? ' (redigerad)' : ''}
+              </span>
+            </div>
+            <div class="comment-text" id="comment-text-${comment.id}">
+              ${escapeHtml(comment.comment)}
+            </div>
+            <div class="comment-actions">
+              <button onclick="editComment(${comment.id}, ${submissionId})" class="edit-comment-btn">
+                Redigera
+              </button>
+              <button onclick="deleteComment(${comment.id}, ${submissionId})" class="delete-comment-btn">
+                Ta bort
+              </button>
+            </div>
+            
+            <!-- Redigeringsform (dold som standard) -->
+            <div class="comment-edit-form" id="edit-form-${comment.id}" style="display: none;">
+              <textarea id="edit-input-${comment.id}" rows="3">${escapeHtml(comment.comment)}</textarea>
+              <div class="edit-form-actions">
+                <button onclick="saveEditComment(${comment.id}, ${submissionId})" class="save-edit-btn">
+                  Spara
+                </button>
+                <button onclick="cancelEditComment(${comment.id})" class="cancel-edit-btn">
+                  Avbryt
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      commentsList.innerHTML = commentsHtml;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Lägg till ny kommentar
+    async function addComment(submissionId) {
+      const commentInput = document.getElementById(`comment-input-${submissionId}`);
+      const commentText = commentInput.value.trim();
+      
+      if (!commentText) {
+        showAlert('Skriv en kommentar först', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/submission/${submissionId}/add_comment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            comment: commentText
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          showAlert('Kommentar tillagd!', 'success');
+          commentInput.value = '';
+          
+          // Uppdatera kommentarsräknaren i submission-listan
+          const submissionItem = document.querySelector(`[data-submission-id="${submissionId}"]`);
+          if (submissionItem) {
+            const countElement = submissionItem.querySelector('.submission-comment-count');
+            if (countElement) {
+              const currentCount = parseInt(countElement.textContent.match(/\d+/)[0]) || 0;
+              countElement.textContent = `💬 ${currentCount + 1} kommentarer`;
+            }
+          }
+          
+          // Ladda om kommentarer
+          await loadComments(submissionId);
+        } else {
+          throw new Error(data.message || 'Kunde inte lägga till kommentar');
+        }
+      } catch (error) {
+        console.error('Error adding comment:', error);
+        showAlert('Fel vid tillägg av kommentar: ' + error.message, 'error');
+      }
+    }
+
+    // Redigera kommentar
+    // Redigera kommentar
+    function editComment(commentId, submissionId) {
+      const commentText = document.getElementById(`comment-text-${commentId}`);
+      const editForm = document.getElementById(`edit-form-${commentId}`);
+      
+      commentText.style.display = 'none';
+      editForm.style.display = 'block';
+      
+      // Fokusera på textarea
+      const editInput = document.getElementById(`edit-input-${commentId}`);
+      editInput.focus();
+    }
+
+    // Spara redigerad kommentar
+    async function saveEditComment(commentId, submissionId) {
+      const editInput = document.getElementById(`edit-input-${commentId}`);
+      const newCommentText = editInput.value.trim();
+      
+      if (!newCommentText) {
+        showAlert('Kommentar kan inte vara tom', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/submission/${submissionId}/edit_comment/${commentId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            comment: newCommentText
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          showAlert('Kommentar uppdaterad!', 'success');
+          
+          // Uppdatera visningen
+          const commentText = document.getElementById(`comment-text-${commentId}`);
+          const editForm = document.getElementById(`edit-form-${commentId}`);
+          
+          commentText.textContent = newCommentText;
+          commentText.style.display = 'block';
+          editForm.style.display = 'none';
+          
+          // Ladda om kommentarer för att visa uppdaterat datum
+          await loadComments(submissionId);
+        } else {
+          throw new Error(data.message || 'Kunde inte uppdatera kommentar');
+        }
+      } catch (error) {
+        console.error('Error editing comment:', error);
+        showAlert('Fel vid uppdatering av kommentar: ' + error.message, 'error');
+      }
+    }
+
+    // Spara redigerad kommentar
+    async function saveEditComment(commentId, submissionId) {
+      const editInput = document.getElementById(`edit-input-${commentId}`);
+      const newCommentText = editInput.value.trim();
+      
+      if (!newCommentText) {
+        showAlert('Kommentar kan inte vara tom', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/submission/${submissionId}/edit_comment/${commentId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            comment: newCommentText
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          showAlert('Kommentar uppdaterad!', 'success');
+          
+          // Uppdatera visningen
+          const commentText = document.getElementById(`comment-text-${commentId}`);
+          const editForm = document.getElementById(`edit-form-${commentId}`);
+          
+          commentText.textContent = newCommentText;
+          commentText.style.display = 'block';
+          editForm.style.display = 'none';
+          
+          // Ladda om kommentarer för att visa uppdaterat datum
+          await loadComments(submissionId);
+        } else {
+          throw new Error(data.message || 'Kunde inte uppdatera kommentar');
+        }
+      } catch (error) {
+        console.error('Error editing comment:', error);
+        showAlert('Fel vid uppdatering av kommentar: ' + error.message, 'error');
+      }
+    }
+
+    // Avbryt redigering
+    // Avbryt redigering
+    function cancelEditComment(commentId) {
+      const commentText = document.getElementById(`comment-text-${commentId}`);
+      const editForm = document.getElementById(`edit-form-${commentId}`);
+      
+      commentText.style.display = 'block';
+      editForm.style.display = 'none';
+    }
+
+    // Ta bort kommentar
+    async function deleteComment(commentId, submissionId) {
+      if (!confirm('Är du säker på att du vill ta bort denna kommentar?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/submission/${submissionId}/delete_comment/${commentId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          showAlert('Kommentar borttagen!', 'success');
+          
+          // Uppdatera kommentarsräknaren
+          const submissionItem = document.querySelector(`[data-submission-id="${submissionId}"]`);
+          if (submissionItem) {
+            const countElement = submissionItem.querySelector('.submission-comment-count');
+            if (countElement) {
+              const currentCount = parseInt(countElement.textContent.match(/\d+/)[0]) || 0;
+              countElement.textContent = `💬 ${Math.max(0, currentCount - 1)} kommentarer`;
+            }
+          }
+          
+          // Ladda om kommentarer
+          await loadComments(submissionId);
+        } else {
+          throw new Error(data.message || 'Kunde inte ta bort kommentar');
+        }
+      } catch (error) {
+        console.error('Error deleting comment:', error);
+        showAlert('Fel vid borttagning av kommentar: ' + error.message, 'error');
+      }
+    }
+
+
+
+    function openCommentSection(submissionId) {
+      const commentSection = document.getElementById(`comment-section-${submissionId}`);
+      
+      if (commentSection.style.display === 'none' || commentSection.style.display === '') {
+        commentSection.style.display = 'block';
+        loadComments(submissionId);
+      } else {
+        commentSection.style.display = 'none';
+      }
+    }
+
 
     // Öppna inlämningsmodal
     function openSubmitAssignmentModal(assignmentId) {
