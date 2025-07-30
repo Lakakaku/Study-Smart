@@ -857,6 +857,7 @@ class KravDocument(db.Model):
     def __repr__(self):
         return f"KravDocument('{self.doc_type}', '{self.filename}')"
 
+# Uppdaterade modeller för kommentarfunktionalitet
 
 class Assignment(db.Model):
     """Uppgifter som skapas av ämnesägare"""
@@ -889,6 +890,8 @@ class AssignmentSubmission(db.Model):
     # Relationer
     student = db.relationship('User', backref='assignment_submissions')
     files = db.relationship('AssignmentFile', backref='submission', cascade='all, delete-orphan')
+    # NY: Relation till kommentarer från lärare
+    teacher_comments = db.relationship('SubmissionComment', backref='submission', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<AssignmentSubmission {self.id}>'
@@ -905,55 +908,25 @@ class AssignmentFile(db.Model):
 
     def __repr__(self):
         return f'<AssignmentFile {self.filename}>'
+
+
+# NY MODELL: Kommentarer från lärare på inlämningar
+class SubmissionComment(db.Model):
+    """Kommentarer från lärare/ägare på elevens inlämning"""
+    __tablename__ = 'submission_comments'
     
-
-def create_tables():
-    """Skapa alla databastabeller"""
-    with app.app_context():
-        db.create_all()
-        print("Database tables created successfully!")
-
-def update_database():
-    """Uppdatera databasen med nya tabeller"""
-    try:
-        # Skapa Lesson-tabellen om den inte finns
-        db.engine.execute("""
-            CREATE TABLE IF NOT EXISTS lessons (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                subject_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                title VARCHAR(200) NOT NULL,
-                description TEXT,
-                filename VARCHAR(255) NOT NULL,
-                file_path VARCHAR(500) NOT NULL,
-                file_size INTEGER,
-                file_type VARCHAR(100),
-                duration INTEGER,
-                lesson_date DATE NOT NULL,
-                is_active BOOLEAN DEFAULT 1,
-                view_count INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (subject_id) REFERENCES subject (id),
-                FOREIGN KEY (user_id) REFERENCES user (id)
-            )
-        """)
-        
-        # Skapa index
-        db.engine.execute("CREATE INDEX IF NOT EXISTS idx_lessons_subject_id ON lessons(subject_id)")
-        db.engine.execute("CREATE INDEX IF NOT EXISTS idx_lessons_user_id ON lessons(user_id)")
-        db.engine.execute("CREATE INDEX IF NOT EXISTS idx_lessons_lesson_date ON lessons(lesson_date)")
-        db.engine.execute("CREATE INDEX IF NOT EXISTS idx_lessons_active ON lessons(is_active)")
-        
-        db.session.commit()
-        print("Database updated successfully!")
-        
-    except Exception as e:
-        print(f"Error updating database: {e}")
-        db.session.rollback()
-
-
-
+    id = db.Column(db.Integer, primary_key=True)
+    submission_id = db.Column(db.Integer, db.ForeignKey('assignment_submission.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    comment = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationer
+    teacher = db.relationship('User', backref='submission_comments')
+    
+    def __repr__(self):
+        return f'<SubmissionComment {self.id}>'
 
 def create_shared_files_table():
     """Create the shared_files table if it doesn't exist"""
@@ -5170,7 +5143,277 @@ def create_assignment():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+# Nya routes för att öppna filer och hantera kommentarer
 
+@app.route('/view_submission_file/<int:file_id>')
+def view_submission_file(file_id):
+    """Öppna inlämnad fil i webbläsaren"""
+    try:
+        file = AssignmentFile.query.get_or_404(file_id)
+        assignment = file.submission.assignment
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        # Endast ägare kan öppna filer
+        if user_role != 'owner':
+            return "Åtkomst nekad", 403
+
+        # Kontrollera att filen existerar
+        if not os.path.exists(file.file_path):
+            return "Fil hittades inte", 404
+
+        # Returnera filen för visning i webbläsaren
+        return send_file(file.file_path, as_attachment=False)
+
+    except Exception as e:
+        print(f"Error viewing file: {e}")
+        return "Fel vid öppning av fil", 500
+
+
+@app.route('/api/submission/<int:submission_id>/comments')
+def get_submission_comments(submission_id):
+    """Hämta kommentarer för en inlämning"""
+    try:
+        submission = AssignmentSubmission.query.get_or_404(submission_id)
+        assignment = submission.assignment
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        # Både ägare och studenten som lämnade in kan se kommentarer
+        if user_role != 'owner' and submission.student_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
+
+        comments = SubmissionComment.query.filter_by(submission_id=submission_id).order_by(SubmissionComment.created_at.desc()).all()
+        
+        comments_data = []
+        for comment in comments:
+            comments_data.append({
+                'id': comment.id,
+                'comment': comment.comment,
+                'teacher_name': comment.teacher.username,
+                'created_at': comment.created_at.isoformat(),
+                'updated_at': comment.updated_at.isoformat()
+            })
+
+        return jsonify({
+            'status': 'success',
+            'comments': comments_data
+        })
+
+    except Exception as e:
+        print(f"Error loading comments: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/submission/<int:submission_id>/add_comment', methods=['POST'])
+def add_submission_comment(submission_id):
+    """Lägg till kommentar på inlämning (endast ägare)"""
+    try:
+        data = request.get_json()
+        comment_text = data.get('comment', '').strip()
+        
+        if not comment_text:
+            return jsonify({'status': 'error', 'message': 'Kommentar krävs'}), 400
+
+        submission = AssignmentSubmission.query.get_or_404(submission_id)
+        assignment = submission.assignment
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        if user_role != 'owner':
+            return jsonify({'status': 'error', 'message': 'Endast ägare kan kommentera'}), 403
+
+        # Skapa kommentar
+        comment = SubmissionComment(
+            submission_id=submission_id,
+            teacher_id=current_user.id,
+            comment=comment_text
+        )
+        
+        db.session.add(comment)
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Kommentar tillagd',
+            'comment': {
+                'id': comment.id,
+                'comment': comment.comment,
+                'teacher_name': comment.teacher.username,
+                'created_at': comment.created_at.isoformat(),
+                'updated_at': comment.updated_at.isoformat()
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error adding comment: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/submission/<int:submission_id>/edit_comment/<int:comment_id>', methods=['POST'])
+def edit_submission_comment(submission_id, comment_id):
+    """Redigera kommentar (endast av den som skrev den)"""
+    try:
+        data = request.get_json()
+        new_comment_text = data.get('comment', '').strip()
+        
+        if not new_comment_text:
+            return jsonify({'status': 'error', 'message': 'Kommentar krävs'}), 400
+
+        comment = SubmissionComment.query.get_or_404(comment_id)
+        
+        # Endast den som skrev kommentaren kan redigera
+        if comment.teacher_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Du kan endast redigera dina egna kommentarer'}), 403
+
+        comment.comment = new_comment_text
+        comment.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Kommentar uppdaterad',
+            'comment': {
+                'id': comment.id,
+                'comment': comment.comment,
+                'teacher_name': comment.teacher.username,
+                'created_at': comment.created_at.isoformat(),
+                'updated_at': comment.updated_at.isoformat()
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error editing comment: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/submission/<int:submission_id>/delete_comment/<int:comment_id>', methods=['POST'])
+def delete_submission_comment(submission_id, comment_id):
+    """Ta bort kommentar (endast av den som skrev den)"""
+    try:
+        comment = SubmissionComment.query.get_or_404(comment_id)
+        
+        # Endast den som skrev kommentaren kan ta bort den
+        if comment.teacher_id != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Du kan endast ta bort dina egna kommentarer'}), 403
+
+        db.session.delete(comment)
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Kommentar borttagen'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting comment: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+
+
+
+
+def create_submission_comments_table():
+    """Skapa submission_comments tabellen"""
+    try:
+        # Kontrollera om tabellen redan finns
+        db.session.execute(db.text("SELECT name FROM sqlite_master WHERE type='table' AND name='submission_comments'"))
+        result = db.session.fetchone()
+        
+        if result:
+            print("submission_comments table already exists")
+            return
+        
+        # Skapa tabellen
+        create_table_sql = """
+        CREATE TABLE submission_comments (
+            id INTEGER PRIMARY KEY,
+            submission_id INTEGER NOT NULL,
+            teacher_id INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (submission_id) REFERENCES assignment_submission (id) ON DELETE CASCADE,
+            FOREIGN KEY (teacher_id) REFERENCES user (id) ON DELETE CASCADE
+        )
+        """
+        
+        db.session.execute(db.text(create_table_sql))
+        db.session.commit()
+        print("✓ Created submission_comments table")
+        
+    except Exception as e:
+        print(f"Error creating submission_comments table: {e}")
+        db.session.rollback()
+
+def run_assignment_migrations():
+    """Kör alla migrations för uppgiftssystemet"""
+    print("Running assignment system migrations...")
+    
+    # Skapa submission_comments tabellen
+    create_submission_comments_table()
+    
+    print("Assignment migrations completed!")
+
+
+# Route för studenter att se sina egna inlämningar med kommentarer
+@app.route('/api/my_submissions/<int:assignment_id>')
+def get_my_submission(assignment_id):
+    """Hämta egen inlämning för en uppgift (studenter)"""
+    try:
+        assignment = Assignment.query.get_or_404(assignment_id)
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        if not user_role or user_role == 'owner':
+            return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
+
+        submission = AssignmentSubmission.query.filter_by(
+            assignment_id=assignment_id,
+            student_id=current_user.id
+        ).first()
+
+        if not submission:
+            return jsonify({
+                'status': 'success',
+                'submission': None
+            })
+
+        files_data = []
+        for file in submission.files:
+            files_data.append({
+                'id': file.id,
+                'filename': file.filename,
+                'file_size': file.file_size
+            })
+
+        # Hämta kommentarer
+        comments = SubmissionComment.query.filter_by(submission_id=submission.id).order_by(SubmissionComment.created_at.desc()).all()
+        comments_data = []
+        for comment in comments:
+            comments_data.append({
+                'id': comment.id,
+                'comment': comment.comment,
+                'teacher_name': comment.teacher.username,
+                'created_at': comment.created_at.isoformat(),
+                'updated_at': comment.updated_at.isoformat()
+            })
+
+        return jsonify({
+            'status': 'success',
+            'submission': {
+                'id': submission.id,
+                'comment': submission.comment,
+                'submitted_at': submission.submitted_at.isoformat(),
+                'files': files_data,
+                'teacher_comments': comments_data
+            }
+        })
+
+    except Exception as e:
+        print(f"Error loading my submission: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/assignments/delete', methods=['POST'])
 def delete_assignment():
@@ -5220,12 +5463,16 @@ def get_assignment_submissions(assignment_id):
                     'file_size': file.file_size
                 })
 
+            # Räkna antal kommentarer för denna inlämning
+            comment_count = SubmissionComment.query.filter_by(submission_id=submission.id).count()
+
             submissions_data.append({
                 'id': submission.id,
                 'student_name': submission.student.username,
                 'comment': submission.comment,
                 'submitted_at': submission.submitted_at.isoformat(),
-                'files': files_data
+                'files': files_data,
+                'comment_count': comment_count  # Lägg till comment_count här
             })
 
         return jsonify({
@@ -5236,7 +5483,9 @@ def get_assignment_submissions(assignment_id):
     except Exception as e:
         print(f"Error loading submissions: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+    
 
+    
 
 @app.route('/api/assignments/submit', methods=['POST'])
 def submit_assignment():
@@ -7295,10 +7544,11 @@ def daily_quiz_all(date):
 
 if __name__ == '__main__':
     
-    migrate_database()
-    
-    
+    with app.app_context():
+        migrate_database()
+        run_assignment_migrations()
+        create_shared_files_table()
+        ensure_upload_directories()
+
+    cleanup_on_startup()   # om den inte behöver context
     app.run(debug=True)
-    cleanup_on_startup()
-    create_shared_files_table()
-    ensure_upload_directories()
