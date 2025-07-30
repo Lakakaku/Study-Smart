@@ -2539,6 +2539,26 @@
       {% endif %}
     </div>
 
+
+
+    <!-- Shared Files Section - Moved to bottom for members -->
+    {% if user_role not in ['owner', 'admin'] %}
+    <div class="shared-files-section">
+      <div class="files-section-title">
+        Delade Filer
+        <span id="file-stats"></span>
+      </div>
+
+      <!-- File List -->
+      <div class="file-list" id="file-list">
+        <div class="no-files-message" id="no-files-message">
+          Loading files...
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    
+
     <!-- Documents Section - Only show for owners and admins -->
     {% if user_role in ['owner', 'admin'] %}
     <div class="placeholder-panel">
@@ -2597,23 +2617,8 @@
 
   </div>
 
-  <!-- Shared Files Section - Moved to bottom for members -->
-  {% if user_role not in ['owner', 'admin'] %}
-  <div class="shared-files-section">
-    <div class="files-section-title">
-      Delade Filer
-      <span id="file-stats"></span>
-    </div>
-
-    <!-- File List -->
-    <div class="file-list" id="file-list">
-      <div class="no-files-message" id="no-files-message">
-        Loading files...
-      </div>
-    </div>
-  </div>
-  {% else %}
   <!-- Shared Files Section for owners/admins -->
+  {% if user_role == 'owner' %}
   <div class="shared-files-section">
     <div class="files-section-title">
       📁 Delade Filer
@@ -2640,6 +2645,8 @@
       <div id="upload-status" class="upload-status" style="display: none;"></div>
     </div>
     {% endif %}
+
+  
 
     <!-- File List -->
     <div class="file-list" id="file-list">
