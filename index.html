@@ -1003,14 +1003,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   
 
-  // Update the renderCalendar function to use the tracking variable:
   window.renderCalendar = date => {
-    calendarCurrentDate = new Date(date); // Update the tracking variable
+    calendarCurrentDate = new Date(date);
     monthYearSpan.textContent = `${date.toLocaleString('default',{month:'long'})} ${date.getFullYear()}`;
     calendarBody.innerHTML = '';
 
     let start = new Date(date.getFullYear(), date.getMonth(), 1);
     start.setDate(start.getDate() - start.getDay());
+
+    const today = new Date(); // Dagens datum
+    today.setHours(0, 0, 0, 0); // Nollställ tid för jämförelse
 
     for (let r = 0; r < 6; r++) {
       const tr = document.createElement('tr');
@@ -1020,10 +1022,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const d = new Date(start);
         d.setDate(start.getDate() + (r * 7 + c));
+        d.setHours(0, 0, 0, 0); // Nollställ tid för jämförelse
 
-        if (d.toDateString() === new Date().toDateString()) {
+        // Kontrollera om det är dagens datum
+        if (d.getTime() === today.getTime()) {
           td.classList.add('today');
         }
+        
         if (d.getMonth() !== date.getMonth()) {
           td.classList.add('other-month');
         }
@@ -1041,9 +1046,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dayDiv.appendChild(hdr);
 
         const dayEvents = getEventsForDate(d);
-        // REMOVED: const scheduledQuizzes = schedule[formatKey(d)] || [];
 
-        // Only show indicators for events, not for scheduled quizzes
         if (dayEvents.length > 0) {
           const indicator = document.createElement('div');
           indicator.className = 'event-indicator';
@@ -1057,7 +1060,6 @@ document.addEventListener('DOMContentLoaded', () => {
           if (sharedEvents.length > 0) {
             indicator.classList.add('has-shared-events');
           }
-          // REMOVED: Quiz indicator logic
 
           let tooltipText = '';
           if (ownEvents.length > 0) {
@@ -1066,7 +1068,6 @@ document.addEventListener('DOMContentLoaded', () => {
           if (sharedEvents.length > 0) {
             tooltipText += (tooltipText ? ', ' : '') + `${sharedEvents.length} shared event(s)`;
           }
-          // REMOVED: Quiz tooltip logic
 
           indicator.title = tooltipText;
           dayDiv.appendChild(indicator);
@@ -2535,10 +2536,20 @@ async function leaveSubject(subjectId) {
         cursor: pointer;
       }
 
-      .calendar-cell.today {
-        background-color: #fef3c7;
-        border: 2px solid var(--warning-color);
+      .calendar-cell.today .day-header {
+        background-color: gold;
+        color: white;
+        border-radius: var(--radius-md);
+        font-weight: 700;
       }
+
+      .calendar-cell.today {
+        background-color: #dbeafe;
+        border: 2px solid var(--primary-color);
+        position: relative;
+      }
+
+      
 
       .calendar-cell.other-month {
         color: var(--text-muted);
