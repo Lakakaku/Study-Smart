@@ -5038,7 +5038,8 @@ def view_shared_file(file_id):
         return send_file(
             shared.file_path,
             mimetype=shared.file_type,
-            as_attachment=False
+            as_attachment=False,
+            download_name=shared.filename
         )
     except FileNotFoundError:
         abort(404)
