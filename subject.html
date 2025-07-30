@@ -785,6 +785,13 @@
   }
 }
 
+
+
+
+
+
+
+
 /* UPPDATERAD lesson-timeline - ökad max-höjd */
 .lesson-timeline {
   flex: 1;
@@ -1238,22 +1245,7 @@
         cursor: pointer;
     }
 
-    /* UPPDATERAD main-layout - ökad höjd */
-    .main-layout {
-        display: grid;
-        grid-template-columns: 2fr 1fr 1fr;
-        gap: 20px;
-        height: calc(100vh - 10px); /* Ökad höjd från 200px till 150px */
-        padding: 20px;
-    }
-
-    /* For members - remove third column and stack vertically */
-    .main-layout.member-view {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto auto;
-        height: auto;
-        min-height: calc(100vh - 150px);
-    }
+    
 
     .quiz-container {
         background: #f8f9fa;
@@ -1766,6 +1758,140 @@
       border-bottom: 1px solid #ddd;
     }
 
+
+
+
+
+
+
+
+
+
+    /* RENSAD OCH FIXAD CSS - TA BORT ALLA GAMLA MEDIA QUERIES OCH ERSÄTT MED DESSA */
+
+    /* GRUNDLÄGGANDE LAYOUT */
+    .main-layout {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        gap: 20px;
+        height: calc(100vh - 10px);
+        padding: 20px;
+    }
+
+    /* MEMBER VIEW - GRUNDLÄGGANDE (VERTIKAL STACK) */
+    .main-layout.member-view {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto auto auto !important;
+        height: auto !important;
+        min-height: calc(100vh - 150px) !important;
+    }
+
+    /* KRITISK FIX: SIDE-BY-SIDE LAYOUT FÖR MEDLEMMAR PÅ STORA SKÄRMAR */
+    @media (min-width: 1200px) and (min-aspect-ratio: 4/3) {
+        .main-layout.member-view {
+            grid-template-columns: 1fr 1fr !important;
+            grid-template-rows: auto 1fr !important;
+            gap: 20px !important;
+            height: auto !important;
+            min-height: calc(100vh - 150px) !important;
+        }
+        
+        /* Quiz-container sträcker sig över båda kolumnerna */
+        .main-layout.member-view .quiz-container {
+            grid-column: 1 / -1 !important;
+            grid-row: 1 !important;
+            max-height: 400px !important;
+        }
+        
+        /* Lessons-section i andra raden, första kolumnen */
+        .main-layout.member-view .lessons-section {
+            grid-column: 1 !important;
+            grid-row: 2 !important;
+            margin: 0 !important;
+            max-height: 500px !important;
+        }
+        
+        /* Shared-files-section i andra raden, andra kolumnen */
+        .main-layout.member-view .shared-files-section {
+            grid-column: 2 !important;
+            grid-row: 2 !important;
+            margin: 0 !important;
+            max-height: 500px !important;
+        }
+    }
+
+    /* ULTRAWIDE SKÄRMAR */
+    @media (min-width: 1400px) and (min-aspect-ratio: 16/10) {
+        .main-layout.member-view {
+            grid-template-columns: 1fr 1fr !important;
+            grid-template-rows: auto 1fr !important;
+            gap: 25px !important;
+        }
+        
+        .main-layout.member-view .quiz-container {
+            max-height: 450px !important;
+        }
+        
+        .main-layout.member-view .lessons-section,
+        .main-layout.member-view .shared-files-section {
+            max-height: 550px !important;
+        }
+    }
+
+    /* SÄKERSTÄLL VERTIKAL STACK PÅ MINDRE SKÄRMAR */
+    @media (max-width: 1199px) {
+        .main-layout.member-view {
+            grid-template-columns: 1fr !important;
+            grid-template-rows: auto auto auto !important;
+        }
+        
+        .main-layout.member-view .quiz-container,
+        .main-layout.member-view .lessons-section,
+        .main-layout.member-view .shared-files-section {
+            grid-column: 1 !important;
+            grid-row: auto !important;
+            margin: 20px 0 !important;
+            max-height: 600px !important;
+        }
+    }
+
+    /* OWNERS/ADMINS LAYOUT - PÅVERKAS INTE */
+    .main-layout:not(.member-view) {
+        grid-template-columns: 2fr 1fr 1fr !important;
+        gap: 20px !important;
+        height: calc(100vh - 10px) !important;
+        padding: 20px !important;
+    }
+
+    @media (max-width: 992px) {
+        .main-layout:not(.member-view) {
+            grid-template-columns: 1fr !important;
+            grid-template-rows: auto auto auto !important;
+            height: auto !important;
+            min-height: calc(100vh - 150px) !important;
+        }
+    }
+
+    /* MOBIL LAYOUT */
+    @media (max-width: 768px) {
+        .main-layout {
+            padding: 10px !important;
+            gap: 15px !important;
+        }
+        
+        .main-layout.member-view {
+            grid-template-columns: 1fr !important;
+            grid-template-rows: auto auto auto !important;
+        }
+        
+        .quiz-container, 
+        .lessons-section, 
+        .placeholder-panel,
+        .shared-files-section {
+            max-height: 500px !important;
+        }
+    }
+
     .members-list-header h4 {
       margin: 0;
       color: #333;
@@ -2111,27 +2237,7 @@
       }
     }
 
-    @media (max-width: 992px) {
-      .main-layout {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto auto;
-        height: auto;
-        min-height: calc(100vh - 150px); /* Uppdaterad från 200px */
-      }
-      
-      .main-layout.member-view {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto;
-      }
-      
-      .quiz-container, .lessons-section, .placeholder-panel {
-        max-height: 600px; /* Minskad för mobiler */
-      }
-      
-      .quiz-grid {
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      }
-    }
+    
 
     @media (max-width: 768px) {
       .quiz-grid {
