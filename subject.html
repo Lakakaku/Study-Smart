@@ -798,7 +798,6 @@
   overflow-y: auto;
   margin-top: 20px;
   padding-right: 5px;
-  max-height: 500px; /* Ökad höjd från tidigare värde */
 }
 
 .lesson-timeline::-webkit-scrollbar {
@@ -1852,6 +1851,16 @@
             grid-row: auto !important;
             margin: 20px 0 !important;
             max-height: 600px !important;
+        }
+        .main-layout:not(.member-view) .lessons-section {
+          /* Ge mer höjd baserat på viewport */
+          max-height: 80vh !important;
+        }
+        
+        .main-layout:not(.member-view) .lesson-timeline {
+          /* Ta bort tidigare hårdkodad max-height, ersätt med flexibelt värde */
+          max-height: calc(80vh - 200px) !important;
+      
         }
     }
 
