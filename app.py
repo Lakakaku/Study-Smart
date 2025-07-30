@@ -20,7 +20,7 @@ import wave
 
 import math
 
-
+from flask_migrate import Migrate
 
 
 
@@ -66,6 +66,7 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Du måste vara inloggad för att komma åt den här sidan.'
 login_manager.login_message_category = 'info'
+migrate = Migrate(app, db)
 
 # -------------------- Database Models --------------------
 
@@ -332,7 +333,8 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(20), unique=True, nullable=False)
     password_hash = db.Column(db.String(60), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+    email = db.Column(db.String(120), unique=True, nullable=False)
+
     # Relationships
     subjects = db.relationship('Subject', backref='owner', lazy=True, cascade='all, delete-orphan')
     quizzes = db.relationship('Quiz', backref='owner', lazy=True, cascade='all, delete-orphan')
@@ -4799,138 +4801,155 @@ def get_flashcard_statistics():
     }
 # -------------------- Auth Routes --------------------
 
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    # Omdirigera inloggade användare
+    # Redirect authenticated users
     if current_user.is_authenticated:
         return redirect(url_for('home'))
-        
+
     if request.method == 'POST':
         username = request.form['username'].strip()
+        email = request.form['email'].strip().lower()
+        email_confirm = request.form['email_confirm'].strip().lower()
         password = request.form['password']
-        
-        # Validering
+
+        # Validation
         if len(username) < 3:
             flash('Användarnamn måste vara minst 3 tecken långt.', 'danger')
             return redirect(url_for('register'))
-        
+        if email != email_confirm:
+            flash('E-postadresserna matchar inte.', 'danger')
+            return redirect(url_for('register'))
+        if not email or '@' not in email:
+            flash('Ange en giltig e-postadress.', 'danger')
+            return redirect(url_for('register'))
         if len(password) < 6:
             flash('Lösenord måste vara minst 6 tecken långt.', 'danger')
             return redirect(url_for('register'))
 
-        existing_user = User.query.filter_by(username=username).first()
-        if existing_user:
+        # Check existing username or email
+        if User.query.filter_by(username=username).first():
             flash('Användarnamn finns redan.', 'danger')
             return redirect(url_for('register'))
+        if User.query.filter_by(email=email).first():
+            flash('E-postadressen är redan registrerad.', 'danger')
+            return redirect(url_for('register'))
 
+        # Create user
         hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
-        user = User(username=username, password_hash=hashed_pw)
+        user = User(username=username, email=email, password_hash=hashed_pw)
         db.session.add(user)
         db.session.commit()
         flash('Kontot skapades! Nu kan du logga in.', 'success')
         return redirect(url_for('login'))
 
+    # Render form
     return render_template_string('''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Registrera - Flashcards</title>
-            <style>
-                body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
-                input { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
-                button { background: #007bff; color: white; padding: 10px; border: none; width: 100%; cursor: pointer; }
-                button:hover { background: #0056b3; }
-                .flash-messages { margin: 10px 0; }
-                .alert { padding: 10px; margin: 5px 0; border-radius: 4px; }
-                .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-                .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-            </style>
-        </head>
-        <body>
-            <h2>Registrera nytt konto</h2>
-            
-            <div class="flash-messages">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }}">{{ message }}</div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
-            </div>
-            
-            <form method="POST">
-                <label>Användarnamn:</label>
-                <input name="username" required minlength="3">
-                <label>Lösenord:</label>
-                <input type="password" name="password" required minlength="6">
-                <button type="submit">Registrera</button>
-            </form>
-            <p><a href="{{ url_for('login') }}">Redan registrerad? Logga in här.</a></p>
-        </body>
-        </html>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Registrera - Flashcards</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+            input { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
+            button { background: #007bff; color: white; padding: 10px; border: none; width: 100%; cursor: pointer; }
+            button:hover { background: #0056b3; }
+            .flash-messages { margin: 10px 0; }
+            .alert { padding: 10px; margin: 5px 0; border-radius: 4px; }
+            .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+            .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        </style>
+    </head>
+    <body>
+        <h2>Registrera nytt konto</h2>
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+        <form method="POST">
+            <label>Användarnamn:</label>
+            <input name="username" required minlength="3">
+            <label>E-postadress:</label>
+            <input type="email" name="email" required>
+            <label>Bekräfta e-postadress:</label>
+            <input type="email" name="email_confirm" required>
+            <label>Lösenord:</label>
+            <input type="password" name="password" required minlength="6">
+            <button type="submit">Registrera</button>
+        </form>
+        <p><a href="{{ url_for('login') }}">Redan registrerad? Logga in här.</a></p>
+    </body>
+    </html>
     ''')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # Omdirigera inloggade användare
+    # Redirect authenticated users
     if current_user.is_authenticated:
         return redirect(url_for('home'))
-        
+
     if request.method == 'POST':
-        username = request.form['username'].strip()
+        identity = request.form['identity'].strip()
         password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        
+        # Allow login via username or email
+        user = User.query.filter(
+            (User.username == identity) | (User.email == identity)
+        ).first()
+
         if user and bcrypt.check_password_hash(user.password_hash, password):
             login_user(user)
             flash(f'Välkommen {user.username}!', 'success')
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('home'))
         else:
-            flash('Fel användarnamn eller lösenord.', 'danger')
+            flash('Fel användarnamn/e-post eller lösenord.', 'danger')
 
     return render_template_string('''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Logga in - Flashcards</title>
-            <style>
-                body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
-                input { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
-                button { background: #28a745; color: white; padding: 10px; border: none; width: 100%; cursor: pointer; }
-                button:hover { background: #1e7e34; }
-                .flash-messages { margin: 10px 0; }
-                .alert { padding: 10px; margin: 5px 0; border-radius: 4px; }
-                .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-                .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-                .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-            </style>
-        </head>
-        <body>
-            <h2>Logga in</h2>
-            
-            <div class="flash-messages">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }}">{{ message }}</div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
-            </div>
-            
-            <form method="POST">
-                <label>Användarnamn:</label>
-                <input name="username" required>
-                <label>Lösenord:</label>
-                <input type="password" name="password" required>
-                <button type="submit">Logga in</button>
-            </form>
-            <p><a href="{{ url_for('register') }}">Skapa nytt konto</a></p>
-        </body>
-        </html>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Logga in - Flashcards</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+            input { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
+            button { background: #28a745; color: white; padding: 10px; border: none; width: 100%; cursor: pointer; }
+            button:hover { background: #1e7e34; }
+            .flash-messages { margin: 10px 0; }
+            .alert { padding: 10px; margin: 5px 0; border-radius: 4px; }
+            .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+            .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+            .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        </style>
+    </head>
+    <body>
+        <h2>Logga in</h2>
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+        <form method="POST">
+            <label>Användarnamn eller e-post:</label>
+            <input name="identity" required>
+            <label>Lösenord:</label>
+            <input type="password" name="password" required>
+            <button type="submit">Logga in</button>
+        </form>
+        <p><a href="{{ url_for('register') }}">Skapa nytt konto</a></p>
+    </body>
+    </html>
     ''')
+
 
 @app.route('/dashboard')
 @login_required
