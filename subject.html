@@ -2223,14 +2223,13 @@
 
 
     .open-file-btn {
-      display: inline-block;
-      margin-right: 0.5em;
-      padding: 0.3em 0.6em;
-      background-color: #4CAF50;
+      background: #28a745;
       color: white;
+      padding: 8px 16px;
       border-radius: 4px;
       text-decoration: none;
       font-size: 0.9em;
+      transition: background-color 0.2s;
     }
     .open-file-btn:hover {
       background-color: #45A049;
@@ -4098,7 +4097,7 @@
             const statsDiv = document.getElementById('file-stats-details');
             if (statsDiv) {
               statsDiv.innerHTML = `
-                📊 Antal filer: ${data.total_files} • Antal nedladdningar: ${data.total_downloads}
+                Antal nedladdningar: ${data.total_downloads}
               `;
               statsDiv.style.display = 'block';
             }
