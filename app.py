@@ -858,6 +858,54 @@ class KravDocument(db.Model):
         return f"KravDocument('{self.doc_type}', '{self.filename}')"
 
 
+class Assignment(db.Model):
+    """Uppgifter som skapas av ämnesägare"""
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    due_date = db.Column(db.DateTime)
+    allow_multiple_files = db.Column(db.Boolean, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationer
+    subject = db.relationship('Subject', backref='assignments')
+    creator = db.relationship('User', backref='created_assignments')
+    submissions = db.relationship('AssignmentSubmission', backref='assignment', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<Assignment {self.title}>'
+
+
+class AssignmentSubmission(db.Model):
+    """Elevernas inlämningar av uppgifter"""
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey('assignment.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    comment = db.Column(db.Text)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationer
+    student = db.relationship('User', backref='assignment_submissions')
+    files = db.relationship('AssignmentFile', backref='submission', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<AssignmentSubmission {self.id}>'
+
+
+class AssignmentFile(db.Model):
+    """Filer som lämnats in för uppgifter"""
+    id = db.Column(db.Integer, primary_key=True)
+    submission_id = db.Column(db.Integer, db.ForeignKey('assignment_submission.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<AssignmentFile {self.filename}>'
+    
 
 def create_tables():
     """Skapa alla databastabeller"""
@@ -1404,6 +1452,14 @@ def transcribe_with_speech_recognition(audio_file_path):
                     print(f"Cleaned up temporary file: {temp_file}")
             except Exception as e:
                 print(f"Could not remove temp file {temp_file}: {e}")
+
+
+def get_user_role_in_subject(user_id, subject_id):
+    """Hjälpfunktion för att få användarens roll i ett ämne"""
+    user = User.query.get(user_id)
+    if not user:
+        return None
+    return user.get_role_in_subject(subject_id)
 
 
 def transcribe_with_whisper_api(audio_file_path):
@@ -5023,7 +5079,253 @@ def logout():
     return redirect(url_for('login'))
 
 
+# Flask routes att lägga till i din app.py
 
+@app.route('/api/assignments/<int:subject_id>')
+def get_assignments(subject_id):
+    """Hämta alla uppgifter för ett ämne"""
+    try:
+        # Kontrollera att användaren har tillgång till ämnet
+        user_role = get_user_role_in_subject(current_user.id, subject_id)
+        if not user_role:
+            return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
+
+        # Hämta uppgifter
+        assignments = Assignment.query.filter_by(subject_id=subject_id).order_by(Assignment.created_at.desc()).all()
+        
+        assignments_data = []
+        for assignment in assignments:
+            # För medlemmar, kontrollera inlämningsstatus
+            submission_status = 'pending'
+            if user_role != 'owner':
+                submission = AssignmentSubmission.query.filter_by(
+                    assignment_id=assignment.id,
+                    student_id=current_user.id
+                ).first()
+                if submission:
+                    submission_status = 'submitted'
+
+            # För ägare, räkna antal inlämningar
+            submission_count = 0
+            if user_role == 'owner':
+                submission_count = AssignmentSubmission.query.filter_by(assignment_id=assignment.id).count()
+
+            assignments_data.append({
+                'id': assignment.id,
+                'title': assignment.title,
+                'description': assignment.description,
+                'due_date': assignment.due_date.isoformat() if assignment.due_date else None,
+                'created_at': assignment.created_at.isoformat(),
+                'submission_status': submission_status,
+                'submission_count': submission_count
+            })
+
+        return jsonify({
+            'status': 'success',
+            'assignments': assignments_data
+        })
+
+    except Exception as e:
+        print(f"Error loading assignments: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+
+
+
+
+@app.route('/api/assignments/create', methods=['POST'])
+def create_assignment():
+    """Skapa ny uppgift (endast ägare)"""
+    try:
+        data = request.get_json()
+        
+        subject_id = data.get('subject_id')
+        user_role = get_user_role_in_subject(current_user.id, subject_id)
+        
+        if user_role != 'owner':
+            return jsonify({'status': 'error', 'message': 'Endast ägare kan skapa uppgifter'}), 403
+
+        # Skapa uppgift
+        assignment = Assignment(
+            subject_id=subject_id,
+            title=data.get('title'),
+            description=data.get('description'),
+            due_date=datetime.fromisoformat(data.get('due_date')) if data.get('due_date') else None,
+            allow_multiple_files=data.get('allow_multiple_files', True),
+            created_by=current_user.id
+        )
+
+        db.session.add(assignment)
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Uppgift skapad',
+            'assignment_id': assignment.id
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating assignment: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+
+
+@app.route('/api/assignments/delete', methods=['POST'])
+def delete_assignment():
+    """Ta bort uppgift (endast ägare)"""
+    try:
+        data = request.get_json()
+        assignment_id = data.get('assignment_id')
+        
+        assignment = Assignment.query.get_or_404(assignment_id)
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        if user_role != 'owner':
+            return jsonify({'status': 'error', 'message': 'Endast ägare kan ta bort uppgifter'}), 403
+
+        db.session.delete(assignment)
+        db.session.commit()
+
+        return jsonify({'status': 'success', 'message': 'Uppgift borttagen'})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting assignment: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+
+
+@app.route('/api/assignments/<int:assignment_id>/submissions')
+def get_assignment_submissions(assignment_id):
+    """Hämta inlämningar för en uppgift (endast ägare)"""
+    try:
+        assignment = Assignment.query.get_or_404(assignment_id)
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        if user_role != 'owner':
+            return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
+
+        submissions = AssignmentSubmission.query.filter_by(assignment_id=assignment_id).all()
+        
+        submissions_data = []
+        for submission in submissions:
+            files_data = []
+            for file in submission.files:
+                files_data.append({
+                    'id': file.id,
+                    'filename': file.filename,
+                    'file_size': file.file_size
+                })
+
+            submissions_data.append({
+                'id': submission.id,
+                'student_name': submission.student.username,
+                'comment': submission.comment,
+                'submitted_at': submission.submitted_at.isoformat(),
+                'files': files_data
+            })
+
+        return jsonify({
+            'status': 'success',
+            'submissions': submissions_data
+        })
+
+    except Exception as e:
+        print(f"Error loading submissions: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/assignments/submit', methods=['POST'])
+def submit_assignment():
+    """Lämna in uppgift (medlemmar)"""
+    try:
+        assignment_id = request.form.get('assignment_id')
+        comment = request.form.get('comment', '')
+        
+        assignment = Assignment.query.get_or_404(assignment_id)
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        if not user_role or user_role == 'owner':
+            return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
+
+        # Kontrollera om redan inlämnat
+        existing_submission = AssignmentSubmission.query.filter_by(
+            assignment_id=assignment_id,
+            student_id=current_user.id
+        ).first()
+
+        if existing_submission:
+            return jsonify({'status': 'error', 'message': 'Du har redan lämnat in denna uppgift'}), 400
+
+        # Skapa inlämning
+        submission = AssignmentSubmission(
+            assignment_id=assignment_id,
+            student_id=current_user.id,
+            comment=comment
+        )
+        db.session.add(submission)
+        db.session.flush()  # För att få submission.id
+
+        # Hantera filer
+        uploaded_files = request.files.getlist('files')
+        if not uploaded_files:
+            return jsonify({'status': 'error', 'message': 'Minst en fil krävs'}), 400
+
+        # Skapa upload-mapp
+        upload_dir = os.path.join('static', 'uploads', 'assignments', str(assignment.subject_id), str(assignment_id))
+        os.makedirs(upload_dir, exist_ok=True)
+
+        for file in uploaded_files:
+            if file and file.filename:
+                # Säker filnamn
+                filename = secure_filename(file.filename)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                unique_filename = f"{current_user.id}_{timestamp}_{filename}"
+                
+                file_path = os.path.join(upload_dir, unique_filename)
+                file.save(file_path)
+
+                # Spara i databas
+                assignment_file = AssignmentFile(
+                    submission_id=submission.id,
+                    filename=filename,
+                    file_path=file_path,
+                    file_size=os.path.getsize(file_path)
+                )
+                db.session.add(assignment_file)
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Uppgift inlämnad'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error submitting assignment: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/download_submission_file/<int:file_id>')
+def download_submission_file(file_id):
+    """Ladda ner inlämnad fil"""
+    try:
+        file = AssignmentFile.query.get_or_404(file_id)
+        assignment = file.submission.assignment
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        if user_role != 'owner':
+            return "Åtkomst nekad", 403
+
+        return send_file(file.file_path, as_attachment=True, download_name=file.filename)
+
+    except Exception as e:
+        print(f"Error downloading file: {e}")
+        return "Fil hittades inte", 404
 
 
 @app.route('/view_shared_file/<int:file_id>')
