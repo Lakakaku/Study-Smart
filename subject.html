@@ -2221,6 +2221,22 @@
       padding: 6px 12px;
     }
 
+
+    .open-file-btn {
+      display: inline-block;
+      margin-right: 0.5em;
+      padding: 0.3em 0.6em;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 0.9em;
+    }
+    .open-file-btn:hover {
+      background-color: #45A049;
+    }
+
+
     .quiz-action-btn.delete:hover {
       background: #c82333;
     }
@@ -3728,6 +3744,7 @@
               ${file.description ? `<div class="file-description">${escapeHtml(file.description)}</div>` : ''}
             </div>
             <div class="file-actions">
+              <a href="/view_shared_file/${file.id}" class="open-file-btn" target="_blank">Öppna</a>
               <a href="/download_shared_file/${file.id}" class="download-btn">Ladda Ner</a>
               ${file.can_delete ? `<button class="delete-file-btn" onclick="deleteFile(${file.id})">×</button>` : ''}
             </div>
