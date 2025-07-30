@@ -5022,6 +5022,26 @@ def logout():
     flash('Du har loggats ut.', 'info')
     return redirect(url_for('login'))
 
+
+
+
+
+@app.route('/view_shared_file/<int:file_id>')
+@login_required
+def view_shared_file(file_id):
+    shared = SharedFile.query.get_or_404(file_id)
+    if not shared.is_downloadable_by_user(current_user.id):
+        abort(403)
+    try:
+        # as_attachment=False öppnar filen i webbläsaren (inline),
+        # och vi anger inte download_name då vi inte behöver ett fönster-spar-namn.
+        return send_file(
+            shared.file_path,
+            mimetype=shared.file_type,
+            as_attachment=False
+        )
+    except FileNotFoundError:
+        abort(404)
 # -------------------- Main Routes --------------------
 
 @app.route('/', methods=['GET', 'POST'])
@@ -5040,9 +5060,6 @@ def home():
             db.session.commit()
         return redirect(url_for('home'))
     return render_template('index.html', subjects=subject_names)
-
-
-
 
 
 
