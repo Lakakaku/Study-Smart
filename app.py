@@ -5509,13 +5509,22 @@ def get_assignment_submissions(assignment_id):
         for submission in submissions:
             comment_count = SubmissionComment.query.filter_by(submission_id=submission.id).count()
 
+            # NYTT: lista upp inlämnade filer
+            files = []
+            for f in submission.files:
+                files.append({
+                    'id': f.id,
+                    'filename': f.filename
+                })
+
             submissions_data.append({
                 'id': submission.id,
                 'student_name': submission.student.username,
                 'submitted_at': submission.submitted_at.isoformat(),
                 'comment_count': comment_count,
                 'seen': submission.seen,
-                'comment': submission.comment or ''    # <-- Skicka med studentens kommentar
+                'comment': submission.comment or '',
+                'files': files                    # <-- Skicka med fil-listan
             })
 
         return jsonify({'status': 'success', 'submissions': submissions_data})
