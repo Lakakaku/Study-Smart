@@ -2437,7 +2437,19 @@ async function leaveSubject(subjectId) {
         box-shadow: var(--shadow-xl);
         padding: 2.5rem;
         border: 1px solid var(--border-color);
+        overflow: hidden; /* Lägg till denna för att förhindra överflöde */
+        display: flex; /* Ändra till flex */
+        flex-direction: column; /* Ställ in column-riktning */
       }
+
+      .calendar-main-container {
+        flex: 1; /* Ta upp återstående utrymme */
+        min-height: 0; /* Viktigt för flex-shrinking */
+        overflow: hidden; /* Förhindra överflöde */
+        display: flex;
+        flex-direction: column;
+      }
+
 
       .calendar-close {
         position: absolute;
@@ -2508,17 +2520,19 @@ async function leaveSubject(subjectId) {
         border-radius: var(--radius-xl);
         overflow: hidden;
         box-shadow: var(--shadow-sm);
+        flex-shrink: 0; /* Förhindra att tabellen krymper för mycket */
       }
 
-      #calendar-table th {
-        background-color: var(--primary-color);
-        color: white;
-        padding: 1rem;
-        text-align: center;
-        font-weight: 600;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+      /* Begränsa cellhöjden för fullscreen */
+      #calendar-table td {
+        border: 1px solid var(--border-color);
+        padding: 0.5rem; /* Minska padding från 0.75rem */
+        height: 80px; /* Fast höjd istället för 90px */
+        max-height: 80px; /* Begränsa maxhöjd */
+        vertical-align: top;
+        background-color: var(--bg-white);
+        transition: all 0.2s ease;
+        overflow: hidden; /* Dölj överflöde i celler */
       }
 
       #calendar-table td {
@@ -3108,6 +3122,26 @@ async function leaveSubject(subjectId) {
         padding: 0.875rem 1.75rem;
         font-weight: 600;
         border: none;
+      }
+
+      @media (min-height: 900px) {
+        #calendar-table td {
+          height: 100px;
+          max-height: 100px;
+        }
+      }
+
+      @media (max-height: 700px) {
+        .calendar-content {
+          max-height: 95vh;
+          padding: 1.5rem;
+        }
+        
+        #calendar-table td {
+          height: 60px;
+          max-height: 60px;
+          padding: 0.25rem;
+        }
       }
 
       /* === RESPONSIVE DESIGN === */
