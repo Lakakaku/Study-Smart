@@ -5187,7 +5187,8 @@
               </span>
             </div>
 
-            <div class="comment-section" id="comment-section-${sub.id}">
+
+            <div class="comment-section" id="comment-section-${sub.id}" style="display: block;">
               <textarea id="comment-input-${sub.id}"
                         placeholder="Skriv kommentar..."></textarea>
               <button onclick="addComment(${sub.id})">
@@ -5198,6 +5199,18 @@
           </div>
         `;
       }).join('');
+
+
+
+      // --- NYTT: efter att vi satt innerHTML, ladda alla kommentarer direkt ---
+     submissions.forEach(sub => {
+        // se till att kommentarssektionen är öppen
+        const commentSection = document.getElementById(`comment-section-${sub.id}`);
+        if (commentSection) commentSection.style.display = 'block';
+        // hämta och rendera befintliga kommentarer
+        loadComments(sub.id);
+      });
+
 
       // Bind event på checkboxar
       container.querySelectorAll('.seen-checkbox').forEach(cb => {
