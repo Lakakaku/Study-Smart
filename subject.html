@@ -2215,6 +2215,17 @@
         background: #e0a800;
     }
 
+
+
+    .student-comment {
+      background: #eef6ff;
+      border-left: 4px solid #5b9bd5;
+      padding: 8px 12px;
+      margin: 12px 0;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
     .members-count {
         margin-top: 15px;
         font-size: 0.9em;
@@ -5188,10 +5199,17 @@
                 ${new Date(sub.submitted_at).toLocaleString('sv-SE')}
               </span>
               <span class="submission-comment-count">
-                💬 ${sub.comment_count||0} kommentarer
+                💬 ${sub.comment_count || 0} kommentarer
               </span>
             </div>
 
+            <!-- NYTT: studentens egen kommentar -->
+            ${sub.comment ? `
+              <div class="student-comment">
+                <strong>Studentens kommentar:</strong>
+                <p>${escapeHtml(sub.comment)}</p>
+              </div>
+            ` : ''}
 
             <div class="comment-section" id="comment-section-${sub.id}" style="display: block;">
               <textarea id="comment-input-${sub.id}"
@@ -5204,6 +5222,7 @@
           </div>
         `;
       }).join('');
+
 
 
 
