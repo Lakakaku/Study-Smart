@@ -270,6 +270,8 @@ class Subject(db.Model):
     share_code = db.Column(db.String(8), unique=True, nullable=True)
     is_shared = db.Column(db.Boolean, default=False)
     
+
+    owner_email = db.Column(db.String(120), nullable=True)
     # Relationships
     quizzes = db.relationship('Quiz', backref='subject_ref', lazy=True, cascade='all, delete-orphan',
                              foreign_keys='Quiz.subject_id')
@@ -2002,6 +2004,45 @@ def get_lesson_transcription(lesson_id):
     except Exception as e:
         print(f"Error getting transcription: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/subject/<subject_name>/save-email', methods=['POST'])
+@login_required
+def save_owner_email(subject_name):
+    try:
+        # Hämta subject från databasen
+        subject = Subject.query.filter_by(name=subject_name).first()
+        if not subject:
+            return jsonify({'success': False, 'error': 'Subject not found'}), 404
+        
+        # Kontrollera att användaren är ägare
+        if subject.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Not authorized'}), 403
+        
+        # Hämta email från request
+        data = request.get_json()
+        if not data or 'email' not in data:
+            return jsonify({'success': False, 'error': 'Email is required'}), 400
+        
+        email = data['email'].strip()
+        
+        # Validera email-format
+        import re
+        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_pattern, email):
+            return jsonify({'success': False, 'error': 'Invalid email format'}), 400
+        
+        # Spara email till subject
+        subject.owner_email = email
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Email saved successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error saving owner email: {str(e)}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
 
 @app.route('/api/lesson/<int:lesson_id>/retranscribe', methods=['POST'])
 @login_required
@@ -5485,7 +5526,7 @@ def get_assignment_submissions(assignment_id):
         return jsonify({'status': 'error', 'message': str(e)}), 500
     
 
-    
+
 
 @app.route('/api/assignments/submit', methods=['POST'])
 def submit_assignment():
