@@ -990,6 +990,79 @@
   color: white;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* Textfält för kommentar */
+textarea[id^="comment-input-"] {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+/* Knappen för att lägga till kommentar */
+button[onclick^="addComment"] {
+  background-color: #007bff;
+  color: white;
+  padding: 6px 12px;
+  font-size: 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Hover-effekt */
+button[onclick^="addComment"]:hover {
+  background-color: #0056b3;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 .lesson-action-btn.delete {
   background: #dc3545;
   color: white;
@@ -5058,7 +5131,7 @@
                             <span class="comment-author">${escapeHtml(comment.teacher_name)}</span>
                             <span class="comment-date">
                               ${new Date(comment.created_at).toLocaleString('sv-SE')}
-                              ${comment.updated_at !== comment.created_at ? ' (redigerad)' : ''}
+                             
                             </span>
                           </div>
                           <div class="comment-text">${escapeHtml(comment.comment)}</div>
@@ -5328,7 +5401,6 @@
               <span class="comment-author">${escapeHtml(comment.teacher_name)}</span>
               <span class="comment-date">
                 ${new Date(comment.created_at).toLocaleString('sv-SE')}
-                ${isUpdated ? ' (redigerad)' : ''}
               </span>
             </div>
             <div class="comment-text" id="comment-text-${comment.id}">
