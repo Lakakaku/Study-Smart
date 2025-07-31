@@ -888,7 +888,8 @@ class AssignmentSubmission(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     comment = db.Column(db.Text)
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+    seen = db.Column(db.Boolean, default=False)  # <— NYTT!
+
     # Relationer
     student = db.relationship('User', backref='assignment_submissions')
     files = db.relationship('AssignmentFile', backref='submission', cascade='all, delete-orphan')
@@ -5145,6 +5146,19 @@ def get_assignments(subject_id):
     
 
 
+@app.route('/api/submission/<int:submission_id>/mark_seen', methods=['POST'])
+def mark_submission_seen(submission_id):
+    """Markera en inlämning som sedd (endast ägare)."""
+    submission = AssignmentSubmission.query.get_or_404(submission_id)
+    user_role = get_user_role_in_subject(current_user.id, submission.assignment.subject_id)
+    if user_role != 'owner':
+        return jsonify({'status':'error','message':'Åtkomst nekad'}),403
+
+    submission.seen = True
+    db.session.commit()
+    return jsonify({'status':'success','message':'Inlämning markerad som sedd'})
+
+
 
 
 @app.route('/api/assignments/create', methods=['POST'])
@@ -5598,6 +5612,29 @@ def submit_assignment():
         db.session.rollback()
         print(f"Error submitting assignment: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/assignments/<int:subject_id>/unseen_count')
+def unseen_count(subject_id):
+    # kolla att current_user är owner
+    if get_user_role_in_subject(current_user.id, subject_id) != 'owner':
+        return jsonify({'status':'error'}),403
+    cnt = db.session.query(AssignmentSubmission).\
+          join(Assignment).\
+          filter(Assignment.subject_id==subject_id, AssignmentSubmission.seen==False).\
+          count()
+    return jsonify({'status':'success','unseen_count': cnt})
+
+
+@app.route('/api/submission/<int:submission_id>/mark_seen', methods=['POST'])
+def mark_seen(submission_id):
+    submission = AssignmentSubmission.query.get_or_404(submission_id)
+    # Kontroll: bara owner får göra detta
+    if get_user_role_in_subject(current_user.id, submission.assignment.subject_id) != 'owner':
+        return jsonify({'status':'error'}), 403
+
+    submission.seen = True
+    db.session.commit()
+    return jsonify({'status':'success'})
 
 
 @app.route('/download_submission_file/<int:file_id>')
