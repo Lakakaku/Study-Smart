@@ -5507,7 +5507,6 @@ def get_assignment_submissions(assignment_id):
         submissions = AssignmentSubmission.query.filter_by(assignment_id=assignment_id).all()
         submissions_data = []
         for submission in submissions:
-            # räkna kommentarer etc...
             comment_count = SubmissionComment.query.filter_by(submission_id=submission.id).count()
 
             submissions_data.append({
@@ -5515,8 +5514,8 @@ def get_assignment_submissions(assignment_id):
                 'student_name': submission.student.username,
                 'submitted_at': submission.submitted_at.isoformat(),
                 'comment_count': comment_count,
-                'seen': submission.seen,               # <-- Lägg till detta
-                # ... ev fler fält
+                'seen': submission.seen,
+                'comment': submission.comment or ''    # <-- Skicka med studentens kommentar
             })
 
         return jsonify({'status': 'success', 'submissions': submissions_data})
