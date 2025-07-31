@@ -178,6 +178,11 @@ class Lesson(db.Model):
         }
 
 
+
+# models.py
+
+
+
 # Lägg till denna model i din models.py
 class SharedFile(db.Model):
     __tablename__ = 'shared_files'
@@ -318,7 +323,7 @@ class SubjectMember(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
     role = db.Column(db.String(20), default='member')  # 'admin' eller 'member'
-    
+    last_seen_shared_at = db.Column(db.DateTime, default=datetime.utcnow)
     # Unique constraint för att förhindra duplicerade medlemskap
     __table_args__ = (db.UniqueConstraint('subject_id', 'user_id', name='unique_subject_member'),)
     
@@ -2848,6 +2853,37 @@ def add_subject():
         db.session.rollback()
         return jsonify({'status': 'error', 'message': 'Failed to create subject'}), 500
 # Uppdatera dina befintliga quiz routes med denna kod för att hantera shared subjects
+
+@app.route('/api/subject/<int:subject_id>/shared_unread_count')
+@login_required
+def shared_unread_count(subject_id):
+    # Hitta medlemspost
+    member = SubjectMember.query.filter_by(
+        subject_id=subject_id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    # Räkna alla aktiva SharedFile för ämnet med created_at > last_seen_shared_at
+    unread = SharedFile.query.filter(
+        SharedFile.subject_id == subject_id,
+        SharedFile.created_at > member.last_seen_shared_at,
+        SharedFile.is_active == True
+    ).count()
+
+    return jsonify({'status': 'success', 'unread_count': unread})
+
+
+@app.route('/api/subject/<int:subject_id>/mark_shared_read', methods=['POST'])
+@login_required
+def mark_shared_read(subject_id):
+    member = SubjectMember.query.filter_by(
+        subject_id=subject_id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    member.last_seen_shared_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'status': 'success'})
 
 
 @app.route('/upload_shared_file', methods=['POST'])
