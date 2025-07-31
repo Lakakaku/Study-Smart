@@ -5501,44 +5501,30 @@ def get_assignment_submissions(assignment_id):
     """Hämta inlämningar för en uppgift (endast ägare)"""
     try:
         assignment = Assignment.query.get_or_404(assignment_id)
-        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
-        
-        if user_role != 'owner':
+        if get_user_role_in_subject(current_user.id, assignment.subject_id) != 'owner':
             return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
 
         submissions = AssignmentSubmission.query.filter_by(assignment_id=assignment_id).all()
-        
         submissions_data = []
         for submission in submissions:
-            files_data = []
-            for file in submission.files:
-                files_data.append({
-                    'id': file.id,
-                    'filename': file.filename,
-                    'file_size': file.file_size
-                })
-
-            # Räkna antal kommentarer för denna inlämning
+            # räkna kommentarer etc...
             comment_count = SubmissionComment.query.filter_by(submission_id=submission.id).count()
 
             submissions_data.append({
                 'id': submission.id,
                 'student_name': submission.student.username,
-                'comment': submission.comment,
                 'submitted_at': submission.submitted_at.isoformat(),
-                'files': files_data,
-                'comment_count': comment_count  # Lägg till comment_count här
+                'comment_count': comment_count,
+                'seen': submission.seen,               # <-- Lägg till detta
+                # ... ev fler fält
             })
 
-        return jsonify({
-            'status': 'success',
-            'submissions': submissions_data
-        })
+        return jsonify({'status': 'success', 'submissions': submissions_data})
 
     except Exception as e:
         print(f"Error loading submissions: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
-    
+
 
 
 
