@@ -5284,6 +5284,29 @@ button[onclick^="addComment"]:hover {
               </div>
             ` : ''}
 
+
+            <!-- NYTT: inlämnade filer -->
+            ${sub.files && sub.files.length ? `
+              <div class="submission-files">
+                <h4>Inlämnade filer:</h4>
+                ${sub.files.map(file => `
+                  <div class="submission-file">
+                    <a href="/view_submission_file/${file.id}" target="_blank">
+                      📄 ${escapeHtml(file.filename)}
+                    </a>
+                    &nbsp;
+                    <a href="/download_submission_file/${file.id}" download>
+                      (Ladda ner)
+                    </a>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+
+
+
+
+
             <div class="comment-section" id="comment-section-${sub.id}" style="display: block;">
               <textarea id="comment-input-${sub.id}"
                         placeholder="Skriv kommentar..."></textarea>
