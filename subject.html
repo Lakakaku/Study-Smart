@@ -1632,6 +1632,19 @@ button[onclick^="addComment"]:hover {
         display: none;
     }
 
+    .pending-count-badge {
+      display: inline-block;
+      min-width: 20px;
+      padding: 2px 6px;
+      border-radius: 12px;
+      background: #dc3545;
+      color: white;
+      font-size: 12px;
+      text-align: center;
+      margin-left: 8px;
+    }
+
+
     .file-upload-label,
     .send-message-button {
       display: inline-flex;
@@ -3823,7 +3836,8 @@ button[onclick^="addComment"]:hover {
     <div class="shared-files-section">
       <div class="files-section-title">
         Delade Filer
-        <span id="file-stats"></span>
+        <span id="pending-count-badge" class="pending-count-badge" style="display:none;"></span>
+
       </div>
 
       <!-- File List -->
@@ -4812,6 +4826,52 @@ button[onclick^="addComment"]:hover {
       }
     }
 
+
+
+
+    // Efter att currentUserRole och subjectId är definierade:
+
+    if (userRole === 'member') {
+      const badge = document.getElementById('pending-count-badge');
+      const sharedSection = document.querySelector('.shared-files-section');
+
+      // 1) Hämta initialt antal olästa
+      async function updateUnreadBadge() {
+        try {
+          const res = await fetch(`/api/subject/${subjectId}/shared_unread_count`);
+          const data = await res.json();
+          if (data.status === 'success' && data.unread_count > 0) {
+            badge.textContent = data.unread_count;
+            badge.style.display = 'inline-block';
+          }
+        } catch (e) {
+          console.error('Could not fetch unread count', e);
+        }
+      }
+      updateUnreadBadge();
+
+      // 2) Använd IntersectionObserver för att detektera när sektionen blir synlig
+      const io = new IntersectionObserver(async entries => {
+        for (let entry of entries) {
+          if (entry.isIntersecting) {
+            // Markera som läst på servern
+            try {
+              await fetch(`/api/subject/${subjectId}/mark_shared_read`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+              });
+            } catch (e) {
+              console.error('Could not mark shared as read', e);
+            }
+            // Dölj badge
+            badge.style.display = 'none';
+            io.disconnect();
+          }
+        }
+      }, { threshold: 0.1 });
+
+      io.observe(sharedSection);
+    }
 
 
 
