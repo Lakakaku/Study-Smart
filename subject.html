@@ -2361,27 +2361,39 @@
 
     /* CSS att lägga till i din stylesheet */
 
-    .assignments-toggle-container {
-      margin: 20px 0;
-      text-align: center;
+    .assignments-toggle-container-centered {
+      display: flex;
+      justify-content: center;
+      margin: 25px 0;
+      padding: 0 20px;
     }
 
-    .assignments-toggle-btn {
-      background: slateblue;
+    /* Större uppgifter-knapp */
+    .assignments-toggle-btn-large {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
+      padding: 18px 48px;
+      border-radius: 16px;
+      font-size: 20px;
+      font-weight: 700;
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      min-width: 250px;
     }
 
-    .assignments-toggle-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    .assignments-toggle-btn-large:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+      background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }
+
+    .assignments-toggle-btn-large:active {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
     }
 
     .assignments-section {
@@ -3202,6 +3214,22 @@
       padding: 15px;
     }
 
+    @media (max-width: 768px) {
+      .assignments-toggle-btn-large {
+        padding: 16px 36px;
+        font-size: 18px;
+        min-width: 200px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .assignments-toggle-btn-large {
+        padding: 14px 28px;
+        font-size: 16px;
+        min-width: 180px;
+      }
+    }
+
     /* Responsiv design */
     @media (max-width: 768px) {
       .my-submission-modal-content {
@@ -3239,12 +3267,9 @@
         <span class="member-role-badge {{ user_role }}">{{ user_role.title() }}</span>
       {% endif %}
     </div>
-    <div class="assignments-toggle-container">
-      <button id="assignments-toggle" class="assignments-toggle-btn">📝 Uppgifter</button>
-    </div>
+    
   </div>
 
-  <!-- Share Section - only for owners -->
   {% if user_role == 'owner' %}
   <div class="share-section">
     <div class="share-title">📤 Dela Ämnet</div>
@@ -3280,6 +3305,11 @@
       </button>
     </div>
 
+    <!-- NY CENTRERAD UPPGIFTER-KNAPP MELLAN REGENERERA OCH VISA MEDLEMMAR -->
+    <div class="assignments-toggle-container-centered">
+      <button id="assignments-toggle" class="assignments-toggle-btn-large">📝 Uppgifter</button>
+    </div>
+
     <div class="members-list" id="members-list" style="display: none; margin-top: 15px;">
       <div class="members-list-header">
         <h4>Medlemmar</h4>
@@ -3293,11 +3323,15 @@
     <div class="members-count" id="members-count">
       Loading member count...
     </div>
-
-    
   </div>
-
   {% endif %}
+
+  {% if user_role != 'owner' %}
+  <div class="assignments-toggle-container-centered">
+    <button id="assignments-toggle" class="assignments-toggle-btn-large">📝 Uppgifter</button>
+  </div>
+  {% endif %}
+
 
 
   <!-- Lägg till denna sektion efter share-section men före main-layout -->
