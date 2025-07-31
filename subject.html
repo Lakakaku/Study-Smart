@@ -1632,6 +1632,25 @@
         border: 1px solid #f5c6cb;
     }
 
+
+
+
+
+
+    .seen-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .seen-checkbox {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+
     /* File List */
     .file-list {
         max-height: 500px;
@@ -3463,7 +3482,10 @@
 
   {% if user_role == 'owner' %}
   <div class="assignments-toggle-container-centered">
-    <button id="assignments-toggle" class="assignments-toggle-btn-large">📝 Uppgifter</button>
+    <button id="assignments-toggle" class="assignments-toggle-btn-large">
+      <span class="toggle-label">📝 Uppgifter</span>
+      <span id="unseen-badge" class="pending-count-badge" style="display:none;"></span>
+    </button>
   </div>
   {% endif %}
 
@@ -4056,6 +4078,9 @@
       if (userRole !== 'owner') {
         loadAssignments();
       }
+      else {
+        loadAssignments();
+      }
     });
 
 
@@ -4484,6 +4509,9 @@
 
 
 
+
+
+
     // Show krav status messages
     function showKravStatus(message, type = 'info') {
         // Try to use existing status div first
@@ -4731,6 +4759,12 @@
       // Initiera inlämning för medlemmar
       if (userRole !== 'owner') {
         initializeAssignmentSubmission();
+      }
+
+      if (userRole === 'owner') {
+        initializeAssignmentCreation();
+        setDefaultDueDate();
+        updateUnseenBadge();          // <— Lägg till här
       }
     }
 
@@ -5034,6 +5068,24 @@
       document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
+
+
+    // Anropa när sidan laddas för ägare
+    async function updateUnseenBadge() {
+      if (userRole !== 'owner') return;
+      const res = await fetch(`/api/assignments/${subjectId}/unseen_count`);
+      const data = await res.json();
+      const badge = document.getElementById('unseen-badge');
+      if (data.status === 'success' && data.unseen_count > 0) {
+        badge.textContent = data.unseen_count;
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+
+
     // Visa min inlämning med kommentarer (för studenter)
     async function viewMySubmission(assignmentId) {
       try {
@@ -5105,68 +5157,62 @@
     }
 
 
-    // Uppdatera renderSubmissions för att inkludera comment_count
     function renderSubmissions(submissions) {
       const container = document.getElementById('submissions-list');
       if (!container) return;
-
-      if (!submissions || submissions.length === 0) {
+      if (!submissions.length) {
         container.innerHTML = '<div class="no-submissions">Inga inlämningar än.</div>';
         return;
       }
 
-      const submissionsHtml = submissions.map(submission => `
-        <div class="submission-item" data-submission-id="${submission.id}">
-          <div class="submission-header">
-            <span class="submission-student">${escapeHtml(submission.student_name)}</span>
-            <span class="submission-date">${new Date(submission.submitted_at).toLocaleString('sv-SE')}</span>
-            <span class="submission-comment-count">💬 ${submission.comment_count || 0} kommentarer</span>
-          </div>
-          
-          ${submission.comment ? `
-            <div class="submission-comment">
-              <strong>Elevens kommentar:</strong> ${escapeHtml(submission.comment)}
-            </div>
-          ` : ''}
-          
-          <div class="submission-files">
-            ${submission.files.map(file => `
-              <div class="submission-file">
-                <span class="submission-file-name">📎 ${escapeHtml(file.filename)}</span>
-                <div class="submission-file-actions">
-                  <a href="/view_submission_file/${file.id}" class="submission-file-view" target="_blank">
-                    Öppna
-                  </a>
-                  <a href="/download_submission_file/${file.id}" class="submission-file-download">
-                    Ladda ner
-                  </a>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-          
-          <div class="submission-actions">
-            <button class="submission-action-btn comment" onclick="openCommentSection(${submission.id})">
-              Kommentera
-            </button>
-          </div>
-          
-          <!-- Kommentarssektion -->
-          <div class="comment-section" id="comment-section-${submission.id}" style="display: none;">
-            <div class="comment-form">
-              <textarea id="comment-input-${submission.id}" placeholder="Skriv din kommentar här..." rows="3"></textarea>
-              <button onclick="addComment(${submission.id})" class="add-comment-btn">Lägg till kommentar</button>
-            </div>
-            
-            <div class="comments-list" id="comments-list-${submission.id}">
-              <div class="loading-comments">Laddar kommentarer...</div>
-            </div>
-          </div>
-        </div>
-      `).join('');
+      container.innerHTML = submissions.map(sub => {
+        const seenChecked = sub.seen ? 'checked' : '';
+        return `
+          <div class="submission-item" data-submission-id="${sub.id}">
+            <label class="seen-label">
+              <input type="checkbox"
+                    class="seen-checkbox"
+                    data-submission-id="${sub.id}"
+                    ${seenChecked}>
+              Sett
+            </label>
 
-      container.innerHTML = submissionsHtml;
+            <div class="submission-header">
+              <span class="submission-student">${escapeHtml(sub.student_name)}</span>
+              <span class="submission-date">
+                ${new Date(sub.submitted_at).toLocaleString('sv-SE')}
+              </span>
+              <span class="submission-comment-count">
+                💬 ${sub.comment_count||0} kommentarer
+              </span>
+            </div>
+
+            <div class="comment-section" id="comment-section-${sub.id}">
+              <textarea id="comment-input-${sub.id}"
+                        placeholder="Skriv kommentar..."></textarea>
+              <button onclick="addComment(${sub.id})">
+                Lägg till kommentar
+              </button>
+              <div class="comments-list" id="comments-list-${sub.id}"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Bind event på checkboxar
+      container.querySelectorAll('.seen-checkbox').forEach(cb => {
+        cb.addEventListener('change', async e => {
+          const id = e.target.dataset.submissionId;
+          if (e.target.checked) {
+            await fetch(`/api/submission/${id}/mark_seen`, { method: 'POST' });
+            updateUnseenBadge();
+          }
+        });
+      });
     }
+
+
+
 
     // Stäng inlämningsmodal
     function closeSubmissionsModal() {
@@ -5288,56 +5334,33 @@
 
 
 
-
-
-
-    // Lägg till ny kommentar
     async function addComment(submissionId) {
-      const commentInput = document.getElementById(`comment-input-${submissionId}`);
-      const commentText = commentInput.value.trim();
-      
-      if (!commentText) {
-        showAlert('Skriv en kommentar först', 'error');
-        return;
+      const txt = document.getElementById(`comment-input-${submissionId}`).value.trim();
+      if (!txt) return showAlert('Kommentar krävs','error');
+
+      // 1) Lägg till kommentar
+      const resp = await fetch(`/api/submission/${submissionId}/add_comment`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ comment: txt })
+      });
+      const data = await resp.json();
+      if (data.status !== 'success') {
+        return showAlert('Kunde inte lägga till kommentar','error');
       }
-      
-      try {
-        const response = await fetch(`/api/submission/${submissionId}/add_comment`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            comment: commentText
-          })
-        });
-        
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-          showAlert('Kommentar tillagd!', 'success');
-          commentInput.value = '';
-          
-          // Uppdatera kommentarsräknaren i submission-listan
-          const submissionItem = document.querySelector(`[data-submission-id="${submissionId}"]`);
-          if (submissionItem) {
-            const countElement = submissionItem.querySelector('.submission-comment-count');
-            if (countElement) {
-              const currentCount = parseInt(countElement.textContent.match(/\d+/)[0]) || 0;
-              countElement.textContent = `💬 ${currentCount + 1} kommentarer`;
-            }
-          }
-          
-          // Ladda om kommentarer
-          await loadComments(submissionId);
-        } else {
-          throw new Error(data.message || 'Kunde inte lägga till kommentar');
-        }
-      } catch (error) {
-        console.error('Error adding comment:', error);
-        showAlert('Fel vid tillägg av kommentar: ' + error.message, 'error');
-      }
+
+      // 2) Markera som sett
+      await fetch(`/api/submission/${submissionId}/mark_seen`, { method: 'POST' });
+
+      // 3) Ladda om kommentarer och uppdatera checkbox + badge
+      loadComments(submissionId);
+      updateUnseenBadge();
     }
+
+
+
+
+    
 
     // Redigera kommentar
     // Redigera kommentar
