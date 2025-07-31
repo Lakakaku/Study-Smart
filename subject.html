@@ -3368,6 +3368,18 @@
       }
     }
 
+
+
+    .pending-count-badge {
+      background: #e53e3e;
+      color: white;
+      border-radius: 50%;
+      padding: 0 8px;
+      font-size: 0.8em;
+      margin-left: 6px;
+    }
+
+
   </style>
 </head>
 <body>
@@ -3456,7 +3468,10 @@
   {% if user_role != 'owner' %}
   <div class="assignments-header-with-email">
     <div class="assignments-toggle-container-with-email">
-      <button id="assignments-toggle" class="assignments-toggle-btn-large">📝 Uppgifter</button>
+      <button id="assignments-toggle" class="assignments-toggle-btn-large">
+        <span class="toggle-label">📝 Uppgifter</span>
+        <span id="pending-count-badge" class="pending-count-badge" style="display:none;">0</span>
+      </button>
     </div>
     
     {% if subject.owner_email %}
@@ -4712,17 +4727,19 @@
     function toggleAssignmentsSection() {
       const section = document.getElementById('assignments-section');
       const btn = document.getElementById('assignments-toggle');
-      
-      if (section.style.display === 'none' || section.style.display === '') {
+      const label = btn.querySelector('.toggle-label');
+
+      if (section.style.display === '' || section.style.display === 'none') {
         section.style.display = 'block';
-        btn.textContent = '📝 Dölj Uppgifter';
+        label.textContent = '📝 Dölj Uppgifter';
         loadAssignments();
       } else {
         section.style.display = 'none';
-        btn.textContent = '📝 Uppgifter';
+        label.textContent = '📝 Uppgifter';
       }
     }
 
+    // Ladda alla uppgifter
     // Ladda alla uppgifter
     async function loadAssignments() {
       const assignmentsList = document.getElementById('assignments-list');
@@ -4730,10 +4747,9 @@
 
       try {
         assignmentsList.innerHTML = '<div class="loading-assignments">Laddar uppgifter...</div>';
-        
         const response = await fetch(`/api/assignments/${subjectId}`);
         const data = await response.json();
-        
+
         if (data.status === 'success') {
           assignments = data.assignments;
           renderAssignments(assignments);
@@ -4749,6 +4765,7 @@
         `;
       }
     }
+
 
     // Uppdatera renderAssignments för att visa kommentarer för studenter
     function renderAssignments(assignmentsList) {
@@ -4827,8 +4844,29 @@
         `;
       }).join('');
 
+
       container.innerHTML = assignmentsHtml;
+
+      if (userRole !== 'owner') {
+        updatePendingCount(assignmentsList);
+      }
     }
+
+
+
+    function updatePendingCount(assignmentsList) {
+      const badge = document.getElementById('pending-count-badge');
+      if (!badge) return;
+      // Filtrera ut uppgifter som inte är submitted
+      const pending = assignmentsList.filter(a => a.submission_status !== 'submitted').length;
+      if (pending > 0) {
+        badge.textContent = pending;
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
 
     // Initiera formulär för att skapa uppgifter (endast ägare)
     function initializeAssignmentCreation() {
