@@ -1466,8 +1466,9 @@
       border: 1px solid #ced4da;
       border-radius: 4px;
       font-size: 14px;
-      max-width: 300px;
+      max-width: 250px; /* Begränsa bredden */
     }
+
 
     .owner-email-input:focus {
       outline: none;
@@ -1484,6 +1485,7 @@
       cursor: pointer;
       font-size: 14px;
       transition: background-color 0.2s;
+      white-space: nowrap;
     }
 
     .save-email-btn:hover {
@@ -1491,20 +1493,23 @@
     }
 
     .owner-email-display {
+      position: absolute;
+      top: 0;
+      right: 0;
       background: #f8f9fa;
       border: 1px solid #dee2e6;
       border-radius: 4px;
       padding: 8px 12px;
       font-size: 14px;
       color: #495057;
-      margin-left: auto;
     }
 
     .assignments-header-with-email {
       display: flex;
-      justify-content: space-between;
+      justify-content: center; /* Ändrat från space-between till center */
       align-items: center;
       margin-bottom: 20px;
+      position: relative; /* Lägg till position relative */
     }
 
     .assignments-toggle-container-with-email {
@@ -1762,6 +1767,21 @@
         margin: 20px 0;
     }
 
+    .share-buttons-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .share-actions-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 15px;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
     .share-title {
         font-size: 1.3em;
         font-weight: 600;
@@ -1797,6 +1817,8 @@
       cursor: pointer;
       font-size: 14px;
       transition: background-color 0.2s;
+      white-space: nowrap;
+
     }
 
     .view-members-btn:hover {
@@ -1944,6 +1966,33 @@
             height: auto !important;
             min-height: calc(100vh - 150px) !important;
         }
+    }
+
+    @media (max-width: 768px) {
+      .share-actions-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+      }
+      
+      .share-buttons-group,
+      .email-controls-group {
+        justify-content: center;
+      }
+      
+      .owner-email-input {
+        max-width: 100%;
+      }
+      
+      .assignments-header-with-email {
+        flex-direction: column;
+        gap: 15px;
+      }
+      
+      .owner-email-display {
+        position: static;
+        margin-top: 10px;
+      }
     }
 
     /* MOBIL LAYOUT */
@@ -3335,6 +3384,7 @@
     
   </div>
 
+  <!-- Uppdaterad HTML för ägare: Flytta email-kontroller till share-section -->
   {% if user_role == 'owner' %}
   <div class="share-section">
     <div class="share-title">📤 Dela Ämnet</div>
@@ -3352,8 +3402,9 @@
     </div>
     {% endif %}
     
-    <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
-      <div>
+    <!-- UPPDATERAD SEKTION: Flytta email-kontroller hit -->
+    <div class="share-actions-row">
+      <div class="share-buttons-group">
         <button class="toggle-sharing" onclick="toggleSharing()">
           {{ 'Inaktivera Delning' if subject.is_shared else 'Enable Sharing' }}
         </button>
@@ -3364,19 +3415,18 @@
         </button>
         {% endif %}
       </div>
-    </div>
-
-    <!-- NY sektion för email och visa medlemmar -->
-    <div class="owner-email-section">
-      <input type="email" 
-            id="owner-email-input" 
-            class="owner-email-input" 
-            placeholder="Din email-adress..." 
-            value="{{ subject.owner_email or '' }}">
-      <button class="save-email-btn" onclick="saveOwnerEmail()">Spara Email</button>
-      <button class="view-members-btn" onclick="toggleMembersList()">
-        👥 Visa Medlemmar
-      </button>
+      
+      <div class="email-controls-group">
+        <input type="email" 
+              id="owner-email-input" 
+              class="owner-email-input" 
+              placeholder="Skriv in din email-adress" 
+              value="{{ subject.owner_email or '' }}">
+        <button class="save-email-btn" onclick="saveOwnerEmail()">Spara Email</button>
+        <button class="view-members-btn" onclick="toggleMembersList()">
+          👥 Visa Medlemmar
+        </button>
+      </div>
     </div>
 
     <div class="members-list" id="members-list" style="display: none; margin-top: 15px;">
