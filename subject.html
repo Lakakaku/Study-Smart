@@ -594,6 +594,9 @@
   color: white;
 }
 
+
+
+
 .delete-file-btn {
   background: #dc3545;
   color: white;
@@ -1446,6 +1449,68 @@
         padding: 20px;
         margin: 20px 0;
         border: 1px solid #e9ecef;
+    }
+
+
+
+    .owner-email-section {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-top: 10px;
+    }
+
+    .owner-email-input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 14px;
+      max-width: 300px;
+    }
+
+    .owner-email-input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+
+    .save-email-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+
+    .save-email-btn:hover {
+      background: #218838;
+    }
+
+    .owner-email-display {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 14px;
+      color: #495057;
+      margin-left: auto;
+    }
+
+    .assignments-header-with-email {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .assignments-toggle-container-with-email {
+      display: flex;
+      align-items: center;
+      gap: 20px;
     }
 
     .files-section-title {
@@ -3299,15 +3364,19 @@
         </button>
         {% endif %}
       </div>
-      
+    </div>
+
+    <!-- NY sektion för email och visa medlemmar -->
+    <div class="owner-email-section">
+      <input type="email" 
+            id="owner-email-input" 
+            class="owner-email-input" 
+            placeholder="Din email-adress..." 
+            value="{{ subject.owner_email or '' }}">
+      <button class="save-email-btn" onclick="saveOwnerEmail()">Spara Email</button>
       <button class="view-members-btn" onclick="toggleMembersList()">
         👥 Visa Medlemmar
       </button>
-    </div>
-
-    <!-- NY CENTRERAD UPPGIFTER-KNAPP MELLAN REGENERERA OCH VISA MEDLEMMAR -->
-    <div class="assignments-toggle-container-centered">
-      <button id="assignments-toggle" class="assignments-toggle-btn-large">📝 Uppgifter</button>
     </div>
 
     <div class="members-list" id="members-list" style="display: none; margin-top: 15px;">
@@ -3326,11 +3395,28 @@
   </div>
   {% endif %}
 
-  {% if user_role != 'owner' %}
+
+  {% if user_role == 'owner' %}
   <div class="assignments-toggle-container-centered">
     <button id="assignments-toggle" class="assignments-toggle-btn-large">📝 Uppgifter</button>
   </div>
   {% endif %}
+
+  <!-- För medlemmar: knapp till vänster, email till höger -->
+  {% if user_role != 'owner' %}
+  <div class="assignments-header-with-email">
+    <div class="assignments-toggle-container-with-email">
+      <button id="assignments-toggle" class="assignments-toggle-btn-large">📝 Uppgifter</button>
+    </div>
+    
+    {% if subject.owner_email %}
+    <div class="owner-email-display">
+      📧 {{ subject.owner_email }}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
 
 
 
@@ -4056,6 +4142,56 @@
             xhr.send(formData);
         });
     }
+
+
+    function saveOwnerEmail() {
+      const emailInput = document.getElementById('owner-email-input');
+      const email = emailInput.value.trim();
+      
+      if (!email) {
+        alert('Vänligen ange en email-adress');
+        return;
+      }
+      
+      // Enkel email-validering
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        alert('Vänligen ange en giltig email-adress');
+        return;
+      }
+      
+      fetch(`/subject/{{ subject_name }}/save-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Email sparad!');
+        } else {
+          alert('Fel vid sparande: ' + data.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Fel vid sparande av email');
+      });
+    }
+
+    // Lägg till enter-tangent support för email-fältet
+    document.addEventListener('DOMContentLoaded', function() {
+      const emailInput = document.getElementById('owner-email-input');
+      if (emailInput) {
+        emailInput.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            saveOwnerEmail();
+          }
+        });
+      }
+    });
 
     // Setup removal functionality
     function setupKravDocumentRemoval() {
