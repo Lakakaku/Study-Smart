@@ -1427,7 +1427,7 @@
         background-color: #e74c3c;
         color: white;
         border: none;
-        border-radius: 50%;
+        border-radius: 4px;
         width: 25px;
         height: 25px;
         font-size: 14px;
@@ -2627,6 +2627,8 @@
       border-radius: 8px;
       padding: 20px;
       transition: all 0.3s ease;
+      position: relative;
+
     }
 
     .assignment-card:hover {
@@ -2663,6 +2665,9 @@
     }
 
     .assignment-status {
+      position: absolute;
+      top: 16px;    /* justera om du vill ha mer/färre marginaler */
+      right: 16px;
       display: inline-block;
       padding: 4px 12px;
       border-radius: 20px;
