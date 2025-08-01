@@ -4640,6 +4640,26 @@ button[onclick^="addComment"]:hover {
       }
     });
 
+    document.addEventListener('DOMContentLoaded', function() {
+      const assignmentsToggle = document.getElementById('assignments-toggle');
+      const assignmentsSection = document.getElementById('assignments-section');
+              if (isVisible) {
+            // Stäng sektionen
+            assignmentsSection.style.display = 'none';
+            assignmentsToggle.classList.remove('active');
+            assignmentsToggle.setAttribute('data-tooltip', 'Klicka för att fälla ut uppgifter');
+          } else {
+            // Öppna sektionen
+            assignmentsSection.style.display = 'block';
+            assignmentsToggle.classList.add('active');
+            assignmentsToggle.setAttribute('data-tooltip', 'Klicka för att fälla in uppgifter');
+          }
+        
+      
+    });
+    
+
+
     // Setup removal functionality
     function setupKravDocumentRemoval() {
         // Use event delegation for remove buttons
