@@ -5233,7 +5233,153 @@ def create_assignment():
         print(f"Error creating assignment: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/view_my_submission_file/<int:file_id>')
+def view_my_submission_file(file_id):
+    """Låt studenter öppna sina egna inlämnade filer"""
+    try:
+        file = AssignmentFile.query.get_or_404(file_id)
+        submission = file.submission
+        assignment = submission.assignment
+        
+        # Kontrollera att det är studenten som lämnade in filen
+        if submission.student_id != current_user.id:
+            return "Åtkomst nekad - du kan endast se dina egna filer", 403
+        
+        # Kontrollera att användaren har tillgång till ämnet
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        if not user_role:
+            return "Åtkomst nekad", 403
 
+        # Kontrollera att filen existerar
+        if not os.path.exists(file.file_path):
+            return "Fil hittades inte", 404
+
+        # Returnera filen för visning i webbläsaren
+        return send_file(file.file_path, as_attachment=False)
+
+    except Exception as e:
+        print(f"Error viewing my submission file: {e}")
+        return "Fel vid öppning av fil", 500
+
+
+@app.route('/download_my_submission_file/<int:file_id>')
+def download_my_submission_file(file_id):
+    """Låt studenter ladda ner sina egna inlämnade filer"""
+    try:
+        file = AssignmentFile.query.get_or_404(file_id)
+        submission = file.submission
+        assignment = submission.assignment
+        
+        # Kontrollera att det är studenten som lämnade in filen
+        if submission.student_id != current_user.id:
+            return "Åtkomst nekad - du kan endast ladda ner dina egna filer", 403
+        
+        # Kontrollera att användaren har tillgång till ämnet
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        if not user_role:
+            return "Åtkomst nekad", 403
+
+        return send_file(file.file_path, as_attachment=True, download_name=file.filename)
+
+    except Exception as e:
+        print(f"Error downloading my submission file: {e}")
+        return "Fil hittades inte", 404
+
+
+@app.route('/api/assignments/undo_submission', methods=['POST'])
+def undo_assignment_submission():
+    """Ångra inlämning (endast studenten som lämnade in)"""
+    try:
+        data = request.get_json()
+        assignment_id = data.get('assignment_id')
+        
+        assignment = Assignment.query.get_or_404(assignment_id)
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+        
+        if not user_role or user_role == 'owner':
+            return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
+
+        # Hitta användarens inlämning
+        submission = AssignmentSubmission.query.filter_by(
+            assignment_id=assignment_id,
+            student_id=current_user.id
+        ).first()
+
+        if not submission:
+            return jsonify({'status': 'error', 'message': 'Ingen inlämning att ångra'}), 400
+
+        # Ta bort filer från disk
+        for file in submission.files:
+            try:
+                if os.path.exists(file.file_path):
+                    os.remove(file.file_path)
+            except Exception as e:
+                print(f"Error removing file {file.file_path}: {e}")
+
+        # Ta bort inlämningen från databasen (cascade tar hand om filer och kommentarer)
+        db.session.delete(submission)
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Inlämning har ångrats'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error undoing submission: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/preview_upload_file', methods=['POST'])
+def preview_upload_file():
+    """Förhandsgranska uppladdad fil innan inlämning"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'status': 'error', 'message': 'Ingen fil skickad'}), 400
+
+        file = request.files['file']
+        if not file or not file.filename:
+            return jsonify({'status': 'error', 'message': 'Ogiltig fil'}), 400
+
+        # Spara temporärt för förhandsgranskning
+        temp_dir = os.path.join('static', 'temp_uploads', str(current_user.id))
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join(temp_dir, filename)
+        file.save(temp_path)
+
+        # Returnera temporär URL för förhandsgranskning
+        temp_url = f"/static/temp_uploads/{current_user.id}/{filename}"
+        
+        return jsonify({
+            'status': 'success',
+            'temp_url': temp_url,
+            'filename': filename,
+            'file_size': os.path.getsize(temp_path)
+        })
+
+    except Exception as e:
+        print(f"Error previewing file: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/cleanup_temp_files', methods=['POST'])
+def cleanup_temp_files():
+    """Rensa temporära filer för förhandsgranskning"""
+    try:
+        temp_dir = os.path.join('static', 'temp_uploads', str(current_user.id))
+        if os.path.exists(temp_dir):
+            import shutil
+            shutil.rmtree(temp_dir)
+            os.makedirs(temp_dir, exist_ok=True)
+        
+        return jsonify({'status': 'success', 'message': 'Temporära filer rensade'})
+    
+    except Exception as e:
+        print(f"Error cleaning up temp files: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 # Nya routes för att öppna filer och hantera kommentarer
 
 @app.route('/view_submission_file/<int:file_id>')
