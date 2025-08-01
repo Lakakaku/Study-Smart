@@ -10,6 +10,7 @@
     :root {
         --primary-color: #2563eb;
         --primary-hover: #1d4ed8;
+        --primary-yellow: hwb(43 18% 0%);
         --secondary-color: #f1f5f9;
         --accent-color: #059669;
         --danger-color: #dc2626;
@@ -1630,7 +1631,7 @@ button[onclick^="addComment"]:hover {
     /* Stop pulsing when active */
     .assignments-toggle-btn-large.active {
       animation: none;
-      background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+      background: var(--primary-yellow);
     }
 
     .assignment-action-btn.undo-submission {
@@ -2512,7 +2513,7 @@ button[onclick^="addComment"]:hover {
     }
 
     .toggle-sharing, .regenerate-code {
-        background: #007bff;
+        background: rgb(209, 23, 23);
         color: white;
         border: none;
         padding: 10px 20px;
@@ -2523,12 +2524,12 @@ button[onclick^="addComment"]:hover {
         transition: background-color 0.2s;
     }
 
-    .toggle-sharing:hover, .regenerate-code:hover {
-        background: #0056b3;
+    .toggle-sharing:hover {
+        background: #9e0d0d;
     }
 
     .regenerate-code {
-        background: #ffc107;
+        background: orange;
         color: #212529;
     }
 
@@ -2856,7 +2857,7 @@ button[onclick^="addComment"]:hover {
 
     /* ERSÄTTER BEFINTLIG .assignments-toggle-btn-large CSS */
     .assignments-toggle-btn-large {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: var(--primary-yellow);
       color: white;
       border: none;
       padding: 18px 48px;
@@ -2865,7 +2866,8 @@ button[onclick^="addComment"]:hover {
       font-weight: 700;
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 12px 35px var(--primary-yellow);
+
       text-transform: uppercase;
       letter-spacing: 1px;
       min-width: 250px;
@@ -2882,13 +2884,14 @@ button[onclick^="addComment"]:hover {
 
     .assignments-toggle-btn-large:hover {
       transform: translateY(-3px);
-      box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
-      background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+      box-shadow: 0 12px 35px var(--primary-yellow);
+      background: var(--primary-yellow);
     }
 
     .assignments-toggle-btn-large:active {
       transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
+      box-shadow: 0 12px 35px var(--primary-yellow);
+
     }
 
     /* När uppgifts-sektionen är öppen */
@@ -2902,7 +2905,6 @@ button[onclick^="addComment"]:hover {
       border-radius: 12px;
       padding: 24px;
       margin: 20px 0;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       border: 1px solid #e1e8ed;
     }
 
