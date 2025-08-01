@@ -2742,7 +2742,6 @@ def leave_subject(subject_id):
 
 
 # Uppdatera din befintliga index route med denna kod
-
 @app.route('/')
 @login_required
 def index():
@@ -2777,8 +2776,23 @@ def index():
             ).count()
             subject.due_flashcards = due_count
             
+            # Räkna inlämnade uppgifter för medlemmar
+            subject.pending_assignments = 0
+            user_role = current_user.get_role_in_subject(subject.id)
+            if user_role and user_role != 'owner':
+                # Räkna uppgifter som inte är inlämnade än
+                pending_assignments = db.session.query(Assignment).filter(
+                    Assignment.subject_id == subject.id,
+                    ~Assignment.id.in_(
+                        db.session.query(AssignmentSubmission.assignment_id).filter(
+                            AssignmentSubmission.student_id == current_user.id
+                        )
+                    )
+                ).count()
+                subject.pending_assignments = pending_assignments
+            
             # Lägg till användarens roll
-            subject.user_role = current_user.get_role_in_subject(subject.id)
+            subject.user_role = user_role
         
         # Hämta totala statistik för användaren
         total_due = Flashcard.query.filter(
@@ -2798,7 +2812,6 @@ def index():
         print(f"[ERROR] Failed to load index: {e}")
         flash('Error loading subjects', 'error')
         return render_template('index.html', owned_subjects=[], shared_subjects=[], total_due_flashcards=0)
-
 
 @app.route('/add_subject', methods=['POST'])
 @login_required
