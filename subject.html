@@ -2078,6 +2078,7 @@ button[onclick^="addComment"]:hover {
       align-items: center;
     }
 
+
     .share-actions-row {
       display: flex;
       justify-content: space-between;
@@ -2177,6 +2178,25 @@ button[onclick^="addComment"]:hover {
         min-height: calc(100vh - 150px) !important;
     }
 
+
+    @media (min-width: 1200px) {
+      /* Endast för owners - flytta upp assignments-toggle för att matcha share-section knappar */
+      .assignments-toggle-container-centered {
+        margin: -10px 0 20px 0; /* Negativ top-margin för att flytta upp knappen */
+        transform: translateY(-15px); /* Extra justering uppåt */
+      }
+
+      /* Säkerställ att share-section har rätt spacing */
+      .share-section {
+        margin-bottom: 25px; /* Ökad bottom-margin för att ge plats */
+      }
+
+      /* Justera assignments-section för att kompensera för den flyttade knappen */
+      .assignments-section {
+        margin-top: -5px; /* Mindre negativ margin för att täta ihop */
+      }
+    }
+
     /* KRITISK FIX: SIDE-BY-SIDE LAYOUT FÖR MEDLEMMAR PÅ STORA SKÄRMAR */
     @media (min-width: 1200px) and (min-aspect-ratio: 4/3) {
         .main-layout.member-view {
@@ -2209,6 +2229,36 @@ button[onclick^="addComment"]:hover {
             margin: 0 !important;
             max-height: 500px !important;
         }
+    }
+
+    @media (min-width: 1400px) {
+      .assignments-toggle-container-centered {
+        margin: -12px 0 20px 0;
+        transform: translateY(-18px);
+      }
+      
+      .share-section {
+        margin-bottom: 30px;
+      }
+    }
+
+    .main-layout.member-view .assignments-toggle-container-centered {
+      margin: 25px 0 !important; /* Återställ normal margin för members */
+      transform: none !important; /* Ta bort transform för members */
+    }
+
+
+    body:not(.member-view) .assignments-toggle-container-centered {
+      position: relative;
+      z-index: 10;
+    }
+
+    /* Kontrollera att knappen inte hamnar för högt på mindre skärmar */
+    @media (max-width: 1199px) {
+      .assignments-toggle-container-centered {
+        margin: 25px 0 !important;
+        transform: none !important;
+      }
     }
 
     /* ULTRAWIDE SKÄRMAR */
@@ -3777,11 +3827,21 @@ button[onclick^="addComment"]:hover {
         <button class="toggle-sharing" onclick="toggleSharing()">
           {{ 'Inaktivera Delning' if subject.is_shared else 'Enable Sharing' }}
         </button>
-        
         {% if subject.is_shared %}
         <button class="regenerate-code" onclick="regenerateCode()">
           Regenerera Kod
         </button>
+
+
+        <!-- Ägarspecifik "Uppgifter"-knapp i fullscreen -->
+        <button id="assignments-toggle" 
+                class="assignments-toggle-btn-large" 
+                data-tooltip="Klicka för att fälla ut uppgifter" 
+                onclick="toggleAssignments()">
+          <span class="toggle-label">📝 Uppgifter</span>
+          <span id="unseen-badge" class="pending-count-badge" style="display:none;"></span>
+        </button>
+        
         {% endif %}
       </div>
       
@@ -3815,17 +3875,7 @@ button[onclick^="addComment"]:hover {
   {% endif %}
 
 
-  <!-- För ägare (owners) -->
-  {% if user_role == 'owner' %}
-  <div class="assignments-toggle-container-centered">
-    <button id="assignments-toggle" 
-            class="assignments-toggle-btn-large" 
-            data-tooltip="Klicka för att fälla ut uppgifter">
-      <span class="toggle-label">📝 Uppgifter</span>
-      <span id="unseen-badge" class="pending-count-badge" style="display:none;"></span>
-    </button>
-  </div>
-  {% endif %}
+  
 
   <!-- För medlemmar -->
   {% if user_role != 'owner' %}
