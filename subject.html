@@ -667,16 +667,7 @@
   flex-direction: column;
 }
 
-.lessons-section-title {
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 15px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
+
 
 .lesson-upload-area {
   border: 2px dashed #dee2e6;
@@ -1187,11 +1178,20 @@ button[onclick^="addComment"]:hover {
   border-radius: 5px;
 }
 
-.quiz-title-text {
+
+.quiz-title-text,
+.krav-title,
+.lessons-section-title {
   font-size: 1.4rem;
-  font-family: Arial, sans-serif;
-  font-weight: bold;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
+
 
 .lesson-info {
   margin-bottom: 20px;
@@ -1411,6 +1411,7 @@ button[onclick^="addComment"]:hover {
         display: flex;
         flex-direction: column;
         max-height: 730px; /* Ökad höjd för att matcha lessons-section */
+        border: 1px solid #dee2e6;
     }
 
     .lessons-section {
@@ -4173,7 +4174,7 @@ button[onclick^="addComment"]:hover {
     {% if user_role in ['owner', 'admin'] %}
     <div class="placeholder-panel">
       <div class="documents-section">
-        <h3>Kunskapsmål</h3>
+        <div class="krav-title"> Kunskapsmål </div>
 
         <!-- Upload area for owners/admins -->
         <div class="upload-area">
