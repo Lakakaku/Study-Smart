@@ -2273,32 +2273,7 @@ button[onclick^="addComment"]:hover {
         }
     }
 
-    @media (max-width: 768px) {
-      .share-actions-row {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 15px;
-      }
-      
-      .share-buttons-group,
-      .email-controls-group {
-        justify-content: center;
-      }
-      
-      .owner-email-input {
-        max-width: 100%;
-      }
-      
-      .assignments-header-with-email {
-        flex-direction: column;
-        gap: 15px;
-      }
-      
-      .owner-email-display {
-        position: static;
-        margin-top: 10px;
-      }
-    }
+    
 
     /* MOBIL LAYOUT */
     @media (max-width: 768px) {
@@ -2802,6 +2777,21 @@ button[onclick^="addComment"]:hover {
       justify-content: center;
       
       padding: 0 20px;
+    }
+
+
+
+    @media (max-width: 768px) {
+      .share-actions-row {
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+      }
+      .share-buttons-group,
+      .email-controls-group {
+        justify-content: center;
+        gap: 10px;
+      }
     }
 
     /* ERSÄTTER BEFINTLIG .assignments-toggle-btn-large CSS */
@@ -3798,19 +3788,9 @@ button[onclick^="addComment"]:hover {
       </div>
     </div>
 
-    <div class="members-list" id="members-list" style="display: none; margin-top: 15px;">
-      <div class="members-list-header">
-        <h4>Medlemmar</h4>
-        <span id="members-list-count">Laddar...</span>
-      </div>
-      <div class="members-container" id="members-container">
-        <div class="loading-members">Laddar medlemmar...</div>
-      </div>
-    </div>
     
-    <div class="members-count" id="members-count">
-      Loading member count...
-    </div>
+    
+    
   </div>
   {% endif %}
 
