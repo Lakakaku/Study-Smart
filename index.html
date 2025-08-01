@@ -129,7 +129,7 @@
 
       <p id="subject-header">Ämnen:</p>
 
-      <!-- Fixed subject list with proper event handling -->
+      <!-- Ersätt den befintliga subject list-sektionen (runt rad 120-180) med denna kod -->
       <div class="subject-list">
         <!-- Owned subjects -->
         {% for subject in owned_subjects %}
@@ -166,6 +166,9 @@
                   <span class="subject-role-badge">Member</span>
                   {% if subject.due_flashcards > 0 %}
                     <span class="due-badge">{{ subject.due_flashcards }}</span>
+                  {% endif %}
+                  {% if subject.pending_assignments > 0 %}
+                    <span class="assignment-badge">{{ subject.pending_assignments }}</span>
                   {% endif %}
                 </div>
               </div>
@@ -2085,7 +2088,7 @@ async function leaveSubject(subjectId) {
       }
 
       .due-badge {
-        background-color: var(--danger-color);
+        background-color: var(--primary-color);
         color: white;
         font-size: 0.75rem;
         padding: 0.25rem 0.75rem;
@@ -2180,6 +2183,19 @@ async function leaveSubject(subjectId) {
         background-color: var(--primary-hover);
         transform: translateY(-2px);
         box-shadow: var(--shadow-md);
+      }
+
+
+      /* Lägg till denna CSS i din index_styles.css fil */
+      .assignment-badge {
+        background-color: var(--danger-color);
+        color: white;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        min-width: 1.5rem;
+        text-align: center;
       }
 
       .products-header {
@@ -2301,9 +2317,7 @@ async function leaveSubject(subjectId) {
         flex-direction: row; 
       }
 
-      .quiz-actions .start-quiz-btn {
-        width: 120px;
-      }
+      
 
       .leave-quiz-btn {
         font-size: 1.2rem;
