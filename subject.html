@@ -1423,6 +1423,168 @@ button[onclick^="addComment"]:hover {
         color: #333;
     }
 
+
+
+    /* Add these CSS styles to your existing stylesheet */
+
+    /* File actions styling */
+    .file-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .file-action-btn {
+      padding: 4px 12px;
+      border: none;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .file-action-btn.view {
+      background-color: #007bff;
+      color: white;
+    }
+
+    .file-action-btn.view:hover {
+      background-color: #0056b3;
+    }
+
+    .file-action-btn.download {
+      background-color: #28a745;
+      color: white;
+    }
+
+    .file-action-btn.download:hover {
+      background-color: #1e7e34;
+    }
+
+    /* Selected file item styling */
+    .selected-file-item {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+
+    .selected-file-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .selected-file-name {
+      font-weight: 500;
+      color: #495057;
+    }
+
+    .selected-file-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .preview-file-btn {
+      background-color: #17a2b8;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background-color 0.2s;
+    }
+
+    .preview-file-btn:hover {
+      background-color: #138496;
+    }
+
+    .selected-file-remove {
+      background-color: #dc3545;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .selected-file-remove:hover {
+      background-color: #c82333;
+    }
+
+    /* Undo submission button styling */
+    .undo-submission-btn {
+      background-color: #fd7e14;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 15px;
+      transition: background-color 0.2s;
+    }
+
+    .undo-submission-btn:hover {
+      background-color: #e8590c;
+    }
+
+    .assignment-action-btn.undo-submission {
+      background-color: #fd7e14;
+      color: white;
+    }
+
+    .assignment-action-btn.undo-submission:hover {
+      background-color: #e8590c;
+    }
+
+    /* Submission actions container */
+    .submission-actions {
+      border-top: 1px solid #dee2e6;
+      padding-top: 15px;
+      margin-top: 15px;
+      text-align: center;
+    }
+
+    /* Enhanced submission file styling */
+    .submission-file {
+      display: flex;
+      flex-direction: column;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+
+    .submission-file-name {
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: #495057;
+    }
+
+    /* Responsive design for file actions */
+    @media (max-width: 768px) {
+      .selected-file-info {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .selected-file-actions {
+        justify-content: center;
+      }
+      
+      .file-actions {
+        justify-content: center;
+      }
+    }
+
     #document-type {
         width: 100%;
         padding: 8px 12px;
@@ -3639,7 +3801,7 @@ button[onclick^="addComment"]:hover {
     <div class="assignment-divider"></div>
     {% endif %}
 
-    <!-- Uppgiftslista -->
+    <!-- Uppgiftslista - This container will be populated by JavaScript -->
     <div class="assignments-container">
       <h3>📋 {% if user_role == 'owner' %}Alla Uppgifter{% else %}Mina Uppgifter{% endif %}</h3>
       <div id="assignments-list" class="assignments-list">
@@ -4960,7 +5122,6 @@ button[onclick^="addComment"]:hover {
     }
 
 
-    // Uppdatera renderAssignments för att visa kommentarer för studenter
     function renderAssignments(assignmentsList) {
       const container = document.getElementById('assignments-list');
       if (!container) return;
@@ -4993,6 +5154,43 @@ button[onclick^="addComment"]:hover {
           statusText = 'Försenad';
         }
 
+        // Knappar för ägare
+        let ownerActions = '';
+        if (userRole === 'owner') {
+          ownerActions = `
+            <div class="assignment-actions">
+              <button class="assignment-action-btn view-submissions" onclick="viewSubmissions(${assignment.id})">
+                📝 Visa Inlämningar (${assignment.submission_count || 0})
+              </button>
+              <button class="assignment-action-btn delete-assignment" onclick="deleteAssignment(${assignment.id})">
+                🗑️ Ta bort
+              </button>
+            </div>
+          `;
+        }
+
+        // Knappar för medlemmar
+        let memberActions = '';
+        if (userRole !== 'owner') {
+          if (assignment.submission_status === 'submitted') {
+            memberActions = `
+              <div class="assignment-actions">
+                <button class="assignment-action-btn view-my-submission" onclick="viewMySubmission(${assignment.id})">
+                  👁️ Visa Min Inlämning
+                </button>
+              </div>
+            `;
+          } else {
+            memberActions = `
+              <div class="assignment-actions">
+                <button class="assignment-action-btn submit-assignment" onclick="openSubmitAssignmentModal(${assignment.id})">
+                  📤 Lämna in
+                </button>
+              </div>
+            `;
+          }
+        }
+
         return `
           <div class="assignment-card">
             <div class="assignment-header">
@@ -5013,30 +5211,11 @@ button[onclick^="addComment"]:hover {
               </div>
             ` : ''}
             
-            <div class="assignment-actions">
-              ${userRole === 'owner' ? `
-                <button class="assignment-action-btn view-submissions" onclick="viewSubmissions(${assignment.id})">
-                  Visa Inlämningar (${assignment.submission_count || 0})
-                </button>
-                <button class="assignment-action-btn delete" onclick="deleteAssignment(${assignment.id})">
-                  Ta bort
-                </button>
-              ` : `
-                ${assignment.submission_status !== 'submitted' ? `
-                  <button class="assignment-action-btn submit" onclick="openSubmitAssignmentModal(${assignment.id})">
-                    ${assignment.submission_status === 'draft' ? 'Redigera Inlämning' : 'Lämna in'}
-                  </button>
-                ` : `
-                  <button class="assignment-action-btn view-feedback" onclick="viewMySubmission(${assignment.id})">
-                    Visa Feedback
-                  </button>
-                `}
-              `}
-            </div>
+            ${ownerActions}
+            ${memberActions}
           </div>
         `;
       }).join('');
-
 
       container.innerHTML = assignmentsHtml;
 
@@ -5044,6 +5223,8 @@ button[onclick^="addComment"]:hover {
         updatePendingCount(assignmentsList);
       }
     }
+
+
 
 
 
@@ -5157,9 +5338,7 @@ button[onclick^="addComment"]:hover {
       }
     }
 
-    // Visa modal med studentens inlämning
     function showMySubmissionModal(submission) {
-      // Skapa modal dynamiskt
       const modalHtml = `
         <div id="student-submission-modal" class="submissions-modal" style="display: flex;">
           <div class="submissions-modal-content">
@@ -5177,6 +5356,14 @@ button[onclick^="addComment"]:hover {
                   ${submission.files.map(file => `
                     <div class="submission-file">
                       <span class="submission-file-name">📎 ${escapeHtml(file.filename)}</span>
+                      <div class="file-actions">
+                        <a href="/view_my_submission_file/${file.id}" target="_blank" class="file-action-btn view">
+                          Öppna
+                        </a>
+                        <a href="/download_my_submission_file/${file.id}" download class="file-action-btn download">
+                          Ladda ner
+                        </a>
+                      </div>
                     </div>
                   `).join('')}
                 </div>
@@ -5191,7 +5378,6 @@ button[onclick^="addComment"]:hover {
                             <span class="comment-author">${escapeHtml(comment.teacher_name)}</span>
                             <span class="comment-date">
                               ${new Date(comment.created_at).toLocaleString('sv-SE')}
-                             
                             </span>
                           </div>
                           <div class="comment-text">${escapeHtml(comment.comment)}</div>
@@ -5200,6 +5386,13 @@ button[onclick^="addComment"]:hover {
                       '<p class="no-teacher-comments">Inga kommentarer från lärare än.</p>'
                     }
                   </div>
+                </div>
+
+                <!-- Ångra inlämning-knapp -->
+                <div class="submission-actions">
+                  <button class="undo-submission-btn" onclick="undoSubmission(${submission.assignment_id})">
+                    🔄 Ångra Inlämning
+                  </button>
                 </div>
               </div>
             </div>
@@ -5219,6 +5412,41 @@ button[onclick^="addComment"]:hover {
 
 
 
+    // Function to undo submission
+    async function undoSubmission(assignmentId) {
+      if (!confirm('Är du säker på att du vill ångra din inlämning? Detta kan inte ångras och alla filer och kommentarer kommer att tas bort.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/assignments/undo_submission', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            assignment_id: assignmentId
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          showAlert('Inlämning har ångrats!', 'success');
+          closeStudentSubmissionModal();
+          loadAssignments(); // Reload assignments to show updated status
+        } else {
+          throw new Error(data.message || 'Kunde inte ångra inlämning');
+        }
+      } catch (error) {
+        console.error('Error undoing submission:', error);
+        showAlert('Fel vid ångring av inlämning: ' + error.message, 'error');
+      }
+    }
+
+
+
+
     // Anropa när sidan laddas för ägare
     async function updateUnseenBadge() {
       if (userRole !== 'owner') return;
@@ -5235,14 +5463,15 @@ button[onclick^="addComment"]:hover {
 
 
 
-    // Visa min inlämning med kommentarer (för studenter)
+    // Update viewMySubmission to pass assignment_id to the modal
     async function viewMySubmission(assignmentId) {
       try {
         const response = await fetch(`/api/my_submissions/${assignmentId}`);
         const data = await response.json();
         
         if (data.status === 'success' && data.submission) {
-          // Skapa en modal för att visa inlämningen och kommentarer
+          // Add assignment_id to submission data for the undo button
+          data.submission.assignment_id = assignmentId;
           showMySubmissionModal(data.submission);
         } else {
           showAlert('Ingen inlämning hittades', 'error');
@@ -5403,6 +5632,27 @@ button[onclick^="addComment"]:hover {
         });
       });
     }
+
+
+
+    async function cleanupTempFiles() {
+      try {
+        await fetch('/api/cleanup_temp_files', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+      } catch (error) {
+        console.log('Could not clean up temp files:', error);
+      }
+    }
+
+    // Clean up when leaving the page
+    window.addEventListener('beforeunload', cleanupTempFiles);
+
+    // Clean up periodically (every 10 minutes)
+    setInterval(cleanupTempFiles, 10 * 60 * 1000);
 
 
 
@@ -5759,7 +6009,7 @@ button[onclick^="addComment"]:hover {
       updateSubmitButtonState();
     }
 
-    // Uppdatera lista över valda filer
+    // Update the updateSelectedFilesList function to include preview functionality
     function updateSelectedFilesList() {
       const container = document.getElementById('selected-files-list');
       if (!container) return;
@@ -5771,15 +6021,56 @@ button[onclick^="addComment"]:hover {
 
       const filesHtml = selectedFiles.map((file, index) => `
         <div class="selected-file-item">
-          <span>${escapeHtml(file.name)} (${formatFileSize(file.size)})</span>
-          <button class="selected-file-remove" onclick="removeSelectedFile(${index})">
-            Ta bort
-          </button>
+          <div class="selected-file-info">
+            <span class="selected-file-name">${escapeHtml(file.name)} (${formatFileSize(file.size)})</span>
+            <div class="selected-file-actions">
+              <button class="preview-file-btn" onclick="previewFile(${index})">
+                👁️ Förhandsgranska
+              </button>
+              <button class="selected-file-remove" onclick="removeSelectedFile(${index})">
+                Ta bort
+              </button>
+            </div>
+          </div>
         </div>
       `).join('');
 
       container.innerHTML = filesHtml;
     }
+
+
+    // Function to preview a file before submission
+    async function previewFile(fileIndex) {
+      if (fileIndex < 0 || fileIndex >= selectedFiles.length) {
+        showAlert('Ogiltig fil', 'error');
+        return;
+      }
+
+      const file = selectedFiles[fileIndex];
+      
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/preview_upload_file', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          // Open file in new window/tab for preview
+          window.open(data.temp_url, '_blank');
+        } else {
+          throw new Error(data.message || 'Kunde inte förhandsgranska fil');
+        }
+      } catch (error) {
+        console.error('Error previewing file:', error);
+        showAlert('Fel vid förhandsgranskning: ' + error.message, 'error');
+      }
+    }
+
 
     // Ta bort vald fil
     function removeSelectedFile(index) {
