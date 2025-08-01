@@ -1201,11 +1201,14 @@ button[onclick^="addComment"]:hover {
   color: #721c24;
 }
 
+
 @keyframes pulse {
   0% { opacity: 1; }
   50% { opacity: 0.7; }
   100% { opacity: 1; }
 }
+
+
 
 .transcription-content {
   max-height: 300px;
@@ -1533,6 +1536,41 @@ button[onclick^="addComment"]:hover {
 
     .undo-submission-btn:hover {
       background-color: #e8590c;
+    }
+
+    @keyframes subtle-pulse {
+      0% { box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3); }
+      50% { box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5), 0 0 0 0 rgba(102, 126, 234, 0.4); }
+      100% { box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3); }
+    }
+
+    @keyframes tooltip-fade-in {
+      to { opacity: 1; }
+    }
+
+    .assignments-toggle-btn-large:hover::before {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: -35px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      opacity: 0;
+      animation: tooltip-fade-in 0.3s ease forwards;
+      font-weight: normal;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    /* Stop pulsing when active */
+    .assignments-toggle-btn-large.active {
+      animation: none;
+      background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
     }
 
     .assignment-action-btn.undo-submission {
@@ -2749,7 +2787,13 @@ button[onclick^="addComment"]:hover {
       }
     }
 
-
+    .assignments-toggle-btn-large::after {
+      content: '▼';
+      font-size: 16px;
+      transition: all 0.3s ease;
+      margin-left: 8px;
+      opacity: 0.8;
+    }
 
     /* CSS att lägga till i din stylesheet */
 
@@ -2760,7 +2804,7 @@ button[onclick^="addComment"]:hover {
       padding: 0 20px;
     }
 
-    /* Större uppgifter-knapp */
+    /* ERSÄTTER BEFINTLIG .assignments-toggle-btn-large CSS */
     .assignments-toggle-btn-large {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
@@ -2775,6 +2819,15 @@ button[onclick^="addComment"]:hover {
       text-transform: uppercase;
       letter-spacing: 1px;
       min-width: 250px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    /* Subtle pulsing animation för att visa interaktivitet */
+    .assignments-toggle-btn-large {
+      animation: subtle-pulse 3s ease-in-out infinite;
     }
 
     .assignments-toggle-btn-large:hover {
@@ -2786,6 +2839,12 @@ button[onclick^="addComment"]:hover {
     .assignments-toggle-btn-large:active {
       transform: translateY(-1px);
       box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
+    }
+
+    /* När uppgifts-sektionen är öppen */
+    .assignments-toggle-btn-large.active::after {
+      transform: rotate(180deg);
+      opacity: 1;
     }
 
     .assignments-section {
@@ -3617,6 +3676,18 @@ button[onclick^="addComment"]:hover {
         font-size: 18px;
         min-width: 200px;
       }
+      
+      .assignments-toggle-btn-large::after {
+        font-size: 14px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .assignments-toggle-btn-large {
+        padding: 14px 28px;
+        font-size: 16px;
+        min-width: 180px;
+      }
     }
 
     @media (max-width: 480px) {
@@ -3744,20 +3815,25 @@ button[onclick^="addComment"]:hover {
   {% endif %}
 
 
+  <!-- För ägare (owners) -->
   {% if user_role == 'owner' %}
   <div class="assignments-toggle-container-centered">
-    <button id="assignments-toggle" class="assignments-toggle-btn-large">
+    <button id="assignments-toggle" 
+            class="assignments-toggle-btn-large" 
+            data-tooltip="Klicka för att fälla ut uppgifter">
       <span class="toggle-label">📝 Uppgifter</span>
       <span id="unseen-badge" class="pending-count-badge" style="display:none;"></span>
     </button>
   </div>
   {% endif %}
 
-  <!-- För medlemmar: knapp till vänster, email till höger -->
+  <!-- För medlemmar -->
   {% if user_role != 'owner' %}
   <div class="assignments-header-with-email">
     <div class="assignments-toggle-container-with-email">
-      <button id="assignments-toggle" class="assignments-toggle-btn-large">
+      <button id="assignments-toggle" 
+              class="assignments-toggle-btn-large" 
+              data-tooltip="Klicka för att fälla ut uppgifter">
         <span class="toggle-label">📝 Uppgifter</span>
         <span id="pending-count-badge" class="pending-count-badge" style="display:none;">0</span>
       </button>
@@ -4545,6 +4621,12 @@ button[onclick^="addComment"]:hover {
         alert('Fel vid sparande av email');
       });
     }
+
+
+
+
+
+    
 
     // Lägg till enter-tangent support för email-fältet
     document.addEventListener('DOMContentLoaded', function() {
