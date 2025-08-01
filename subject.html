@@ -668,7 +668,7 @@
 }
 
 .lessons-section-title {
-  font-size: 1.1em;
+  font-size: 1.4rem;
   font-weight: 600;
   color: #333;
   margin-bottom: 15px;
@@ -723,6 +723,17 @@
   width: 100%;
 }
 
+.lessons-section .form-row {
+  display: grid;
+  grid-template-columns: 1fr !important;
+  gap: 15px;
+}
+/* Behåll originallayout på större skärmar om du vill */
+@media (min-width: 1200px) {
+  .lessons-section .form-row {
+    grid-template-columns: 1fr 180px;  /* återställ bred layout vid stor skärm */
+  }
+}
 
 .lesson-description-input {
   padding: 8px;
@@ -1174,6 +1185,12 @@ button[onclick^="addComment"]:hover {
 #lesson-player-container audio {
   width: 100%;
   border-radius: 5px;
+}
+
+.quiz-title-text {
+  font-size: 1.4rem;
+  font-family: Arial, sans-serif;
+  font-weight: bold;
 }
 
 .lesson-info {
@@ -4007,7 +4024,7 @@ button[onclick^="addComment"]:hover {
 
   <div class="main-layout {% if user_role not in ['owner', 'admin'] %}member-view{% endif %}">
     <div class="quiz-container">
-      <h3> Quizzes</h3>
+      <div class="quiz-title-text"> Quizzes </div>
       <!-- Uppdaterad HTML för quiz-sektionen med sortering -->
       {% if quizzes %}
         <div class="quiz-grid">
