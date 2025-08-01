@@ -1622,7 +1622,7 @@ button[onclick^="addComment"]:hover {
       font-size: 12px;
       white-space: nowrap;
       opacity: 0;
-      animation: tooltip-fade-in 0.3s ease forwards;
+      /*animation: tooltip-fade-in 0.3s ease forwards; */
       font-weight: normal;
       text-transform: none;
       letter-spacing: normal;
@@ -1630,7 +1630,7 @@ button[onclick^="addComment"]:hover {
 
     /* Stop pulsing when active */
     .assignments-toggle-btn-large.active {
-      animation: none;
+      /*animation: none; */
       background: var(--primary-yellow);
     }
 
@@ -2866,7 +2866,6 @@ button[onclick^="addComment"]:hover {
       font-weight: 700;
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 12px 35px var(--primary-yellow);
 
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -2877,14 +2876,10 @@ button[onclick^="addComment"]:hover {
       justify-content: center;
       gap: 12px;
     }
-    /* Subtle pulsing animation för att visa interaktivitet */
-    .assignments-toggle-btn-large {
-      animation: subtle-pulse 3s ease-in-out infinite;
-    }
+    
 
     .assignments-toggle-btn-large:hover {
       transform: translateY(-3px);
-      box-shadow: 0 12px 35px var(--primary-yellow);
       background: var(--primary-yellow);
     }
 
@@ -3835,7 +3830,7 @@ button[onclick^="addComment"]:hover {
   <!-- Uppdaterad HTML för ägare: Flytta email-kontroller till share-section -->
   {% if user_role == 'owner' %}
   <div class="share-section">
-    <div class="share-title">📤 Dela Ämnet</div>
+    <div class="share-title"> Dela Ämnet</div>
     
     <div class="share-status">
       <div class="status-indicator {{ 'active' if subject.is_shared else 'inactive' }}"></div>
@@ -4161,7 +4156,7 @@ button[onclick^="addComment"]:hover {
     {% if user_role in ['owner', 'admin'] %}
     <div class="placeholder-panel">
       <div class="documents-section">
-        <h3>📄 Dokument</h3>
+        <h3>Kunskapsmål</h3>
 
         <!-- Upload area for owners/admins -->
         <div class="upload-area">
@@ -4219,7 +4214,7 @@ button[onclick^="addComment"]:hover {
   {% if user_role == 'owner' %}
   <div class="shared-files-section">
     <div class="files-section-title">
-      📁 Delade Filer
+      Delade Filer
       <span id="file-stats"></span>
     </div>
 
