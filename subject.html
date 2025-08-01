@@ -1294,12 +1294,45 @@ button[onclick^="addComment"]:hover {
     }
 
     .subject-title-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        font-size: 10vh;
-        font-weight: bold;
-        border: 1px solid;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1rem;         /* justera efter önskad sidmarginal */
+      padding-top:5vh;
+      padding-bottom: 5vh;
+      height: 12vh;             /* kan ändras för att matcha din layout */
+      background-color: rgb(255, 255, 255); /* eller vad du vill ha */
+      margin-bottom: 2vh;
+      background-color: var(--primary-color);
+
+    }
+
+    .title-left,
+    .title-center,
+    .title-right {
+      flex: 0 0 auto;
+      
+    }
+    .title-left .return-button,
+    .title-right .subject-role-badge {
+      margin: 0 0.5rem;
+    }
+
+    .title-center {
+      flex: 1;
+      text-align: center;
+      font-size: 3rem;  /* justera storlek på titeln */
+      font-weight: bold;
+      color: var(--bg-gray-50);
+    }
+
+    .title-left {
+      text-align: left;
+      
+    }
+
+    .title-right {
+      text-align: right;
     }
 
     .under-title-container {
@@ -1386,17 +1419,17 @@ button[onclick^="addComment"]:hover {
     }
 
     .return-button {
-        position: absolute;
-        top: 15px;
-        left: 15px;
+        
+        
         text-decoration: none;
-        background-color: lightgray;
+        background-color: var(--secondary-color);
         color: black;
         padding: 8px 14px;
         border-radius: 8px;
         font-weight: bold;
         font-family: sans-serif;
         border: 1px solid gray;
+
     }
 
     /* Document upload styles */
@@ -3779,22 +3812,22 @@ button[onclick^="addComment"]:hover {
 </head>
 <body>
 
-  <a href="{{ url_for('index') }}" class="return-button">← Return</a>
+  
 
   <div class="subject-title-container">
-    <div id="subject-title">
-      {{ subject_name }}
-      {% if user_role == 'member' %}
-        <span class="subject-role-badge">Medlem</span>
-      {% endif %}
-
-      {% if user_role == 'owner' %}
-          <span class="subject-role-badge">Skapare</span>
-      {% endif %}
-
-
+    <div class="title-left">
+      <a href="{{ url_for('index') }}" class="return-button">←</a>
     </div>
-    
+    <div class="title-center">
+      {{ subject_name }}
+    </div>
+    <div class="title-right">
+      {% if user_role == 'member' %}
+        <span class="subject-role-badge member">Medlem</span>
+      {% elif user_role == 'owner' %}
+        <span class="subject-role-badge owner">Skapare</span>
+      {% endif %}
+    </div>
   </div>
 
   <!-- Uppdaterad HTML för ägare: Flytta email-kontroller till share-section -->
