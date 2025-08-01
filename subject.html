@@ -469,6 +469,10 @@
   border-radius: 8px;
   padding: 20px;
   margin: 20px 0;
+  max-height: 730px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .files-section-title {
@@ -1300,6 +1304,13 @@ button[onclick^="addComment"]:hover {
   background-color: #0056b3;
 }
 
+
+body .main-layout + .shared-files-section {
+  margin: 20px !important;
+  margin-top: 20px !important;
+  margin-bottom: 20px !important;
+}
+
 .retry-transcription-btn:disabled {
   background-color: #6c757d;
   cursor: not-allowed;
@@ -1544,6 +1555,12 @@ button[onclick^="addComment"]:hover {
     .file-action-btn.download:hover {
       background-color: #1e7e34;
     }
+
+
+    body {
+      background-color: blue;
+    }
+    
 
     /* Selected file item styling */
     .selected-file-item {
@@ -2225,7 +2242,23 @@ button[onclick^="addComment"]:hover {
 
 
 
+    .main-layout + .shared-files-section {
+      margin: 20px; /* Samma som main-layout padding */
+    }
 
+    /* Mobil layout - matcha main-layout padding */
+    @media (max-width: 768px) {
+      .main-layout + .shared-files-section {
+        margin: 10px; /* Samma som main-layout padding på mobil */
+      }
+    }
+
+    /* Extra små skärmar */
+    @media (max-width: 480px) {
+      .main-layout + .shared-files-section {
+        margin: 8px; /* Samma som main-layout padding på extra små skärmar */
+      }
+    }
 
 
 
@@ -2304,29 +2337,39 @@ button[onclick^="addComment"]:hover {
 
     /* SÄKERSTÄLL VERTIKAL STACK PÅ MINDRE SKÄRMAR */
     @media (max-width: 1199px) {
-        .main-layout.member-view {
-            grid-template-columns: 1fr !important;
-            grid-template-rows: auto auto auto !important;
-        }
-        
-        .main-layout.member-view .quiz-container,
-        .main-layout.member-view .lessons-section,
-        .main-layout.member-view .shared-files-section {
-            grid-column: 1 !important;
-            grid-row: auto !important;
-            margin: 20px 0 !important;
-            max-height: 600px !important;
-        }
-        .main-layout:not(.member-view) .lessons-section {
-          /* Ge mer höjd baserat på viewport */
-          max-height: 80vh !important;
-        }
-        
-        .main-layout:not(.member-view) .lesson-timeline {
-          /* Ta bort tidigare hårdkodad max-height, ersätt med flexibelt värde */
-          max-height: calc(80vh - 200px) !important;
+      .main-layout.member-view .shared-files-section {
+        grid-column: 1 !important;
+        grid-row: auto !important;
+        margin: 20px 0 !important; /* Samma som andra sektioner */
+        max-height: 600px !important;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .shared-files-section {
+        margin: 15px 0 !important; /* Samma som andra sektioner på mobil */
+        padding: 15px !important; /* Något mindre padding på mobil */
+        max-height: 500px !important;
+      }
       
-        }
+      /* Säkerställ att main-layout har rätt padding på mobil */
+      .main-layout {
+        padding: 10px !important;
+        gap: 15px !important;
+      }
+      
+      /* Specifikt för member-view på mobil */
+      .main-layout.member-view {
+        padding: 10px !important;
+        gap: 15px !important;
+      }
+      
+      /* Alla sektioner ska ha samma marginaler på mobil */
+      .main-layout.member-view .quiz-container,
+      .main-layout.member-view .lessons-section,
+      .main-layout.member-view .shared-files-section {
+        margin: 15px 0 !important;
+      }
     }
 
     /* OWNERS/ADMINS LAYOUT - PÅVERKAS INTE */
@@ -3748,6 +3791,25 @@ button[onclick^="addComment"]:hover {
         padding: 14px 28px;
         font-size: 16px;
         min-width: 180px;
+      }
+    }
+
+    /* Extra liten skärm - under 480px */
+    @media (max-width: 480px) {
+      .shared-files-section {
+        margin: 10px 0 !important;
+        padding: 12px !important;
+      }
+      
+      .main-layout {
+        padding: 8px !important;
+        gap: 10px !important;
+      }
+      
+      .main-layout.member-view .quiz-container,
+      .main-layout.member-view .lessons-section,
+      .main-layout.member-view .shared-files-section {
+        margin: 10px 0 !important;
       }
     }
 
