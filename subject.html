@@ -2075,17 +2075,38 @@ button[onclick^="addComment"]:hover {
     .share-buttons-group {
       display: flex;
       gap: 10px;
-      align-items: center;
+    }
+
+    /* 3) Centrera bara assignments-toggle absolut */
+    .share-actions-row #assignments-toggle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      /* se till att knappen med z-index ligger ovanpå om det skulle behövas */
+      z-index: 1;
     }
 
 
     .share-actions-row {
+      position: relative;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-top: 15px;
-      gap: 15px;
-      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+
+    /* På mindre skärmar – slå av absolut position och centrera via flex */
+    @media (max-width: 768px) {
+      .share-actions-row {
+        /* Byt tillbaka till vanlig flex-centrering */
+        justify-content: center;
+        gap: 10px;           /* Behåll luft mellan knapparna */
+      }
+      .share-actions-row #assignments-toggle {
+        position: static;    /* Ingen absolut position */
+        transform: none;     /* Återställ transform */
+        margin: 0;           /* Ingen extra margin */
+      }
     }
 
     .share-title {
