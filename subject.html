@@ -3755,6 +3755,17 @@ button[onclick^="addComment"]:hover {
 
     }
 
+    .subject-role-badge {
+        font-size: 0.75rem;
+        background-color: var(--bg-gray-100);
+        color: var(--text-secondary);
+        padding: 0.25rem 0.75rem;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        background-color: #dbeafe;
+        color: #2563eb;
+    }
+
 
     /* Placera gärna detta sist i din stylesheet */
     .assignments-section .assignments-list {
@@ -3773,9 +3784,15 @@ button[onclick^="addComment"]:hover {
   <div class="subject-title-container">
     <div id="subject-title">
       {{ subject_name }}
-      {% if user_role %}
-        <span class="member-role-badge {{ user_role }}">{{ user_role.title() }}</span>
+      {% if user_role == 'member' %}
+        <span class="subject-role-badge">Medlem</span>
       {% endif %}
+
+      {% if user_role == 'owner' %}
+          <span class="subject-role-badge">Skapare</span>
+      {% endif %}
+
+
     </div>
     
   </div>
