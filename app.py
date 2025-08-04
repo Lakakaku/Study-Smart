@@ -333,6 +333,142 @@ class SubjectMember(db.Model):
 # Uppdatera User model för att inkludera subject memberships
 
 
+# Lägg till denna modell i din models.py eller där du har dina databasmodeller
+
+class LunchMenu(db.Model):
+    """Matsedel för skolor"""
+    __tablename__ = 'lunch_menu'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    school_id = db.Column(db.Integer, db.ForeignKey('schools.id'), nullable=False)
+    menu_date = db.Column(db.Date, nullable=False)
+    main_dish = db.Column(db.Text)
+    vegetarian_dish = db.Column(db.Text)
+    side_dishes = db.Column(db.Text)
+    dessert = db.Column(db.Text)
+    allergens = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relation till School
+    school = db.relationship('School', backref='lunch_menus')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'school_id': self.school_id,
+            'menu_date': self.menu_date.isoformat() if self.menu_date else None,
+            'main_dish': self.main_dish,
+            'vegetarian_dish': self.vegetarian_dish,
+            'side_dishes': self.side_dishes,
+            'dessert': self.dessert,
+            'allergens': self.allergens
+        }
+    
+    def __repr__(self):
+        return f"LunchMenu(school_id={self.school_id}, date={self.menu_date})"
+
+
+def create_sample_lunch_menu():
+    """Skapa exempel-matsedel för test"""
+    from datetime import date, timedelta
+    
+    # Hämta första skolan (eller skapa en om ingen finns)
+    school = School.query.first()
+    if not school:
+        school = School(
+            name="Test Skola",
+            address="Testgatan 1",
+            city="Stockholm",
+            postal_code="12345",
+            school_code="TEST001"
+        )
+        db.session.add(school)
+        db.session.commit()
+    
+    # Skapa matsedel för denna vecka
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    
+    # Exempel-matsedel för veckan
+    menu_items = [
+        {
+            'day': 0,  # Måndag
+            'main_dish': 'Köttbullar med potatismos och lingonsylt',
+            'vegetarian_dish': 'Vegetariska köttbullar med potatismos',
+            'side_dishes': 'Gurksallad, knäckebröd',
+            'dessert': 'Äppelkaka med vaniljsås',
+            'allergens': 'Gluten, mjölk, ägg'
+        },
+        {
+            'day': 1,  # Tisdag
+            'main_dish': 'Fiskgratäng med dillsås',
+            'vegetarian_dish': 'Pasta med tomatsås och ost',
+            'side_dishes': 'Kokt potatis, blandsallad',
+            'dessert': 'Frukt',
+            'allergens': 'Fisk, mjölk, gluten'
+        },
+        {
+            'day': 2,  # Onsdag
+            'main_dish': 'Kycklingwok med ris',
+            'vegetarian_dish': 'Vegetarisk wok med tofu och ris',
+            'side_dishes': 'Sojasås, chilisås',
+            'dessert': 'Glass',
+            'allergens': 'Soja, mjölk'
+        },
+        {
+            'day': 3,  # Torsdag
+            'main_dish': 'Pasta carbonara',
+            'vegetarian_dish': 'Pasta med pestosås',
+            'side_dishes': 'Riven ost, bröd',
+            'dessert': 'Pannkaka med sylt',
+            'allergens': 'Gluten, mjölk, ägg'
+        },
+        {
+            'day': 4,  # Fredag
+            'main_dish': 'Pizza margherita',
+            'vegetarian_dish': 'Vegansk pizza med grönsaker',
+            'side_dishes': 'Sallad',
+            'dessert': 'Kaka',
+            'allergens': 'Gluten, mjölk'
+        }
+    ]
+    
+    # Ta bort befintlig matsedel för denna vecka
+    LunchMenu.query.filter(
+        LunchMenu.school_id == school.id,
+        LunchMenu.menu_date >= monday,
+        LunchMenu.menu_date <= monday + timedelta(days=4)
+    ).delete()
+    
+    # Lägg till ny matsedel
+    for item in menu_items:
+        menu_date = monday + timedelta(days=item['day'])
+        
+        lunch_menu = LunchMenu(
+            school_id=school.id,
+            menu_date=menu_date,
+            main_dish=item['main_dish'],
+            vegetarian_dish=item['vegetarian_dish'],
+            side_dishes=item['side_dishes'],
+            dessert=item['dessert'],
+            allergens=item['allergens']
+        )
+        db.session.add(lunch_menu)
+    
+    db.session.commit()
+    print(f"✅ Skapade matsedel för vecka {monday} - {monday + timedelta(days=4)}")
+
+
+# Lägg till detta i din init_database() funktion eller kör separat
+def setup_lunch_menu_data():
+    """Setup matsedelsdata för test"""
+    with app.app_context():
+        try:
+            create_sample_lunch_menu()
+        except Exception as e:
+            print(f"Error creating lunch menu data: {e}")
+            db.session.rollback()
 
 # Uppdatera User model för att inkludera subject memberships
 class User(db.Model, UserMixin):
@@ -548,6 +684,17 @@ def init_database():
                 ('description', 'TEXT'),
                 ('year_level', 'INTEGER'),
                 ('created_at', 'DATETIME')
+            ],
+            'lunch_menu': [
+                ('school_id', 'INTEGER'),
+                ('menu_date', 'DATE'),
+                ('main_dish', 'TEXT'),
+                ('vegetarian_dish', 'TEXT'),
+                ('side_dishes', 'TEXT'),
+                ('dessert', 'TEXT'),
+                ('allergens', 'TEXT'),
+                ('created_at', 'DATETIME'),
+                ('updated_at', 'DATETIME')
             ],
             'user': [
                 ('school_id', 'INTEGER'),
@@ -1324,6 +1471,93 @@ def get_schedule_for_date(date):
         return jsonify({
             'status': 'error',
             'message': 'Kunde inte hämta schema'
+        }), 500
+
+
+# Lägg till dessa routes i din Flask app
+
+@app.route('/api/lunch_menu')
+@login_required
+def get_lunch_menu():
+    """Hämta matsedel för användarens skola för en vecka"""
+    try:
+        # Hämta användarens skola
+        user_school_id = current_user.school_id
+        if not user_school_id or user_school_id == 0:
+            return jsonify({
+                'status': 'error',
+                'message': 'Du är inte kopplad till någon skola'
+            }), 400
+        
+        # Hämta datum från query parameter eller använd dagens datum
+        from datetime import datetime, timedelta
+        
+        date_param = request.args.get('date')
+        if date_param:
+            try:
+                target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+            except ValueError:
+                target_date = datetime.now().date()
+        else:
+            target_date = datetime.now().date()
+        
+        # Hämta veckan (måndag till fredag)
+        days_since_monday = target_date.weekday()
+        monday = target_date - timedelta(days=days_since_monday)
+        friday = monday + timedelta(days=4)
+        
+        # Hämta matsedel för veckan
+        lunch_menus = LunchMenu.query.filter(
+            LunchMenu.school_id == user_school_id,
+            LunchMenu.menu_date >= monday,
+            LunchMenu.menu_date <= friday
+        ).order_by(LunchMenu.menu_date).all()
+        
+        # Skapa en lista för alla veckodagar
+        menu_data = []
+        for i in range(5):  # Måndag till fredag
+            current_date = monday + timedelta(days=i)
+            menu_for_day = next((menu for menu in lunch_menus if menu.menu_date == current_date), None)
+            
+            day_data = {
+                'date': current_date.isoformat(),
+                'day_name': current_date.strftime('%A'),  # Måndag, Tisdag, etc.
+                'day_name_sv': ['Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag'][i],
+                'has_menu': menu_for_day is not None
+            }
+            
+            if menu_for_day:
+                day_data.update({
+                    'main_dish': menu_for_day.main_dish,
+                    'vegetarian_dish': menu_for_day.vegetarian_dish,
+                    'side_dishes': menu_for_day.side_dishes,
+                    'dessert': menu_for_day.dessert,
+                    'allergens': menu_for_day.allergens
+                })
+            else:
+                day_data.update({
+                    'main_dish': 'Ingen matsedel tillgänglig',
+                    'vegetarian_dish': None,
+                    'side_dishes': None,
+                    'dessert': None,
+                    'allergens': None
+                })
+            
+            menu_data.append(day_data)
+        
+        return jsonify({
+            'status': 'success',
+            'school_id': user_school_id,
+            'week_start': monday.isoformat(),
+            'week_end': friday.isoformat(),
+            'menu_data': menu_data
+        })
+        
+    except Exception as e:
+        print(f"Error fetching lunch menu: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Kunde inte hämta matsedel'
         }), 500
 
 @app.route('/api/schedule/current')
@@ -8080,6 +8314,7 @@ if __name__ == '__main__':
         run_assignment_migrations()
         create_shared_files_table()
         ensure_upload_directories()
+        setup_lunch_menu_data()  
 
     cleanup_on_startup()   # om den inte behöver context
     app.run(debug=True)
