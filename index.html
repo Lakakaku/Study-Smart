@@ -560,11 +560,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // RENDER MATSEDEL FUNCTION
-  function renderMatsedel() {
+  async function renderMatsedel() {
     console.log('🔄 Renderar matsedel...');
     
-    // Hitta eller skapa content element
     let contentEl = document.getElementById('lunch-menu-content');
     const modalContent = document.querySelector('#lunch-menu-modal .modal-content') || 
                         document.querySelector('#lunch-menu-modal .lunch-menu-content') ||
@@ -573,7 +571,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!contentEl && modalContent) {
       console.log('⚠️ Skapar nytt lunch-menu-content element');
       
-      // Skapa header först
       const headerHTML = `
         <div class="lunch-menu-header">
           <button id="prev-week-btn" type="button">⬅ Föregående vecka</button>
@@ -582,12 +579,6 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
       
-      // Skapa content container
-      contentEl = document.createElement('div');
-      contentEl.id = 'lunch-menu-content';
-      contentEl.className = 'lunch-menu-grid';
-      
-      // Sätt in header och content
       modalContent.innerHTML = `
         <span class="lunch-menu-close">&times;</span>
         <h2 style="text-align: center; margin-bottom: 0;">🍽️ Matsedel</h2>
@@ -595,10 +586,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="lunch-menu-content" class="lunch-menu-grid"></div>
       `;
       
-      // Hitta det nya elementet
       contentEl = document.getElementById('lunch-menu-content');
       
-      // Återanslut event listeners
+      // Återanslut event listeners för navigation
       const newPrevBtn = document.getElementById('prev-week-btn');
       const newNextBtn = document.getElementById('next-week-btn');
       const newCloseBtn = document.querySelector('.lunch-menu-close');
@@ -632,14 +622,28 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Skapa matsedelsdata
-    const matsedelData = createMatsedelData();
-    
-    // Rendera matsedel
-    displayMatsedel(contentEl, matsedelData);
-    
-    // Uppdatera veckovisning
-    updateWeekDisplay(matsedelData.week_start, matsedelData.week_end);
+    // Visa loading meddelande
+    contentEl.innerHTML = '<div class="loading">Laddar matsedel...</div>';
+
+    try {
+      // Hämta riktig matsedelsdata från server
+      const monday = getMonday(currentMenuWeek);
+      const dateString = monday.toISOString().split('T')[0];
+      
+      const response = await fetch(`/api/lunch_menu?date=${dateString}`);
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        displayMatsedel(contentEl, data);
+        updateWeekDisplay(data.week_start, data.week_end);
+      } else {
+        contentEl.innerHTML = `<div class="error">Fel vid hämtning av matsedel: ${data.message}</div>`;
+      }
+      
+    } catch (error) {
+      console.error('❌ Fel vid hämtning av matsedel:', error);
+      contentEl.innerHTML = '<div class="error">Kunde inte ladda matsedel. Försök igen senare.</div>';
+    }
     
     console.log('✅ Matsedel renderad');
   }
@@ -707,74 +711,77 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // VISA MATSEDEL
+  // Uppdatera displayMatsedel för att hantera riktig data
   function displayMatsedel(contentEl, data) {
     const today = new Date().toISOString().split('T')[0];
     
     let html = '<div class="matsedel-container">';
     
-    data.menu_data.forEach(day => {
-      const isToday = day.date === today;
-      const dayDate = new Date(day.date);
-      const formattedDate = dayDate.toLocaleDateString('sv-SE', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
+    if (!data.menu_data || data.menu_data.length === 0) {
+      html += '<div class="no-menu">Ingen matsedel tillgänglig för denna vecka</div>';
+    } else {
+      data.menu_data.forEach(day => {
+        const isToday = day.date === today;
+        const dayDate = new Date(day.date);
+        const formattedDate = dayDate.toLocaleDateString('sv-SE', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
 
-      html += `
-        <div class="lunch-day-card ${isToday ? 'today' : ''}">
-          <div class="lunch-day-header">
-            <div class="lunch-day-name">${day.day_name_sv}</div>
-            <div class="lunch-day-date">${formattedDate}</div>
-          </div>
-          
-          ${day.has_menu ? `
-            <div class="lunch-dishes">
-              <div class="lunch-dish">
-                <div class="lunch-dish-label">🥩 KÖTT/FISK</div>
-                <div class="lunch-dish-content">${day.main_dish}</div>
+        html += `
+          <div class="lunch-day-card ${isToday ? 'today' : ''}">
+            <div class="lunch-day-header">
+              <div class="lunch-day-name">${day.day_name_sv}</div>
+              <div class="lunch-day-date">${formattedDate}</div>
+            </div>
+            
+            ${day.has_menu ? `
+              <div class="lunch-dishes">
+                <div class="lunch-dish">
+                  <div class="lunch-dish-label">🥩 HUVUDRÄTT</div>
+                  <div class="lunch-dish-content">${day.main_dish}</div>
+                </div>
+                
+                ${day.vegetarian_dish ? `
+                  <div class="lunch-dish">
+                    <div class="lunch-dish-label">🥗 VEGETARISKT</div>
+                    <div class="lunch-dish-content">${day.vegetarian_dish}</div>
+                  </div>
+                ` : ''}
+                
+                ${day.side_dishes ? `
+                  <div class="lunch-dish">
+                    <div class="lunch-dish-label">🍚 TILLBEHÖR</div>
+                    <div class="lunch-dish-content">${day.side_dishes}</div>
+                  </div>
+                ` : ''}
+                
+                ${day.dessert ? `
+                  <div class="lunch-dish">
+                    <div class="lunch-dish-label">🍰 EFTERRÄTT</div>
+                    <div class="lunch-dish-content">${day.dessert}</div>
+                  </div>
+                ` : ''}
+                
+                ${day.allergens ? `
+                  <div class="allergens-info">
+                    <strong>⚠️ Allergener:</strong> ${day.allergens}
+                  </div>
+                ` : ''}
               </div>
-              
-              ${day.vegetarian_dish ? `
-                <div class="lunch-dish">
-                  <div class="lunch-dish-label">🥗 VEGETARISKT</div>
-                  <div class="lunch-dish-content">${day.vegetarian_dish}</div>
-                </div>
-              ` : ''}
-              
-              ${day.side_dishes ? `
-                <div class="lunch-dish">
-                  <div class="lunch-dish-label">🍚 TILLBEHÖR</div>
-                  <div class="lunch-dish-content">${day.side_dishes}</div>
-                </div>
-              ` : ''}
-              
-              ${day.dessert ? `
-                <div class="lunch-dish">
-                  <div class="lunch-dish-label">🍰 EFTERRÄTT</div>
-                  <div class="lunch-dish-content">${day.dessert}</div>
-                </div>
-              ` : ''}
-              
-              ${day.allergens ? `
-                <div class="allergens-info">
-                  <strong>⚠️ Allergener:</strong> ${day.allergens}
-                </div>
-              ` : ''}
-            </div>
-          ` : `
-            <div class="no-menu">
-              Ingen matsedel tillgänglig för denna dag
-            </div>
-          `}
-        </div>
-      `;
-    });
+            ` : `
+              <div class="no-menu">
+                Ingen matsedel tillgänglig för ${day.day_name_sv}
+              </div>
+            `}
+          </div>
+        `;
+      });
+    }
 
     html += '</div>';
     contentEl.innerHTML = html;
     
-    // VIKTIGT: Se till att elementet är synligt
     contentEl.style.display = 'block';
     contentEl.style.visibility = 'visible';
     contentEl.style.opacity = '1';
