@@ -334,30 +334,119 @@ class SubjectMember(db.Model):
 
 
 # Uppdatera User model för att inkludera subject memberships
-# Uppdatera User model för att inkludera subject memberships
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), unique=True, nullable=False)
     password_hash = db.Column(db.String(60), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     email = db.Column(db.String(120), unique=True, nullable=False)
-
-    # Relationships
+    
+    # BEFINTLIGA KOLUMNER (matchar ditt schema)
+    school_id = db.Column(db.Integer, db.ForeignKey('schools.id'), default=0)
+    class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'), default=0)
+    user_type = db.Column(db.String(20), default='student')  # 'student', 'teacher', 'admin'
+    first_name = db.Column(db.String(50))
+    last_name = db.Column(db.String(50))
+    personal_number = db.Column(db.String(12))  # personnummer
+    phone = db.Column(db.String(20))
+    address = db.Column(db.String(200))
+    city = db.Column(db.String(100))
+    postal_code = db.Column(db.String(10))
+    parent_name = db.Column(db.String(100))
+    parent_phone = db.Column(db.String(20))
+    parent_email = db.Column(db.String(120))
+    teacher_subjects = db.Column(db.String(200))  # för lärare
+    qualifications = db.Column(db.Text)  # för lärare
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # Resten av dina befintliga kolumner och relationer...
     subjects = db.relationship('Subject', backref='owner', lazy=True, cascade='all, delete-orphan')
     quizzes = db.relationship('Quiz', backref='owner', lazy=True, cascade='all, delete-orphan')
     flashcards = db.relationship('Flashcard', backref='owner', lazy=True, cascade='all, delete-orphan')
     events = db.relationship('Event', backref='owner', lazy=True, cascade='all, delete-orphan')
-    
-    # Ny relationship för subject memberships
     subject_memberships = db.relationship('SubjectMember', backref='user', lazy=True, cascade='all, delete-orphan')
-    
-    # Relationship för krav documents och shared files
     krav_documents = db.relationship('KravDocument', backref='user', lazy=True, cascade='all, delete-orphan')
     shared_files = db.relationship('SharedFile', backref='uploader', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f"User('{self.username}')"
     
+    # NYA METODER för att hantera skola och klass (uppdaterade för utökat schema)
+    def get_school_name(self):
+        """Hämta skolans namn"""
+        if self.school_id and self.school_id > 0:
+            return self.school.name if self.school else "Okänd skola"
+        return "Ingen skola"
+    
+    def get_class_name(self):
+        """Hämta klassens namn"""
+        if self.class_id and self.class_id > 0:
+            return self.school_class.name if self.school_class else "Okänd klass"
+        return "Ingen klass"
+    
+    def get_full_name(self):
+        """Hämta användarens fullständiga namn"""
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        elif self.first_name:
+            return self.first_name
+        return self.username
+    
+    def is_teacher(self):
+        """Kontrollera om användaren är lärare"""
+        return self.user_type == 'teacher'
+    
+    def is_student(self):
+        """Kontrollera om användaren är elev"""
+        return self.user_type == 'student'
+    
+    def is_admin(self):
+        """Kontrollera om användaren är administratör"""
+        return self.user_type == 'admin'
+    
+    def get_classmates(self):
+        """Hämta alla klasskompisar (användare i samma klass)"""
+        if not self.class_id or self.class_id == 0:
+            return []
+        return User.query.filter(
+            User.class_id == self.class_id,
+            User.id != self.id,
+            User.is_active == True
+        ).all()
+    
+    def get_school_users(self):
+        """Hämta alla användare på samma skola"""
+        if not self.school_id or self.school_id == 0:
+            return []
+        return User.query.filter(
+            User.school_id == self.school_id,
+            User.id != self.id,
+            User.is_active == True
+        ).all()
+    
+    def get_students_in_class(self):
+        """För lärare: hämta alla elever i samma klass"""
+        if not self.class_id or self.class_id == 0:
+            return []
+        return User.query.filter(
+            User.class_id == self.class_id,
+            User.user_type == 'student',
+            User.is_active == True
+        ).all()
+    
+    def is_homeroom_teacher(self):
+        """Kontrollera om användaren är klassföreståndare för någon klass"""
+        if not self.is_teacher():
+            return False
+        return SchoolClass.query.filter_by(homeroom_teacher_id=self.id).first() is not None
+    
+    def get_homeroom_classes(self):
+        """Hämta klasser där användaren är klassföreståndare"""
+        if not self.is_teacher():
+            return []
+        return SchoolClass.query.filter_by(homeroom_teacher_id=self.id).all()
+    
+    # Dina befintliga metoder fortsätter här...
     def get_all_subjects(self):
         """Hämta alla subjects som användaren har tillgång till (äger eller är medlem i)"""
         owned_subjects = self.subjects
@@ -437,7 +526,6 @@ def check_quiz_schema():
 
 
 
-# Update your init_database function to include the new table
 def init_database():
     """Initiera databas och hantera migrationer"""
     with app.app_context():
@@ -446,6 +534,24 @@ def init_database():
         
         # Lista över alla kolumner som behövs för varje tabell
         required_columns = {
+            'schools': [
+                ('name', 'VARCHAR(200)'),
+                ('address', 'VARCHAR(300)'),
+                ('phone', 'VARCHAR(20)'),
+                ('email', 'VARCHAR(120)'),
+                ('created_at', 'DATETIME')
+            ],
+            'school_classes': [
+                ('name', 'VARCHAR(50)'),
+                ('school_id', 'INTEGER'),
+                ('description', 'TEXT'),
+                ('year_level', 'INTEGER'),
+                ('created_at', 'DATETIME')
+            ],
+            'user': [
+                ('school_id', 'INTEGER'),
+                ('class_id', 'INTEGER')
+            ],
             'subject': [
                 ('share_code', 'VARCHAR(8)'),
                 ('is_shared', 'BOOLEAN')
@@ -564,6 +670,65 @@ def init_database():
         except Exception as e:
             print(f"Error committing database changes: {e}")
             db.session.rollback()
+
+class School(db.Model):
+    """Skola-modell för att hantera olika skolor"""
+    __tablename__ = 'schools'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False, unique=True)
+    address = db.Column(db.String(300))
+    city = db.Column(db.String(100))
+    postal_code = db.Column(db.String(10))
+    phone = db.Column(db.String(20))
+    email = db.Column(db.String(120))
+    school_code = db.Column(db.String(20), unique=True)
+    school_type = db.Column(db.String(50))  # t.ex. "grundskola", "gymnasium"
+    principal_name = db.Column(db.String(100))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationer
+    classes = db.relationship('SchoolClass', backref='school', lazy=True, cascade='all, delete-orphan')
+    users = db.relationship('User', backref='school', lazy=True)
+    
+    def __repr__(self):
+        return f"School('{self.name}', code='{self.school_code}')"
+
+
+class SchoolClass(db.Model):
+    """Klass-modell för att hantera klasser inom skolor"""
+    __tablename__ = 'school_classes'
+    
+    id = db.Column(db.Integer, primary_key=True) 
+    school_id = db.Column(db.Integer, db.ForeignKey('schools.id'), nullable=False)
+    name = db.Column(db.String(50), nullable=False)  # t.ex. "9A", "Matematik 1"
+    year_level = db.Column(db.Integer)  # årskurs, t.ex. 9
+    class_code = db.Column(db.String(20))  # unik kod för klassen
+    description = db.Column(db.Text)
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    homeroom_teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Unique constraint för att förhindra duplicerade klassnamn inom samma skola
+    __table_args__ = (db.UniqueConstraint('school_id', 'name', name='unique_school_class'),)
+    
+    # Relationer - FIX: Specificera foreign_keys för att lösa ambiguiteten
+    users = db.relationship('User', 
+                           foreign_keys='User.class_id',
+                           backref='school_class', 
+                           lazy=True)
+    
+    homeroom_teacher = db.relationship('User', 
+                                     foreign_keys=[homeroom_teacher_id], 
+                                     backref='homeroom_classes')
+    
+    def __repr__(self):
+        return f"SchoolClass('{self.name}', school_id={self.school_id})"
 
 class Quiz(db.Model):
     id = db.Column(db.Integer, primary_key=True)
