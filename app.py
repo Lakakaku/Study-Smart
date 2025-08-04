@@ -688,13 +688,30 @@ class School(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+    classrooms = db.Column(db.Text, nullable=False, default='[]')
     # Relationer
     classes = db.relationship('SchoolClass', backref='school', lazy=True, cascade='all, delete-orphan')
     users = db.relationship('User', backref='school', lazy=True)
     
     def __repr__(self):
         return f"School('{self.name}', code='{self.school_code}')"
+
+
+class ClassSchedule(db.Model):
+    __tablename__ = 'class_schedule'
+
+    id         = db.Column(db.Integer, primary_key=True)
+    class_id   = db.Column(db.Integer, db.ForeignKey('school_classes.id', ondelete='CASCADE'), nullable=False)
+    weekday    = db.Column(db.String(20),  nullable=False)   # 'måndag', 'tisdag' …
+    start_time = db.Column(db.String(5),   nullable=False)   # '08:00'
+    end_time   = db.Column(db.String(5),   nullable=False)   # '09:00'
+    subject_id = db.Column(db.Integer,     db.ForeignKey('subject.id'), nullable=True)
+    room       = db.Column(db.String(50),  nullable=True)
+    created_at = db.Column(db.DateTime,    default=datetime.utcnow)
+
+    # Relationer (valfritt)
+    school_class = db.relationship('SchoolClass', backref='schedule')
+    subject      = db.relationship('Subject')
 
 
 class SchoolClass(db.Model):
