@@ -673,11 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const isToday = currentDate.toDateString() === today.toDateString();
           
           let scheduleHTML = `
-              <div class="schedule-date-info">
-                  <strong>${scheduleData.weekday} ${currentDate.getDate()}/${currentDate.getMonth() + 1}</strong>
-                  ${scheduleData.class_name ? `<br><span class="class-info">${scheduleData.class_name}</span>` : ''}
-              </div>
-              <div class="schedule-lessons">
+              
           `;
           
           scheduleData.schedule.forEach(lesson => {
