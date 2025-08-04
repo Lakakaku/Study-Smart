@@ -498,8 +498,23 @@ document.addEventListener('DOMContentLoaded', () => {
       currentDate.toLocaleDateString(undefined, opts);
   }
 
+  function markCurrentLesson() {
+      const now = new Date();
+      const currentTime = now.toTimeString().slice(0, 5); // Format: HH:MM
+      
+      document.querySelectorAll('.schedule-item').forEach(item => {
+          const startTime = item.querySelector('.time-start')?.textContent;
+          const endTime = item.querySelector('.time-end')?.textContent;
+          
+          if (startTime && endTime && currentTime >= startTime && currentTime <= endTime) {
+              item.classList.add('current-lesson');
+          } else {
+              item.classList.remove('current-lesson');
+          }
+      });
+  }
+
   
-  // Update the loadQuizzesForDate function to only show Leave Quiz for shared quizzes
   async function loadQuizzesForDate() {
       // Hämta alltid senaste schemat
       await fetchSchedule();
@@ -507,86 +522,82 @@ document.addEventListener('DOMContentLoaded', () => {
       const key = formatKey(currentDate);
       const entries = schedule[key] || [];
       const container = document.getElementById('quizzes-container');
-      container.innerHTML = ''; // Rensa ut
+      container.innerHTML = ''; 
 
       console.log(`[DEBUG] Loading quizzes for date: ${key}, found ${entries.length} entries`);
 
+      // Din befintliga quiz-loading logik här...
       if (entries.length === 0) {
           container.innerHTML = '<p>No repetitions scheduled for this date.</p>';
-          return;
+      } else {
+          // Förbättrad grupp-logik som räknar faktiska frågor
+          const grouped = {};
+          entries.forEach(e => {
+              const id = `${e.subject}|||${e.topic}`;
+              if (!grouped[id]) {
+                  grouped[id] = { 
+                      subject: e.subject, 
+                      topic: e.topic, 
+                      count: 0,
+                      questions: [],
+                      user_role: e.user_role || 'unknown',
+                      is_shared_subject: e.is_shared_subject || false,
+                      quiz_id: e.quiz_id || null,
+                      is_personal_quiz: e.is_personal_quiz || false
+                  };
+              }
+              
+              if (e.questions && Array.isArray(e.questions)) {
+                  grouped[id].count += e.questions.length;
+                  grouped[id].questions.push(...e.questions);
+              } else {
+                  grouped[id].count++;
+              }
+          });
+
+          console.log('[DEBUG] Grouped quizzes:', grouped);
+
+          Object.values(grouped).forEach(qz => {
+              const link = `/daily_quiz/${key}/` +
+                          encodeURIComponent(qz.subject) + '/' +
+                          encodeURIComponent(qz.topic);
+              const card = document.createElement('div');
+              card.className = 'quiz-card';
+              
+              const canLeave = qz.user_role === 'member' && 
+                              qz.is_shared_subject && 
+                              !qz.is_personal_quiz && 
+                              qz.quiz_id;
+              
+              console.log(`[DEBUG] Quiz: ${qz.topic}, canLeave: ${canLeave}`);
+              
+              card.innerHTML = `
+                  <h3>${qz.subject} – ${qz.topic}</h3>
+                  <p>${qz.count} question${qz.count > 1 ? 's' : ''}</p>
+                  <div class="quiz-actions">
+                      <a href="${link}"><button class="start-quiz-btn">Start Quiz</button></a>
+                      ${canLeave ? `<button class="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this shared quiz">✖</button>` : ''}
+                  </div>
+              `;
+              container.appendChild(card);
+          });
       }
 
-      // Förbättrad grupp-logik som räknar faktiska frågor
-      const grouped = {};
-      entries.forEach(e => {
-          const id = `${e.subject}|||${e.topic}`;
-          if (!grouped[id]) {
-              grouped[id] = { 
-                  subject: e.subject, 
-                  topic: e.topic, 
-                  count: 0,
-                  questions: [],
-                  user_role: e.user_role || 'unknown',
-                  is_shared_subject: e.is_shared_subject || false,
-                  quiz_id: e.quiz_id || null,
-                  is_personal_quiz: e.is_personal_quiz || false // Add this field
-              };
-          }
-          
-          // Om det finns questions-array i entry, räkna dem
-          if (e.questions && Array.isArray(e.questions)) {
-              grouped[id].count += e.questions.length;
-              grouped[id].questions.push(...e.questions);
-          } else {
-              // Fallback för äldre format
-              grouped[id].count++;
-          }
-      });
-
-      console.log('[DEBUG] Grouped quizzes:', grouped);
-
-      Object.values(grouped).forEach(qz => {
-          const link = `/daily_quiz/${key}/` +
-                      encodeURIComponent(qz.subject) + '/' +
-                      encodeURIComponent(qz.topic);
-          const card = document.createElement('div');
-          card.className = 'quiz-card';
-          
-          // FIXED: Only allow leaving shared quizzes, not personal ones
-          // Members can only leave quizzes that are:
-          // 1. From shared subjects (is_shared_subject = true)
-          // 2. Created by subject owner (not personal quizzes, is_personal_quiz = false)
-          // 3. User is a member (not owner)
-          const canLeave = qz.user_role === 'member' && 
-                          qz.is_shared_subject && 
-                          !qz.is_personal_quiz && 
-                          qz.quiz_id; // Must have a valid quiz_id
-          
-          console.log(`[DEBUG] Quiz: ${qz.topic}, canLeave: ${canLeave}, user_role: ${qz.user_role}, is_shared_subject: ${qz.is_shared_subject}, is_personal_quiz: ${qz.is_personal_quiz}, quiz_id: ${qz.quiz_id}`);
-          
-          card.innerHTML = `
-              <h3>${qz.subject} – ${qz.topic}</h3>
-              <p>${qz.count} question${qz.count > 1 ? 's' : ''}</p>
-              <div class="quiz-actions">
-                  <a href="${link}"><button class="start-quiz-btn">Start Quiz</button></a>
-                  ${canLeave ? `<button class="leave-quiz-btn" id="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this shared quiz">✖</button>` : ''}
-              </div>
-          `;
-          container.appendChild(card);
-      });
+      // LÄGG TILL: Ladda schema för samma datum
+      await loadScheduleForDate(currentDate);
   }
 
   // Datum‐knapparna
   document.getElementById('prev-day-btn').addEventListener('click', async () => {
-    currentDate.setDate(currentDate.getDate() - 1);
-    updateDateHeader();
-    await loadQuizzesForDate();
+      currentDate.setDate(currentDate.getDate() - 1);
+      updateDateHeader();
+      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
   });
 
   document.getElementById('next-day-btn').addEventListener('click', async () => {
-    currentDate.setDate(currentDate.getDate() + 1);
-    updateDateHeader();
-    await loadQuizzesForDate();
+      currentDate.setDate(currentDate.getDate() + 1);
+      updateDateHeader();
+      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
   });
 
   // ----------- Part 2: Calendar modal and event handling -----------
@@ -627,6 +638,95 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Error loading events:', err);
     }
   }
+
+  async function loadScheduleForDate(date) {
+      try {
+          const dateString = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+          const response = await fetch(`/api/schedule/${dateString}`);
+          
+          if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          console.log('[DEBUG] Schedule data received:', data);
+          
+          displaySchedule(data);
+          
+      } catch (error) {
+          console.error('Error loading schedule:', error);
+          displayScheduleError('Kunde inte ladda schema');
+      }
+  }
+
+
+  function displaySchedule(scheduleData) {
+      const scheduleContainer = document.querySelector('.schedule-content');
+      
+      if (!scheduleContainer) {
+          console.error('Schedule container not found');
+          return;
+      }
+      
+      if (scheduleData.status === 'success' && scheduleData.schedule.length > 0) {
+          const today = new Date();
+          const isToday = currentDate.toDateString() === today.toDateString();
+          
+          let scheduleHTML = `
+              <div class="schedule-date-info">
+                  <strong>${scheduleData.weekday} ${currentDate.getDate()}/${currentDate.getMonth() + 1}</strong>
+                  ${scheduleData.class_name ? `<br><span class="class-info">${scheduleData.class_name}</span>` : ''}
+              </div>
+              <div class="schedule-lessons">
+          `;
+          
+          scheduleData.schedule.forEach(lesson => {
+              scheduleHTML += `
+                  <div class="schedule-item">
+                      <div class="schedule-time">
+                          <span class="time-start">${lesson.start_time}</span>
+                          <span class="time-separator">-</span>
+                          <span class="time-end">${lesson.end_time}</span>
+                      </div>
+                      <div class="schedule-details">
+                          <div class="schedule-subject">${lesson.subject}</div>
+                          <div class="schedule-room">${lesson.room}</div>
+                      </div>
+                  </div>
+              `;
+          });
+          
+          scheduleHTML += '</div>';
+          scheduleContainer.innerHTML = scheduleHTML;
+          
+          // Markera aktuell lektion om det är idag
+          if (isToday) {
+              setTimeout(markCurrentLesson, 100);
+          }
+          
+      } else {
+          const message = scheduleData.message || 'Inget schema för idag';
+          scheduleContainer.innerHTML = `
+              <div class="no-schedule">
+                  <p>${message}</p>
+              </div>
+          `;
+      }
+  }
+
+
+  function displayScheduleError(errorMessage) {
+      const scheduleContainer = document.querySelector('.schedule-content');
+      
+      if (scheduleContainer) {
+          scheduleContainer.innerHTML = `
+              <div class="schedule-error">
+                  <p>${errorMessage}</p>
+              </div>
+          `;
+      }
+  }
+  
 
 
 
@@ -1192,13 +1292,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ----------- Init everything asynchronously -----------
   (async () => {
-    console.log('[DEBUG] Initializing application...');
-    await fetchSchedule();
-    await loadUserSubjects();
-    updateDateHeader();
-    await loadQuizzesForDate();
-    await loadEvents();
-    console.log('[DEBUG] Application initialized successfully');
+      console.log('[DEBUG] Initializing application...');
+      await fetchSchedule();
+      await loadUserSubjects();
+      updateDateHeader();
+      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
+      await loadEvents();
+      
+      // Uppdatera aktuell lektion varje minut om vi visar dagens schema
+      setInterval(() => {
+          const today = new Date();
+          if (currentDate.toDateString() === today.toDateString()) {
+              markCurrentLesson();
+          }
+      }, 60000); // Uppdatera varje minut
+      
+      console.log('[DEBUG] Application initialized successfully');
   })();
 
   // ----------- Subject Form Handlers -----------
@@ -2566,6 +2675,355 @@ async function leaveSubject(subjectId) {
         align-items: center;
         gap: 1.5rem;
         margin-bottom: 1.5rem;
+      }
+
+
+
+
+
+
+      /* Lägg till dessa CSS-stilar i din befintliga CSS-fil */
+
+      /* Schema container */
+      .schedule-container {
+          background: white;
+          border-radius: 12px;
+          padding: 20px;
+          margin-bottom: 20px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          border: 1px solid #e1e5e9;
+      }
+
+      .schedule-header {
+          color: #2c3e50;
+          font-size: 1.4rem;
+          font-weight: 600;
+          margin: 0 0 15px 0;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+      }
+
+      .schedule-header::before {
+          content: "📅";
+          font-size: 1.2rem;
+      }
+
+      /* Schema datum info */
+      .schedule-date-info {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 12px 16px;
+          border-radius: 8px;
+          margin-bottom: 15px;
+          font-weight: 500;
+      }
+
+      .class-info {
+          font-size: 0.9rem;
+          opacity: 0.9;
+          font-weight: normal;
+      }
+
+      /* Schema lektioner */
+      .schedule-lessons {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+      }
+
+      .schedule-item {
+          display: flex;
+          align-items: center;
+          padding: 12px 16px;
+          background: #f8f9fa;
+          border-radius: 8px;
+          border-left: 4px solid #3498db;
+          transition: all 0.3s ease;
+      }
+
+      .schedule-item:hover {
+          background: #e3f2fd;
+          border-left-color: #2196F3;
+          transform: translateX(2px);
+      }
+
+      .schedule-time {
+          display: flex;
+          align-items: center;
+          min-width: 100px;
+          font-weight: 600;
+          color: #2c3e50;
+          font-size: 0.95rem;
+      }
+
+      .time-separator {
+          margin: 0 5px;
+          color: #7f8c8d;
+      }
+
+      .schedule-details {
+          flex: 1;
+          margin-left: 16px;
+      }
+
+      .schedule-subject {
+          font-weight: 600;
+          color: #2c3e50;
+          font-size: 1rem;
+          margin-bottom: 2px;
+      }
+
+      .schedule-room {
+          color: #7f8c8d;
+          font-size: 0.9rem;
+          font-weight: 400;
+      }
+
+      .schedule-room::before {
+          content: "📍 ";
+          margin-right: 2px;
+      }
+
+      /* Inget schema meddelande */
+      .no-schedule {
+          text-align: center;
+          padding: 30px 20px;
+          color: #7f8c8d;
+          font-style: italic;
+      }
+
+      .no-schedule p {
+          margin: 0;
+          font-size: 1rem;
+      }
+
+      /* Schema fel meddelande */
+      .schedule-error {
+          text-align: center;
+          padding: 20px;
+          background: #fff5f5;
+          border: 1px solid #fed7d7;
+          border-radius: 8px;
+          color: #c53030;
+      }
+
+      .schedule-error p {
+          margin: 0;
+          font-size: 0.95rem;
+      }
+
+      /* Responsiv design för schema */
+      @media (max-width: 768px) {
+          .schedule-container {
+              padding: 15px;
+              margin-bottom: 15px;
+          }
+          
+          .schedule-item {
+              flex-direction: column;
+              align-items: flex-start;
+              padding: 12px;
+          }
+          
+          .schedule-time {
+              min-width: auto;
+              margin-bottom: 8px;
+          }
+          
+          .schedule-details {
+              margin-left: 0;
+              width: 100%;
+          }
+          
+          .schedule-header {
+              font-size: 1.2rem;
+          }
+      }
+
+      /* Schema indikator för dagens lektion */
+      .schedule-item.current-lesson {
+          border-left-color: #e74c3c;
+          background: linear-gradient(90deg, #fff5f5 0%, #f8f9fa 100%);
+      }
+
+      .schedule-item.current-lesson .schedule-time {
+          color: #e74c3c;
+      }
+
+      .schedule-item.current-lesson .schedule-subject {
+          color: #e74c3c;
+      }/* Lägg till dessa CSS-stilar i din befintliga CSS-fil */
+
+      /* Schema container */
+      .schedule-container {
+          background: white;
+          border-radius: 12px;
+          padding: 20px;
+          margin-bottom: 20px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          border: 1px solid #e1e5e9;
+      }
+
+      .schedule-header {
+          color: #2c3e50;
+          font-size: 1.4rem;
+          font-weight: 600;
+          margin: 0 0 15px 0;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+      }
+
+      .schedule-header::before {
+          content: "📅";
+          font-size: 1.2rem;
+      }
+
+      /* Schema datum info */
+      .schedule-date-info {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 12px 16px;
+          border-radius: 8px;
+          margin-bottom: 15px;
+          font-weight: 500;
+      }
+
+      .class-info {
+          font-size: 0.9rem;
+          opacity: 0.9;
+          font-weight: normal;
+      }
+
+      /* Schema lektioner */
+      .schedule-lessons {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+      }
+
+      .schedule-item {
+          display: flex;
+          align-items: center;
+          padding: 12px 16px;
+          background: #f8f9fa;
+          border-radius: 8px;
+          border-left: 4px solid #3498db;
+          transition: all 0.3s ease;
+      }
+
+      .schedule-item:hover {
+          background: #e3f2fd;
+          border-left-color: #2196F3;
+          transform: translateX(2px);
+      }
+
+      .schedule-time {
+          display: flex;
+          align-items: center;
+          min-width: 100px;
+          font-weight: 600;
+          color: #2c3e50;
+          font-size: 0.95rem;
+      }
+
+      .time-separator {
+          margin: 0 5px;
+          color: #7f8c8d;
+      }
+
+      .schedule-details {
+          flex: 1;
+          margin-left: 16px;
+      }
+
+      .schedule-subject {
+          font-weight: 600;
+          color: #2c3e50;
+          font-size: 1rem;
+          margin-bottom: 2px;
+      }
+
+      .schedule-room {
+          color: #7f8c8d;
+          font-size: 0.9rem;
+          font-weight: 400;
+      }
+
+      .schedule-room::before {
+          content: "📍 ";
+          margin-right: 2px;
+      }
+
+      /* Inget schema meddelande */
+      .no-schedule {
+          text-align: center;
+          padding: 30px 20px;
+          color: #7f8c8d;
+          font-style: italic;
+      }
+
+      .no-schedule p {
+          margin: 0;
+          font-size: 1rem;
+      }
+
+      /* Schema fel meddelande */
+      .schedule-error {
+          text-align: center;
+          padding: 20px;
+          background: #fff5f5;
+          border: 1px solid #fed7d7;
+          border-radius: 8px;
+          color: #c53030;
+      }
+
+      .schedule-error p {
+          margin: 0;
+          font-size: 0.95rem;
+      }
+
+      /* Responsiv design för schema */
+      @media (max-width: 768px) {
+          .schedule-container {
+              padding: 15px;
+              margin-bottom: 15px;
+          }
+          
+          .schedule-item {
+              flex-direction: column;
+              align-items: flex-start;
+              padding: 12px;
+          }
+          
+          .schedule-time {
+              min-width: auto;
+              margin-bottom: 8px;
+          }
+          
+          .schedule-details {
+              margin-left: 0;
+              width: 100%;
+          }
+          
+          .schedule-header {
+              font-size: 1.2rem;
+          }
+      }
+
+      /* Schema indikator för dagens lektion */
+      .schedule-item.current-lesson {
+          border-left-color: #e74c3c;
+          background: linear-gradient(90deg, #fff5f5 0%, #f8f9fa 100%);
+      }
+
+      .schedule-item.current-lesson .schedule-time {
+          color: #e74c3c;
+      }
+
+      .schedule-item.current-lesson .schedule-subject {
+          color: #e74c3c;
       }
 
       #prev-month-btn,
