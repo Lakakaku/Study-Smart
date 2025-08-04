@@ -2420,12 +2420,13 @@ async function leaveSubject(subjectId) {
       .products-container {
         flex: 1;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        grid-template-columns: repeat(2, 1fr); /* Exakt 2 kolumner i fullscreen */
         grid-auto-rows: min-content;
         gap: 1.5rem;
         padding: 2rem;
         overflow-y: auto;
         background: var(--bg-gray-50);
+        max-height: calc(100vh - 350px); /* Sätt max-höjd för att tvinga scroll */
       }
 
       .products-container::-webkit-scrollbar {
@@ -2814,6 +2815,24 @@ async function leaveSubject(subjectId) {
       .schedule-error p {
           margin: 0;
           font-size: 0.95rem;
+      }
+
+
+      @media (max-width: 768px) {
+        .products-container {
+          grid-template-columns: 1fr;
+          padding: 1.25rem;
+          gap: 1rem;
+          max-height: calc(100vh - 400px);
+        }
+      }
+
+      @media (max-width: 480px) {
+        .products-container {
+          padding: 1rem;
+          gap: 1rem;
+          max-height: calc(100vh - 420px);
+        }
       }
 
       /* Responsiv design för schema */
@@ -3676,6 +3695,14 @@ async function leaveSubject(subjectId) {
         }
       }
 
+      /* Responsiva breakpoints för mindre skärmar */
+      @media (max-width: 1400px) {
+        .products-container {
+          grid-template-columns: repeat(2, 1fr);
+          max-height: calc(100vh - 360px);
+        }
+      }
+
       /* === RESPONSIVE DESIGN === */
       @media (max-width: 1200px) {
         .center-container {
@@ -3690,6 +3717,15 @@ async function leaveSubject(subjectId) {
         
         .schedule-subject {
           max-width: 180px;
+        }
+      }
+
+      @media (max-width: 1024px) {
+        .products-container {
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 1.25rem;
+          padding: 1.5rem;
+          max-height: calc(100vh - 370px);
         }
       }
 
