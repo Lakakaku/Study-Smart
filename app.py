@@ -1501,10 +1501,14 @@ def get_lunch_menu():
         else:
             target_date = datetime.now().date()
         
+        print(f"📅 Hämtar matsedel för datum: {target_date}, skola: {user_school_id}")
+        
         # Hämta veckan (måndag till fredag)
         days_since_monday = target_date.weekday()
         monday = target_date - timedelta(days=days_since_monday)
         friday = monday + timedelta(days=4)
+        
+        print(f"📅 Vecka: {monday} till {friday}")
         
         # Hämta matsedel för veckan
         lunch_menus = LunchMenu.query.filter(
@@ -1513,27 +1517,36 @@ def get_lunch_menu():
             LunchMenu.menu_date <= friday
         ).order_by(LunchMenu.menu_date).all()
         
+        print(f"🍽️ Hittade {len(lunch_menus)} matsedlar i databasen")
+        
+        # Debug: Visa vad som finns i databasen
+        for menu in lunch_menus:
+            print(f"   - {menu.menu_date}: {menu.main_dish[:30]}...")
+        
         # Skapa en lista för alla veckodagar
         menu_data = []
+        swedish_days = ['Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag']
+        
         for i in range(5):  # Måndag till fredag
             current_date = monday + timedelta(days=i)
             menu_for_day = next((menu for menu in lunch_menus if menu.menu_date == current_date), None)
             
             day_data = {
                 'date': current_date.isoformat(),
-                'day_name': current_date.strftime('%A'),  # Måndag, Tisdag, etc.
-                'day_name_sv': ['Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag'][i],
+                'day_name': current_date.strftime('%A'),
+                'day_name_sv': swedish_days[i],
                 'has_menu': menu_for_day is not None
             }
             
             if menu_for_day:
                 day_data.update({
-                    'main_dish': menu_for_day.main_dish,
-                    'vegetarian_dish': menu_for_day.vegetarian_dish,
-                    'side_dishes': menu_for_day.side_dishes,
-                    'dessert': menu_for_day.dessert,
-                    'allergens': menu_for_day.allergens
+                    'main_dish': menu_for_day.main_dish or 'Ingen huvudrätt angiven',
+                    'vegetarian_dish': menu_for_day.vegetarian_dish or 'Ingen vegetarisk rätt angiven',
+                    'side_dishes': menu_for_day.side_dishes or 'Inga tillbehör angivna',
+                    'dessert': menu_for_day.dessert or 'Ingen efterrätt angiven',
+                    'allergens': menu_for_day.allergens or 'Inga allergener angivna'
                 })
+                print(f"✅ Data för {swedish_days[i]}: {menu_for_day.main_dish}")
             else:
                 day_data.update({
                     'main_dish': 'Ingen matsedel tillgänglig',
@@ -1542,6 +1555,7 @@ def get_lunch_menu():
                     'dessert': None,
                     'allergens': None
                 })
+                print(f"❌ Ingen data för {swedish_days[i]} ({current_date})")
             
             menu_data.append(day_data)
         
@@ -1550,16 +1564,26 @@ def get_lunch_menu():
             'school_id': user_school_id,
             'week_start': monday.isoformat(),
             'week_end': friday.isoformat(),
-            'menu_data': menu_data
+            'menu_data': menu_data,
+            'debug_info': {
+                'target_date': target_date.isoformat(),
+                'monday': monday.isoformat(),
+                'friday': friday.isoformat(),
+                'menus_found': len(lunch_menus),
+                'user_school_id': user_school_id
+            }
         })
         
     except Exception as e:
-        print(f"Error fetching lunch menu: {e}")
+        print(f"❌ Error fetching lunch menu: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'status': 'error',
-            'message': 'Kunde inte hämta matsedel'
+            'message': f'Kunde inte hämta matsedel: {str(e)}'
         }), 500
-
+    
+    
 @app.route('/api/schedule/current')
 @login_required 
 def get_current_schedule():
