@@ -2278,7 +2278,7 @@ async function leaveSubject(subjectId) {
       .right-content-wrapper {
         flex: 1;
         display: grid;
-        grid-template-columns: 300px 1fr;
+        grid-template-columns: 380px 1fr;
         height: 100%;
         min-height: 0;
       }
@@ -2289,7 +2289,7 @@ async function leaveSubject(subjectId) {
         border-right: 1px solid var(--border-color);
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        
       }
 
       .schedule-header {
@@ -2731,11 +2731,13 @@ async function leaveSubject(subjectId) {
       .schedule-item {
           display: flex;
           align-items: center;
-          padding: 12px 16px;
+          padding: 14px 18px;
           background: #f8f9fa;
           border-radius: 8px;
           border-left: 4px solid #3498db;
           transition: all 0.3s ease;
+          min-width: 320px;
+          margin-bottom: 5px;
       }
 
       .schedule-item:hover {
@@ -2759,15 +2761,20 @@ async function leaveSubject(subjectId) {
       }
 
       .schedule-details {
-          flex: 1;
-          margin-left: 16px;
+        flex: 1;
+        margin-left: 18px; /* Ökat från 16px */
+        min-width: 0; /* Viktigt för text-overflow att fungera */
       }
 
       .schedule-subject {
-          font-weight: 600;
-          color: #2c3e50;
-          font-size: 1rem;
-          margin-bottom: 2px;
+        font-weight: 600;
+        color: #2c3e50;
+        font-size: 1rem;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis; /* Lägg till ellipsis för mycket långa namn */
+        max-width: 220px; /* Begränsa bredden så det inte blir för brett */
       }
 
       .schedule-room {
@@ -2827,10 +2834,7 @@ async function leaveSubject(subjectId) {
               margin-bottom: 8px;
           }
           
-          .schedule-details {
-              margin-left: 0;
-              width: 100%;
-          }
+          
           
           .schedule-header {
               font-size: 1.2rem;
@@ -2899,15 +2903,7 @@ async function leaveSubject(subjectId) {
           gap: 10px;
       }
 
-      .schedule-item {
-          display: flex;
-          align-items: center;
-          padding: 12px 16px;
-          background: #f8f9fa;
-          border-radius: 8px;
-          border-left: 4px solid #3498db;
-          transition: all 0.3s ease;
-      }
+      
 
       .schedule-item:hover {
           background: #e3f2fd;
@@ -2929,10 +2925,7 @@ async function leaveSubject(subjectId) {
           color: #7f8c8d;
       }
 
-      .schedule-details {
-          flex: 1;
-          margin-left: 16px;
-      }
+      
 
       .schedule-subject {
           font-weight: 600;
@@ -3692,13 +3685,21 @@ async function leaveSubject(subjectId) {
 
       @media (max-width: 1200px) {
         .right-content-wrapper {
-          grid-template-columns: 280px 1fr;
+          grid-template-columns: 350px 1fr; /* Minska något på mindre skärmar */
+        }
+        
+        .schedule-subject {
+          max-width: 180px;
         }
       }
 
       @media (max-width: 1024px) {
         .right-content-wrapper {
-          grid-template-columns: 250px 1fr;
+          grid-template-columns: 320px 1fr;
+        }
+        
+        .schedule-subject {
+          max-width: 160px;
         }
       }
 
