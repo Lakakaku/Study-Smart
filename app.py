@@ -7,6 +7,7 @@ import fitz  # PyMuPDF
 import pytesseract
 import threading
 from pydub import AudioSegment  # IMPORTERA AudioSegment
+import calendar
 
 from threading import Thread
 
@@ -1250,6 +1251,87 @@ def load_user(user_id):
 init_database()
 
 
+
+# Lägg till denna route i din Flask app
+@app.route('/api/schedule/<date>')
+@login_required
+def get_schedule_for_date(date):
+    """Hämta schema för ett specifikt datum"""
+    try:
+        # Parse datum (format: YYYY-MM-DD)
+        schedule_date = datetime.strptime(date, '%Y-%m-%d')
+        
+        # Konvertera till svensk veckodag
+        weekday_eng = schedule_date.strftime('%A').lower()
+        weekday_mapping = {
+            'monday': 'måndag',
+            'tuesday': 'tisdag', 
+            'wednesday': 'onsdag',
+            'thursday': 'torsdag',
+            'friday': 'fredag',
+            'saturday': 'lördag',
+            'sunday': 'söndag'
+        }
+        weekday_swe = weekday_mapping.get(weekday_eng, weekday_eng)
+        
+        # Kontrollera om användaren har en klass
+        if not current_user.class_id or current_user.class_id == 0:
+            return jsonify({
+                'status': 'success',
+                'schedule': [],
+                'message': 'Ingen klass tilldelad'
+            })
+        
+        # Hämta schema från databasen
+        schedule_query = db.session.query(ClassSchedule).filter_by(
+            class_id=current_user.class_id,
+            weekday=weekday_swe
+        ).order_by(ClassSchedule.start_time).all()
+        
+        schedule_items = []
+        for item in schedule_query:
+            # Hämta ämnesnamn om subject_id finns
+            subject_name = "Matematik"  # Default för test
+            if item.subject_id:
+                subject = Subject.query.get(item.subject_id)
+                if subject:
+                    subject_name = subject.name
+            
+            schedule_items.append({
+                'id': item.id,
+                'start_time': item.start_time,
+                'end_time': item.end_time,
+                'subject': subject_name,
+                'room': item.room or 'Okänt rum',
+                'weekday': item.weekday
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'schedule': schedule_items,
+            'date': date,
+            'weekday': weekday_swe,
+            'class_name': current_user.get_class_name() if hasattr(current_user, 'get_class_name') else 'Okänd klass'
+        })
+        
+    except ValueError:
+        return jsonify({
+            'status': 'error',
+            'message': 'Ogiltigt datumformat. Använd YYYY-MM-DD'
+        }), 400
+    except Exception as e:
+        print(f"Error fetching schedule: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Kunde inte hämta schema'
+        }), 500
+
+@app.route('/api/schedule/current')
+@login_required 
+def get_current_schedule():
+    """Hämta schema för dagens datum"""
+    today = datetime.now().strftime('%Y-%m-%d')
+    return get_schedule_for_date(today)
 
 @app.route('/upload_krav_pdf', methods=['POST'])
 @login_required
