@@ -100,6 +100,7 @@
                 <button class="tab-button" onclick="showTab('join')">Anslut till Ämne</button>
               </div>
     
+              <!-- Create Subject Tab -->
               <div id="create-tab" class="tab-content active">
                 <form id="create-subject-form">
                   <div class="form-group">
@@ -116,6 +117,7 @@
                 </form>
               </div>
     
+              <!-- Join Subject Tab -->
               <div id="join-tab" class="tab-content">
                 <form id="join-subject-form">
                   <div class="form-group">
@@ -132,9 +134,12 @@
 
       <p id="subject-header">Ämnen:</p>
 
+      <!-- Ersätt den befintliga subject list-sektionen (runt rad 120-180) med denna kod -->
       <div class="subject-list">
+        <!-- Owned subjects -->
         {% for subject in owned_subjects %}
           <div class="subject owned-subject">
+            <!-- Subject link with proper event handling -->
             <a href="{{ url_for('subject', subject_name=subject.name) }}" class="subject-link">
               <div class="subject-button owned">
                 <span class="subject-title">{{ subject.name }}</span>
@@ -147,6 +152,7 @@
               </div>
             </a>
             
+            <!-- Delete button with proper event handling -->
             <form method="POST" action="{{ url_for('delete_subject') }}" class="delete-form" onsubmit="return false;">
               <input type="hidden" name="subject" value="{{ subject.name }}" />
               <button type="button" class="delete-subject-btn" title="Remove subject" onclick="event.stopPropagation(); confirmDelete('{{ subject.name }}', this.closest('form'));">×</button>
@@ -154,8 +160,10 @@
           </div>
         {% endfor %}
 
+        <!-- Shared subjects -->
         {% for subject in shared_subjects %}
           <div class="subject shared-subject">
+            <!-- Subject link with proper event handling -->
             <a href="{{ url_for('subject', subject_name=subject.name) }}" class="subject-link">
               <div class="subject-button shared">
                 <span class="subject-title">{{ subject.name }}</span>
@@ -171,12 +179,14 @@
               </div>
             </a>
             
+            <!-- Leave button with proper event handling -->
             <form method="POST" action="{{ url_for('leave_subject', subject_id=subject.id) }}" class="delete-form" onsubmit="return false;">
               <button type="button" class="leave-subject-btn" title="Leave subject" onclick="event.stopPropagation(); confirmLeave('{{ subject.name }}', this.closest('form'));">⤷</button>
             </form>
           </div>
         {% endfor %}
 
+        <!-- Show message if no subjects -->
         {% if not owned_subjects and not shared_subjects %}
           <div class="no-subjects-message">
             <p>Inga ämnen här. Skapa ditt första ämne eller anslut till ett!</p>
@@ -197,19 +207,25 @@
         <button id="next-day-btn" aria-label="Next day">&gt;</button>
       </div>
       
+      <!-- Right content wrapper för desktop layout -->
       <div class="right-content-wrapper">
+        <!-- Schema sektion -->
         <div class="schedule-container" id="schedule-container">
           <h3 class="schedule-header">Schema</h3>
           <div class="schedule-content">
+            <!-- Schema innehåll kommer här -->
             <p class="no-schedule">Inget schema för idag</p>
           </div>
         </div>
         
+        <!-- Quiz sektion -->
         <div class="products-container" id="quizzes-container">
           <!-- Quizzes will be loaded here via JavaScript -->
         </div>
       </div>
     </div>
+
+    
   </div>
 
   <!-- Lunch Menu Modal -->
@@ -230,12 +246,13 @@
     </div>
   </div>
 
-  <!-- Rest of modals -->
+  <!-- Rest of your modals remain the same -->
   <div id="subjects-detail-modal" class="modal">
     <div class="modal-content">
       <span class="close">&times;</span>
       <h2>Ämnes Management</h2>
       
+      <!-- Owned Subjects -->
       {% if owned_subjects %}
       <div class="subjects-section">
         <h3>Mina Ämnen</h3>
@@ -268,6 +285,7 @@
       </div>
       {% endif %}
 
+      <!-- Shared Subjects -->
       {% if shared_subjects %}
       <div class="subjects-section">
         <h3>Delad Ämnen</h3>
@@ -303,6 +321,7 @@
     </div>
   </div>
 
+  <!-- Share Code Modal -->
   <div id="share-code-modal" class="modal">
     <div class="modal-content">
       <span class="close">&times;</span>
@@ -315,6 +334,7 @@
     </div>
   </div>
 
+  <!-- Rest of your modals and JavaScript remain the same -->
   <div id="new-data-modal" class="modal">
     <div class="modal-content">
       <button id="close-new-data" class="close">&times;</button>
@@ -398,403 +418,63 @@
   </div>
 
   <div id="add-event-modal" class="modal-a">
-    <button id="add-event-modal-close">&times;</button>
-    <h2 id="add-event-title">Lägg till händelse</h2>
+  <button id="add-event-modal-close">&times;</button>
+  <h2 id="add-event-title">Lägg till händelse</h2>
 
-    <div class="form-group">
-      <label for="subject-select">Välj ett Ämne:</label>
-      <select id="subject-select" required class="subject-select">
-        <option value="" disabled selected hidden>Välj ett Ämne</option>
-        {% for subject in owned_subjects %}
-          <option value="{{ subject.name }}" data-user-role="owner">{{ subject.name }}</option>
-        {% endfor %}
-        {% for subject in shared_subjects %}
-          <option value="{{ subject.name }}" data-user-role="member">{{ subject.name }} (Member)</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="test-type-select">Välj typ av test</label>
-      <select id="test-type-select" required class="test-type-select">
-        <option value="" disabled selected hidden>Välj typ av test</option>
-        <option value="assessment">Inlämning</option>
-        <option value="exam">Prov</option>
-      </select>
-    </div>
-    
-    <div class="form-group">
-      <label for="event-title">Titel</label>
-      <input type="text" id="event-title" required>
-    </div>
-    
-    <div class="form-group">
-      <label for="event-description">Beskrivning:</label>
-      <textarea id="event-description" rows="3"></textarea>
-    </div>
-
-    <div class="form-group" id="share-option-group" style="display: none;">
-      <label class="checkbox-label">
-        <input type="checkbox" id="share-with-members">
-        Dela denna händelse med alla medlemmar av ämnet
-        <span class="checkbox-info">Medlemmar kommer se händelsen i sina kalendrar</span>
-      </label>
-    </div>
-    
-    <div class="form-actions">
-      <button type="button" id="save-event-btn" class="save-btn">Spara Händelse</button>
-      <button type="button" id="cancel-event-btn" class="cancel-btn">Avbryt</button>
-    </div>
+  <!-- Subject Dropdown -->
+  <div class="form-group">
+    <label for="subject-select">Välj ett Ämne:</label>
+    <select id="subject-select" required class="subject-select">
+      <option value="" disabled selected hidden>Välj ett Ämne</option>
+      {% for subject in owned_subjects %}
+        <option value="{{ subject.name }}" data-user-role="owner">{{ subject.name }}</option>
+      {% endfor %}
+      {% for subject in shared_subjects %}
+        <option value="{{ subject.name }}" data-user-role="member">{{ subject.name }} (Member)</option>
+      {% endfor %}
+    </select>
   </div>
+
+  <!-- Test Type Dropdown -->
+  <div class="form-group">
+    <label for="test-type-select">Välj typ av test</label>
+    <select id="test-type-select" required class="test-type-select">
+      <option value="" disabled selected hidden>Välj typ av test</option>
+      <option value="assessment">Inlämning</option>
+      <option value="exam">Prov</option>
+    </select>
+  </div>
+  
+  <!-- Event Title Input -->
+  <div class="form-group">
+    <label for="event-title">Titel</label>
+    <input type="text" id="event-title" required>
+  </div>
+  
+  <!-- Event Description Textarea -->
+  <div class="form-group">
+    <label for="event-description">Beskrivning:</label>
+    <textarea id="event-description" rows="3"></textarea>
+  </div>
+
+  <!-- Share with Members Checkbox (endast för ägare) -->
+  <div class="form-group" id="share-option-group" style="display: none;">
+    <label class="checkbox-label">
+      <input type="checkbox" id="share-with-members">
+      Dela denna händelse med alla medlemmar av ämnet
+      <span class="checkbox-info">Medlemmar kommer se händelsen i sina kalendrar</span>
+    </label>
+  </div>
+  
+  <!-- Action Buttons -->
+  <div class="form-actions">
+    <button type="button" id="save-event-btn" class="save-btn">Spara Händelse</button>
+    <button type="button" id="cancel-event-btn" class="cancel-btn">Avbryt</button>
+  </div>
+</div>
 
 <script>
 // ----------- Combined JavaScript from index_script.js and index.html -----------
-
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('🍽️ Matsedel JavaScript laddad');
-  
-  let currentMenuWeek = new Date();
-
-  // Hitta element
-  const lunchMenuBtn = document.getElementById('lunch-menu-btn');
-  const lunchMenuModal = document.getElementById('lunch-menu-modal');
-  const lunchMenuClose = document.querySelector('.lunch-menu-close');
-  const prevWeekBtn = document.getElementById('prev-week-btn');
-  const nextWeekBtn = document.getElementById('next-week-btn');
-
-  // VIKTIG FIX: Event listener för matsedelsknappen
-  if (lunchMenuBtn) {
-    lunchMenuBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🍽️ Matsedelsknapp klickad');
-      
-      if (lunchMenuModal) {
-        // TVINGA modalen att visas
-        lunchMenuModal.style.display = 'block';
-        lunchMenuModal.style.visibility = 'visible';
-        lunchMenuModal.style.opacity = '1';
-        lunchMenuModal.style.zIndex = '10000';
-        lunchMenuModal.classList.add('show');
-        
-        // Rendera matsedel
-        setTimeout(() => {
-          renderMatsedel();
-        }, 100);
-        
-        console.log('✅ Modal öppnad');
-      }
-    });
-  }
-
-  // Stäng modal
-  if (lunchMenuClose) {
-    lunchMenuClose.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('❌ Stänger matsedelsmodal');
-      closeLunchModal();
-    });
-  }
-
-  // Stäng modal när man klickar utanför innehållet
-  if (lunchMenuModal) {
-    lunchMenuModal.addEventListener('click', function(e) {
-      if (e.target === lunchMenuModal) {
-        closeLunchModal();
-      }
-    });
-  }
-
-  // Funktion för att stänga modal
-  function closeLunchModal() {
-    if (lunchMenuModal) {
-      lunchMenuModal.style.display = 'none';
-      lunchMenuModal.classList.remove('show');
-    }
-  }
-
-  // Veckonavigering
-  if (prevWeekBtn) {
-    prevWeekBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      console.log('⬅️ Föregående vecka');
-      currentMenuWeek.setDate(currentMenuWeek.getDate() - 7);
-      renderMatsedel();
-    });
-  }
-
-  if (nextWeekBtn) {
-    nextWeekBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      console.log('➡️ Nästa vecka');
-      currentMenuWeek.setDate(currentMenuWeek.getDate() + 7);
-      renderMatsedel();
-    });
-  }
-
-  // RENDER MATSEDEL FUNCTION
-  async function renderMatsedel() {
-    console.log('🔄 Renderar matsedel...');
-    
-    let contentEl = document.getElementById('lunch-menu-content');
-    const modalContent = document.querySelector('#lunch-menu-modal .modal-content') || 
-                        document.querySelector('#lunch-menu-modal .lunch-menu-content') ||
-                        document.querySelector('#lunch-menu-modal');
-    
-    if (!contentEl && modalContent) {
-      console.log('⚠️ Skapar nytt lunch-menu-content element');
-      
-      const headerHTML = `
-        <div class="lunch-menu-header">
-          <button id="prev-week-btn" type="button">⬅ Föregående vecka</button>
-          <span id="menu-week-display">Denna vecka</span>
-          <button id="next-week-btn" type="button">Nästa vecka ➡</button>
-        </div>
-      `;
-      
-      modalContent.innerHTML = `
-        <span class="lunch-menu-close">&times;</span>
-        <h2 style="text-align: center; margin-bottom: 0;">🍽️ Matsedel</h2>
-        ${headerHTML}
-        <div id="lunch-menu-content" class="lunch-menu-grid"></div>
-      `;
-      
-      contentEl = document.getElementById('lunch-menu-content');
-      
-      // Återanslut event listeners för navigation
-      const newPrevBtn = document.getElementById('prev-week-btn');
-      const newNextBtn = document.getElementById('next-week-btn');
-      const newCloseBtn = document.querySelector('.lunch-menu-close');
-      
-      if (newPrevBtn) {
-        newPrevBtn.addEventListener('click', function(e) {
-          e.preventDefault();
-          currentMenuWeek.setDate(currentMenuWeek.getDate() - 7);
-          renderMatsedel();
-        });
-      }
-      
-      if (newNextBtn) {
-        newNextBtn.addEventListener('click', function(e) {
-          e.preventDefault();
-          currentMenuWeek.setDate(currentMenuWeek.getDate() + 7);
-          renderMatsedel();
-        });
-      }
-      
-      if (newCloseBtn) {
-        newCloseBtn.addEventListener('click', function(e) {
-          e.preventDefault();
-          closeLunchModal();
-        });
-      }
-    }
-
-    if (!contentEl) {
-      console.error('❌ Kunde inte hitta eller skapa lunch-menu-content');
-      return;
-    }
-
-    // Visa loading meddelande
-    contentEl.innerHTML = '<div class="loading">Laddar matsedel...</div>';
-
-    try {
-      // Hämta riktig matsedelsdata från server
-      const monday = getMonday(currentMenuWeek);
-      const dateString = monday.toISOString().split('T')[0];
-      
-      const response = await fetch(`/api/lunch_menu?date=${dateString}`);
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        displayMatsedel(contentEl, data);
-        updateWeekDisplay(data.week_start, data.week_end);
-      } else {
-        contentEl.innerHTML = `<div class="error">Fel vid hämtning av matsedel: ${data.message}</div>`;
-      }
-      
-    } catch (error) {
-      console.error('❌ Fel vid hämtning av matsedel:', error);
-      contentEl.innerHTML = '<div class="error">Kunde inte ladda matsedel. Försök igen senare.</div>';
-    }
-    
-    console.log('✅ Matsedel renderad');
-  }
-
-  // SKAPA MATSEDELSDATA
-  function createMatsedelData() {
-    const monday = getMonday(currentMenuWeek);
-    const friday = new Date(monday.getTime() + (4 * 24 * 60 * 60 * 1000));
-    
-    return {
-      week_start: monday.toISOString().split('T')[0],
-      week_end: friday.toISOString().split('T')[0],
-      menu_data: [
-        {
-          date: getDateString(monday, 0),
-          day_name_sv: 'Måndag',
-          has_menu: true,
-          main_dish: 'Köttbullar med gräddsås och potatismos',
-          vegetarian_dish: 'Vegetariska köttbullar med gräddsås',
-          side_dishes: 'Potatis, lingonsylt, gurka',
-          dessert: 'Vaniljglass',
-          allergens: 'Gluten, mjölk, ägg'
-        },
-        {
-          date: getDateString(monday, 1),
-          day_name_sv: 'Tisdag',
-          has_menu: true,
-          main_dish: 'Stekt fisk med citronsås',
-          vegetarian_dish: 'Vegetarisk lasagne',
-          side_dishes: 'Kokt ris, ärtor och morötter',
-          dessert: 'Frukt och bär',
-          allergens: 'Fisk, gluten, mjölk'
-        },
-        {
-          date: getDateString(monday, 2),
-          day_name_sv: 'Onsdag',
-          has_menu: true,
-          main_dish: 'Kycklinggryta med curry',
-          vegetarian_dish: 'Kikärts- och grönsakscurry',
-          side_dishes: 'Jasminris, naanbröd, mango chutney',
-          dessert: 'Yoghurt med honung',
-          allergens: 'Gluten, mjölk'
-        },
-        {
-          date: getDateString(monday, 3),
-          day_name_sv: 'Torsdag',
-          has_menu: true,
-          main_dish: 'Korv stroganoff',
-          vegetarian_dish: 'Vegetarisk korv stroganoff',
-          side_dishes: 'Pasta, inlagd gurka, sallad',
-          dessert: 'Chokladkaka',
-          allergens: 'Gluten, mjölk, ägg'
-        },
-        {
-          date: getDateString(monday, 4),
-          day_name_sv: 'Fredag',
-          has_menu: true,
-          main_dish: 'Pizza Margherita',
-          vegetarian_dish: 'Vegansk pizza med grönsaker',
-          side_dishes: 'Blandsallad med vinägrett',
-          dessert: 'Fruktsallad',
-          allergens: 'Gluten, mjölk'
-        }
-      ]
-    };
-  }
-
-  // Uppdatera displayMatsedel för att hantera riktig data
-  function displayMatsedel(contentEl, data) {
-    const today = new Date().toISOString().split('T')[0];
-    
-    let html = '<div class="matsedel-container">';
-    
-    if (!data.menu_data || data.menu_data.length === 0) {
-      html += '<div class="no-menu">Ingen matsedel tillgänglig för denna vecka</div>';
-    } else {
-      data.menu_data.forEach(day => {
-        const isToday = day.date === today;
-        const dayDate = new Date(day.date);
-        const formattedDate = dayDate.toLocaleDateString('sv-SE', { 
-          month: 'short', 
-          day: 'numeric' 
-        });
-
-        html += `
-          <div class="lunch-day-card ${isToday ? 'today' : ''}">
-            <div class="lunch-day-header">
-              <div class="lunch-day-name">${day.day_name_sv}</div>
-              <div class="lunch-day-date">${formattedDate}</div>
-            </div>
-            
-            ${day.has_menu ? `
-              <div class="lunch-dishes">
-                <div class="lunch-dish">
-                  <div class="lunch-dish-label">🥩 HUVUDRÄTT</div>
-                  <div class="lunch-dish-content">${day.main_dish}</div>
-                </div>
-                
-                ${day.vegetarian_dish ? `
-                  <div class="lunch-dish">
-                    <div class="lunch-dish-label">🥗 VEGETARISKT</div>
-                    <div class="lunch-dish-content">${day.vegetarian_dish}</div>
-                  </div>
-                ` : ''}
-                
-                ${day.side_dishes ? `
-                  <div class="lunch-dish">
-                    <div class="lunch-dish-label">🍚 TILLBEHÖR</div>
-                    <div class="lunch-dish-content">${day.side_dishes}</div>
-                  </div>
-                ` : ''}
-                
-                ${day.dessert ? `
-                  <div class="lunch-dish">
-                    <div class="lunch-dish-label">🍰 EFTERRÄTT</div>
-                    <div class="lunch-dish-content">${day.dessert}</div>
-                  </div>
-                ` : ''}
-                
-                ${day.allergens ? `
-                  <div class="allergens-info">
-                    <strong>⚠️ Allergener:</strong> ${day.allergens}
-                  </div>
-                ` : ''}
-              </div>
-            ` : `
-              <div class="no-menu">
-                Ingen matsedel tillgänglig för ${day.day_name_sv}
-              </div>
-            `}
-          </div>
-        `;
-      });
-    }
-
-    html += '</div>';
-    contentEl.innerHTML = html;
-    
-    contentEl.style.display = 'block';
-    contentEl.style.visibility = 'visible';
-    contentEl.style.opacity = '1';
-  }
-
-  // HJÄLPFUNKTIONER
-  function getMonday(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
-  }
-
-  function getDateString(monday, daysFromMonday) {
-    const targetDate = new Date(monday.getTime() + (daysFromMonday * 24 * 60 * 60 * 1000));
-    return targetDate.toISOString().split('T')[0];
-  }
-
-  function updateWeekDisplay(weekStart, weekEnd) {
-    const weekDisplayEl = document.getElementById('menu-week-display');
-    if (weekDisplayEl) {
-      const startDate = new Date(weekStart);
-      const endDate = new Date(weekEnd);
-      
-      const startFormatted = startDate.toLocaleDateString('sv-SE', { 
-        day: 'numeric', 
-        month: 'short' 
-      });
-      const endFormatted = endDate.toLocaleDateString('sv-SE', { 
-        day: 'numeric', 
-        month: 'short' 
-      });
-
-      weekDisplayEl.textContent = `${startFormatted} - ${endFormatted}`;
-    }
-  }
-
-  console.log('✅ Matsedel setup komplett');
-});
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1134,6 +814,1412 @@ document.addEventListener('DOMContentLoaded', () => {
 
   console.log('✅ Matsedel setup komplett');
 });
+
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  // ----------- Part 0: Fetch the entire repetition schedule -----------
+  let schedule = {};
+  let userSubjects = {};
+
+  async function fetchSchedule() {
+    try {
+      const res = await fetch('/flashcards_by_date');
+      if (!res.ok) throw new Error(res.statusText);
+      schedule = await res.json();
+      console.log('[DEBUG] Fetched schedule:', schedule);
+    } catch (e) {
+      console.error('Could not load repetition schedule:', e);
+    }
+  }
+
+  async function loadUserSubjects() {
+    try {
+      const response = await fetch('/api/user_subjects');
+      if (response.ok) {
+        const data = await response.json();
+        userSubjects = data.reduce((acc, subject) => {
+          acc[subject.id] = subject.user_role; // 'owner' eller 'member'
+          return acc;
+        }, {});
+        console.log('[DEBUG] User subjects loaded:', userSubjects);
+      }
+    } catch (error) {
+      console.error('Error loading user subjects:', error);
+    }
+  }
+
+  // ----------- Part 1: Date selector + quiz loading per date -----------
+  let currentDate = new Date();
+
+  function formatKey(d) {
+    return d.toISOString().split('T')[0];
+  }
+
+  function updateDateHeader() {
+    const opts = { year: 'numeric', month: 'long', day: 'numeric' };
+    document.getElementById('current-date').textContent =
+      currentDate.toLocaleDateString(undefined, opts);
+  }
+
+  function markCurrentLesson() {
+      const now = new Date();
+      const currentTime = now.toTimeString().slice(0, 5); // Format: HH:MM
+      
+      document.querySelectorAll('.schedule-item').forEach(item => {
+          const startTime = item.querySelector('.time-start')?.textContent;
+          const endTime = item.querySelector('.time-end')?.textContent;
+          
+          if (startTime && endTime && currentTime >= startTime && currentTime <= endTime) {
+              item.classList.add('current-lesson');
+          } else {
+              item.classList.remove('current-lesson');
+          }
+      });
+  }
+
+  
+  async function loadQuizzesForDate() {
+      // Hämta alltid senaste schemat
+      await fetchSchedule();
+
+      const key = formatKey(currentDate);
+      const entries = schedule[key] || [];
+      const container = document.getElementById('quizzes-container');
+      container.innerHTML = ''; 
+
+      console.log(`[DEBUG] Loading quizzes for date: ${key}, found ${entries.length} entries`);
+
+      // Din befintliga quiz-loading logik här...
+      if (entries.length === 0) {
+          container.innerHTML = '<p>No repetitions scheduled for this date.</p>';
+      } else {
+          // Förbättrad grupp-logik som räknar faktiska frågor
+          const grouped = {};
+          entries.forEach(e => {
+              const id = `${e.subject}|||${e.topic}`;
+              if (!grouped[id]) {
+                  grouped[id] = { 
+                      subject: e.subject, 
+                      topic: e.topic, 
+                      count: 0,
+                      questions: [],
+                      user_role: e.user_role || 'unknown',
+                      is_shared_subject: e.is_shared_subject || false,
+                      quiz_id: e.quiz_id || null,
+                      is_personal_quiz: e.is_personal_quiz || false
+                  };
+              }
+              
+              if (e.questions && Array.isArray(e.questions)) {
+                  grouped[id].count += e.questions.length;
+                  grouped[id].questions.push(...e.questions);
+              } else {
+                  grouped[id].count++;
+              }
+          });
+
+          console.log('[DEBUG] Grouped quizzes:', grouped);
+
+          Object.values(grouped).forEach(qz => {
+              const link = `/daily_quiz/${key}/` +
+                          encodeURIComponent(qz.subject) + '/' +
+                          encodeURIComponent(qz.topic);
+              const card = document.createElement('div');
+              card.className = 'quiz-card';
+              
+              const canLeave = qz.user_role === 'member' && 
+                              qz.is_shared_subject && 
+                              !qz.is_personal_quiz && 
+                              qz.quiz_id;
+              
+              console.log(`[DEBUG] Quiz: ${qz.topic}, canLeave: ${canLeave}`);
+              
+              card.innerHTML = `
+                  <h3>${qz.subject} – ${qz.topic}</h3>
+                  <p>${qz.count} question${qz.count > 1 ? 's' : ''}</p>
+                  <div class="quiz-actions">
+                      <a href="${link}"><button class="start-quiz-btn">Start Quiz</button></a>
+                      ${canLeave ? `<button class="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this shared quiz">✖</button>` : ''}
+                  </div>
+              `;
+              container.appendChild(card);
+          });
+      }
+
+      // LÄGG TILL: Ladda schema för samma datum
+      await loadScheduleForDate(currentDate);
+  }
+
+  // Datum‐knapparna
+  document.getElementById('prev-day-btn').addEventListener('click', async () => {
+      currentDate.setDate(currentDate.getDate() - 1);
+      updateDateHeader();
+      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
+  });
+
+  document.getElementById('next-day-btn').addEventListener('click', async () => {
+      currentDate.setDate(currentDate.getDate() + 1);
+      updateDateHeader();
+      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
+  });
+
+  // ----------- Part 2: Calendar modal and event handling -----------
+
+  let calendarCurrentDate = new Date(); // Add this variable to track calendar's current month/year
+
+  const calendarBtn = document.getElementById('btn-2');
+  const calendarModal = document.getElementById('calendar-modal');
+  const calendarCloseBtn = calendarModal?.querySelector('.calendar-close');
+  const monthYearSpan = document.getElementById('month-year');
+  const prevMonthBtn = document.getElementById('prev-month-btn');
+  const nextMonthBtn = document.getElementById('next-month-btn');
+  const calendarBody = document.getElementById('calendar-body');
+
+  const addEventModal = document.getElementById('add-event-modal');
+  const addEventModalClose = document.getElementById('add-event-modal-close');
+  const saveEventBtn = document.getElementById('save-event-btn');
+  const cancelEventBtn = document.getElementById('cancel-event-btn');
+
+  const eventsDisplay = document.getElementById('events-display');
+  const selectedDateTitle = document.getElementById('selected-date-title');
+  const eventsList = document.getElementById('events-list');
+  const closeEventsDisplay = document.getElementById('close-events-display');
+
+  let selectedDate = null;
+  let calendarEvents = [];
+
+  async function loadEvents() {
+    try {
+      const resp = await fetch('/api/events');
+      if (resp.ok) {
+        calendarEvents = await resp.json();
+        if (calendarModal.style.display === 'block') {
+          renderCalendar(currentDate);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading events:', err);
+    }
+  }
+
+  async function loadScheduleForDate(date) {
+      try {
+          const dateString = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+          const response = await fetch(`/api/schedule/${dateString}`);
+          
+          if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          console.log('[DEBUG] Schedule data received:', data);
+          
+          displaySchedule(data);
+          
+      } catch (error) {
+          console.error('Error loading schedule:', error);
+          displayScheduleError('Kunde inte ladda schema');
+      }
+  }
+
+
+  function displaySchedule(scheduleData) {
+      const scheduleContainer = document.querySelector('.schedule-content');
+      
+      if (!scheduleContainer) {
+          console.error('Schedule container not found');
+          return;
+      }
+      
+      if (scheduleData.status === 'success' && scheduleData.schedule.length > 0) {
+          const today = new Date();
+          const isToday = currentDate.toDateString() === today.toDateString();
+          
+          let scheduleHTML = `
+              
+          `;
+          
+          scheduleData.schedule.forEach(lesson => {
+              scheduleHTML += `
+                  <div class="schedule-item">
+                      <div class="schedule-time">
+                          <span class="time-start">${lesson.start_time}</span>
+                          <span class="time-separator">-</span>
+                          <span class="time-end">${lesson.end_time}</span>
+                      </div>
+                      <div class="schedule-details">
+                          <div class="schedule-subject">${lesson.subject}</div>
+                          <div class="schedule-room">${lesson.room}</div>
+                      </div>
+                  </div>
+              `;
+          });
+          
+          scheduleHTML += '</div>';
+          scheduleContainer.innerHTML = scheduleHTML;
+          
+          // Markera aktuell lektion om det är idag
+          if (isToday) {
+              setTimeout(markCurrentLesson, 100);
+          }
+          
+      } else {
+          const message = scheduleData.message || 'Inget schema för idag';
+          scheduleContainer.innerHTML = `
+              <div class="no-schedule">
+                  <p>${message}</p>
+              </div>
+          `;
+      }
+  }
+
+
+  function displayScheduleError(errorMessage) {
+      const scheduleContainer = document.querySelector('.schedule-content');
+      
+      if (scheduleContainer) {
+          scheduleContainer.innerHTML = `
+              <div class="schedule-error">
+                  <p>${errorMessage}</p>
+              </div>
+          `;
+      }
+  }
+  
+
+
+
+
+
+  // Calendar modal close button
+  calendarCloseBtn?.addEventListener('click', () => {
+    calendarModal.style.display = 'none';
+    // Also hide events display when closing calendar
+    eventsDisplay.style.display = 'none';
+  });
+
+  // Add event modal close button  
+  addEventModalClose?.addEventListener('click', () => {
+    addEventModal.style.display = 'none';
+    clearEventForm();
+  });
+  // Events display close button
+  closeEventsDisplay?.addEventListener('click', () => {
+    eventsDisplay.style.display = 'none';
+  });
+
+
+
+  // Update the window click handler to properly handle modal closing
+  window.addEventListener('click', e => {
+    // Calendar modal
+    if (e.target === calendarModal) {
+      calendarModal.style.display = 'none';
+      eventsDisplay.style.display = 'none';
+    }
+    
+    // Add event modal
+    if (e.target === addEventModal) {
+      addEventModal.style.display = 'none';
+      clearEventForm();
+    }
+    
+    // Subject modal
+    if (e.target === subjectModal) {
+      subjectModal.style.display = 'none';
+    }
+  });
+
+
+  async function saveEvent(eventData) {
+    try {
+      const resp = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(eventData)
+      });
+      if (!resp.ok) throw new Error('Failed to save event');
+      calendarEvents.push(eventData);
+      renderCalendar(currentDate);
+    } catch (error) {
+      console.error('Error saving event:', error);
+      alert('Error saving event.');
+    }
+  }
+
+  // Update the calendar button click handler:
+  calendarBtn?.addEventListener('click', () => {
+    calendarModal.style.display = 'block';
+    calendarCurrentDate = new Date(); // Reset to current month when opening
+    renderCalendar(calendarCurrentDate);
+  });
+
+  // Update the month navigation buttons:
+  prevMonthBtn?.addEventListener('click', () => {
+    calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() - 1);
+    renderCalendar(calendarCurrentDate);
+  });
+
+  nextMonthBtn?.addEventListener('click', () => {
+    calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + 1);
+    renderCalendar(calendarCurrentDate);
+  });
+
+  saveEventBtn?.addEventListener('click', async () => {
+    const subject = document.getElementById('subject-select').value;
+    const testType = document.getElementById('test-type-select').value;
+    const title = document.getElementById('event-title').value;
+    const desc = document.getElementById('event-description').value;
+    const shareWithMembers = document.getElementById('share-with-members')?.checked || false;
+
+    if (subject && testType && title && selectedDate) {
+      const eventData = {
+        date: formatKey(selectedDate),
+        subject: subject,
+        testType: testType,
+        title: title,
+        description: desc,
+        share_with_members: shareWithMembers
+      };
+      try {
+        const response = await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData)
+        });
+        const data = await response.json();
+        if (response.ok && data.status === 'success') {
+          alert(data.message);
+          await loadEvents();
+          renderCalendar(currentDate);
+          addEventModal.style.display = 'none';
+          clearEventForm();
+        } else {
+          alert(data.error || 'Failed to create event');
+        }
+      } catch (error) {
+        console.error('Error creating event:', error);
+        alert('Network error occurred while creating event');
+      }
+    } else {
+      alert('Please fill all required fields');
+    }
+  });
+
+  cancelEventBtn?.addEventListener('click', () => { 
+    addEventModal.style.display = 'none'; 
+    clearEventForm(); 
+  });
+
+  function clearEventForm() {
+    ['subject-select','test-type-select','event-title','event-description'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const shareCheckbox = document.getElementById('share-with-members');
+    if (shareCheckbox) shareCheckbox.checked = false;
+    selectedDate = null;
+  }
+
+  function getEventsForDate(d) {
+    const ds = formatKey(d);
+    return calendarEvents.filter(e => e.date === ds);
+  }
+
+  function displayEventsForDate(d) {
+    const evs = getEventsForDate(d);
+    selectedDateTitle.textContent =
+      `Events for ${d.toLocaleDateString('en-US',{ weekday:'long', year:'numeric', month:'long', day:'numeric'})}`;
+    
+    if (evs.length === 0) {
+      eventsList.innerHTML = '<p class="no-events">No events scheduled for this date.</p>';
+    } else {
+      eventsList.innerHTML = evs.map(e => `
+        <div class="event-item ${e.is_shared ? 'shared-event' : 'private-event'}">
+          <div class="event-header">
+            <h4>${e.title}</h4>
+            <div class="event-badges">
+              <span class="test-type-badge">${e.testType}</span>
+              ${e.is_shared ? '<span class="shared-badge">Shared</span>' : ''}
+            </div>
+          </div>
+          <div class="event-details">
+            <p><strong>Subject:</strong> ${e.subject}</p>
+            ${e.description ? `<p><strong>Description:</strong> ${e.description}</p>` : ''}
+          </div>
+          <div class="event-actions">
+            ${canDeleteEvent(e) ? `<button onclick="deleteEvent(${e.id})" class="delete-btn">Delete</button>` : ''}
+            ${canToggleSharing(e) ? `<button onclick="toggleEventSharing(${e.id}, ${e.is_shared})" class="share-btn">${e.is_shared ? 'Make Private' : 'Share with Members'}</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+    eventsDisplay.style.display = 'block';
+  }
+
+
+
+  // Function to handle leaving a quiz (for members only)
+  window.leaveQuiz = async function(subject, topic, quizId) {
+      const result = await Swal.fire({
+        title: 'Är du säker?',
+        html: `
+          Vill du lämna quizet "<strong>${topic}</strong>" i ämnet "<strong>${subject}</strong>"?<br><br>
+          <ul style="text-align:left">
+            <li>Alla dina flashcards försvinner</li>
+            <li>Det tas bort från din repetitionsplan</li>
+            <li>Åtgärden går inte att ångra</li>
+          </ul>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ja, lämna',
+        cancelButtonText: 'Nej, stanna kvar',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn',
+          cancelButton: 'my-cancel-btn'
+        }
+      });
+
+      if (!result.isConfirmed) return;
+      
+      try {
+          const response = await fetch('/api/leave_quiz', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                  subject: subject,
+                  topic: topic,
+                  quiz_id: quizId
+              })
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok && data.status === 'success') {
+              await Swal.fire({
+                title: 'Klart!',
+                text: data.message,
+                icon: 'success',
+                customClass: {
+                  popup: 'my-swal-popup',
+                  confirmButton: 'my-confirm-btn'
+                }
+              });
+              // Refresh the page to update the quiz list
+              await fetchSchedule();
+              await loadQuizzesForDate();
+          } else {
+              await Swal.fire({
+                title: 'Fel!',
+                text: data.error || 'Failed to leave quiz',
+                icon: 'error',
+                customClass: {
+                  popup: 'my-swal-popup',
+                  confirmButton: 'my-confirm-btn'
+                }
+              });
+          }
+      } catch (error) {
+          console.error('Error leaving quiz:', error);
+          await Swal.fire({
+            title: 'Fel!',
+            text: 'Network error occurred while leaving quiz',
+            icon: 'error',
+            customClass: {
+              popup: 'my-swal-popup',
+              confirmButton: 'my-confirm-btn'
+            }
+          });
+      }
+  };
+
+  window.toggleEventSharing = async function(eventId, isCurrentlyShared) {
+    try {
+      const response = await fetch(`/api/events/${eventId}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        await Swal.fire({
+          title: 'Klart!',
+          text: data.message,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+        await loadEvents();
+        renderCalendar(currentDate);
+        if (eventsDisplay.style.display === 'block' && selectedDate) {
+          displayEventsForDate(selectedDate);
+        }
+      } else {
+        await Swal.fire({
+          title: 'Fel!',
+          text: data.error || 'Failed to update sharing settings',
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling event sharing:', error);
+      await Swal.fire({
+        title: 'Fel!',
+        text: 'Network error occurred while updating sharing settings',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    }
+  };
+
+  function canDeleteEvent(event) {
+    if (!event.subject_id) {
+      return true;
+    }
+    const userRole = userSubjects[event.subject_id];
+    return userRole === 'owner';
+  }
+
+  function canToggleSharing(event) {
+    if (!event.subject_id) {
+      return true;
+    }
+    const userRole = userSubjects[event.subject_id];
+    return userRole === 'owner';
+  }
+
+  window.deleteEvent = async function(id) {
+    const result = await Swal.fire({
+      title: 'Ta bort event?',
+      text: 'Är du säker på att du vill ta bort detta event?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ja, ta bort',
+      cancelButtonText: 'Avbryt',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-delete-btn',
+        cancelButton: 'my-cancel-btn'
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const response = await fetch(`/api/events/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        await Swal.fire({
+          title: 'Borttaget!',
+          text: data.message,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+        await loadEvents();
+        renderCalendar(currentDate);
+        if (eventsDisplay.style.display === 'block' && selectedDate) {
+          displayEventsForDate(selectedDate);
+        }
+      } else {
+        await Swal.fire({
+          title: 'Fel!',
+          text: data.error || 'Failed to delete event',
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      await Swal.fire({
+        title: 'Fel!',
+        text: 'Network error occurred while deleting event',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    }
+  };
+
+  window.addEventListener('click', e => {
+    if (e.target === calendarModal) {
+      calendarModal.style.display = 'none';
+    }
+    if (addEventModal && addEventModal.style.display === 'block' && !e.target.closest('#add-event-modal')) {
+      addEventModal.style.display = 'none';
+      clearEventForm();
+    }
+    if (e.target === subjectModal) {
+      subjectModal.style.display = 'none';
+    }
+  });
+
+  
+
+  window.renderCalendar = date => {
+    calendarCurrentDate = new Date(date);
+    monthYearSpan.textContent = `${date.toLocaleString('default',{month:'long'})} ${date.getFullYear()}`;
+    calendarBody.innerHTML = '';
+
+    let start = new Date(date.getFullYear(), date.getMonth(), 1);
+    start.setDate(start.getDate() - start.getDay());
+
+    const today = new Date(); // Dagens datum
+    today.setHours(0, 0, 0, 0); // Nollställ tid för jämförelse
+
+    for (let r = 0; r < 6; r++) {
+      const tr = document.createElement('tr');
+      for (let c = 0; c < 7; c++) {
+        const td = document.createElement('td');
+        td.className = 'calendar-cell';
+
+        const d = new Date(start);
+        d.setDate(start.getDate() + (r * 7 + c));
+        d.setHours(0, 0, 0, 0); // Nollställ tid för jämförelse
+
+        // Kontrollera om det är dagens datum
+        if (d.getTime() === today.getTime()) {
+          td.classList.add('today');
+        }
+        
+        if (d.getMonth() !== date.getMonth()) {
+          td.classList.add('other-month');
+        }
+
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'day-container';
+
+        const hdr = document.createElement('div');
+        hdr.className = 'day-header';
+        hdr.textContent = d.getDate();
+        hdr.onclick = () => {
+          selectedDate = new Date(d);
+          displayEventsForDate(d);
+        };
+        dayDiv.appendChild(hdr);
+
+        const dayEvents = getEventsForDate(d);
+
+        if (dayEvents.length > 0) {
+          const indicator = document.createElement('div');
+          indicator.className = 'event-indicator';
+
+          const ownEvents = dayEvents.filter(e => !e.is_shared);
+          const sharedEvents = dayEvents.filter(e => e.is_shared);
+
+          if (ownEvents.length > 0) {
+            indicator.classList.add('has-events');
+          }
+          if (sharedEvents.length > 0) {
+            indicator.classList.add('has-shared-events');
+          }
+
+          let tooltipText = '';
+          if (ownEvents.length > 0) {
+            tooltipText += `${ownEvents.length} event(s)`;
+          }
+          if (sharedEvents.length > 0) {
+            tooltipText += (tooltipText ? ', ' : '') + `${sharedEvents.length} shared event(s)`;
+          }
+
+          indicator.title = tooltipText;
+          dayDiv.appendChild(indicator);
+        }
+
+        const addBtn = document.createElement('div');
+        addBtn.className = 'add-event-btn';
+        addBtn.textContent = '+';
+        addBtn.onclick = e => {
+          e.stopPropagation();
+          selectedDate = new Date(d);
+          addEventModal.style.display = 'block';
+        };
+        dayDiv.appendChild(addBtn);
+
+        td.appendChild(dayDiv);
+        tr.appendChild(td);
+      }
+      calendarBody.appendChild(tr);
+    }
+  };
+
+  // ----------- Subject Modal Logic -----------
+  const subjectModal = document.getElementById('subject-modal');
+  const subjectBtn = document.getElementById('left-subject-btn');
+  const subjectClose = subjectModal?.querySelector('.close');
+  const subjectForm = document.getElementById('create-subject-form');
+
+  subjectBtn?.addEventListener('click', () => {
+    subjectModal.style.display = 'block';
+  });
+
+  subjectClose?.addEventListener('click', () => {
+    subjectModal.style.display = 'none';
+  });
+
+  subjectForm?.addEventListener('submit', e => {
+    e.preventDefault();
+    subjectModal.style.display = 'none';
+  });
+
+  // ----------- Quiz Completion Handling -----------
+  window.handleQuizCompletion = function(subject, quizTitle, responses) {
+    console.log('[DEBUG] Quiz completion data received:', { subject, quizTitle, responses });
+
+    const submitData = {
+      subject: subject,
+      quiz_title: quizTitle,
+      responses: responses
+    };
+
+    console.log('[DEBUG] Submitting data:', submitData);
+
+    return fetch('/submit_ratings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(submitData)
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('[DEBUG] Response:', data);
+      if (data.status === 'success') {
+        Swal.fire({
+          title: 'Quiz slutfört!',
+          text: `Uppdaterade ${data.updated_count} frågor.`,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+        if (data.resolved_subject && data.resolved_topic) {
+          console.log(`[DEBUG] Used subject: ${data.resolved_subject}, topic: ${data.resolved_topic}`);
+        }
+        fetchSchedule().then(() => {
+          loadQuizzesForDate();
+        });
+        return data;
+      } else {
+        Swal.fire({
+          title: 'Fel!',
+          text: data.error || 'Unknown error',
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+        throw new Error(data.error || 'Unknown error');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      Swal.fire({
+        title: 'Fel!',
+        text: 'Network error occurred',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+      throw error;
+    });
+  };
+
+  // ----------- Init everything asynchronously -----------
+  (async () => {
+      console.log('[DEBUG] Initializing application...');
+      await fetchSchedule();
+      await loadUserSubjects();
+      updateDateHeader();
+      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
+      await loadEvents();
+      
+      // Uppdatera aktuell lektion varje minut om vi visar dagens schema
+      setInterval(() => {
+          const today = new Date();
+          if (currentDate.toDateString() === today.toDateString()) {
+              markCurrentLesson();
+          }
+      }, 60000); // Uppdatera varje minut
+      
+      console.log('[DEBUG] Application initialized successfully');
+  })();
+
+  // ----------- Subject Form Handlers -----------
+  document.getElementById('create-subject-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = {
+      name: formData.get('subject-name'),
+      is_shared: formData.get('is-shared') === 'on'
+    };
+    
+    fetch('/add_subject', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        Swal.fire({
+          title: 'Klart!',
+          text: data.message,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        }).then(() => {
+          location.reload(); // Reload page to show new subject
+        });
+      } else {
+        Swal.fire({
+          title: 'Fel!',
+          text: data.message,
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      Swal.fire({
+        title: 'Fel!',
+        text: 'An error occurred while creating the subject',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    });
+  });
+
+  document.getElementById('join-subject-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = {
+      share_code: formData.get('share-code')
+    };
+    
+    fetch('/join_subject', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        Swal.fire({
+          title: 'Klart!',
+          text: data.message,
+          icon: 'success',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        }).then(() => {
+          location.reload(); // Reload page to show new subject
+        });
+      } else {
+        Swal.fire({
+          title: 'Fel!',
+          text: data.message,
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      Swal.fire({
+        title: 'Fel!',
+        text: 'An error occurred while joining the subject',
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    });
+  });
+
+  // Prevent event bubbling on delete/leave buttons
+  document.querySelectorAll('.delete-subject-btn, .leave-subject-btn').forEach(button => {
+    button.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    });
+  });
+
+  // Ensure subject links work properly
+  document.querySelectorAll('.subject-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+      // Only prevent default if a delete/leave button was clicked
+      if (e.target.classList.contains('delete-subject-btn') || 
+          e.target.classList.contains('leave-subject-btn')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      // Otherwise, let the link work normally
+    });
+  });
+
+  const subjectSelect = document.getElementById('subject-select');
+  const shareOptionGroup = document.getElementById('share-option-group');
+  const shareCheckbox = document.getElementById('share-with-members');
+
+  // Visa/dölj sharing option baserat på användarens roll
+  subjectSelect?.addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const userRole = selectedOption.getAttribute('data-user-role');
+    
+    if (userRole === 'owner') {
+      shareOptionGroup.style.display = 'block';
+    } else {
+      shareOptionGroup.style.display = 'none';
+      shareCheckbox.checked = false;
+    }
+  });
+
+}); // End of DOMContentLoaded
+
+// ----------- Additional Functions from index.html -----------
+
+// Function to confirm leaving a subject
+async function confirmLeave(subjectName, form) {
+  const result = await Swal.fire({
+    title: 'Lämna ämne?',
+    html: `
+      Är du säker på att du vill lämna ämnet "<strong>${subjectName}</strong>"?<br><br>
+      <ul style="text-align:left">
+        <li>Du kommer inte längre ha tillgång till quiz och flashcards</li>
+        <li>Din progress i detta ämne försvinner</li>
+        <li>Du kan alltid gå med igen om du har koden</li>
+      </ul>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ja, lämna',
+    cancelButtonText: 'Nej, stanna kvar',
+    customClass: {
+      popup: 'my-swal-popup',
+      confirmButton: 'my-confirm-btn',
+      cancelButton: 'my-cancel-btn'
+    }
+  });
+
+  if (!result.isConfirmed) return;
+
+  // For leave buttons, use AJAX instead of form submission
+  const formAction = form.action;
+  
+  try {
+    const response = await fetch(formAction, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      await Swal.fire({
+        title: 'Klart!',
+        text: data.message,
+        icon: 'success',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+      // Reload the page to show updated subject list
+      window.location.reload();
+    } else {
+      await Swal.fire({
+        title: 'Fel!',
+        text: data.message,
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    await Swal.fire({
+      title: 'Fel!',
+      text: 'An error occurred while leaving the subject',
+      icon: 'error',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-confirm-btn'
+      }
+    });
+  }
+}
+
+// Function to confirm deleting a subject
+async function confirmDelete(subjectName, form) {
+  const result = await Swal.fire({
+    title: 'Ta bort ämne?',
+    html: `
+      Är du säker på att du vill ta bort ämnet "<strong>${subjectName}</strong>"?<br><br>
+      <ul style="text-align:left">
+        <li>Alla quiz och flashcards kommer att försvinna</li>
+        <li>Alla medlemmar kommer att förlora tillgång</li>
+        <li>Denna åtgärd kan inte ångras</li>
+      </ul>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ja, ta bort',
+    cancelButtonText: 'Avbryt',
+    customClass: {
+      popup: 'my-swal-popup',
+      confirmButton: 'my-delete-btn',
+      cancelButton: 'my-cancel-btn'
+    }
+  });
+
+  if (result.isConfirmed) {
+    form.submit();
+  }
+}
+
+// Tab functionality for create/join modal
+function showTab(tabName) {
+  // Hide all tabs
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  document.querySelectorAll('.tab-button').forEach(button => {
+    button.classList.remove('active');
+  });
+  
+  // Show selected tab
+  document.getElementById(tabName + '-tab').classList.add('active');
+  event.target.classList.add('active');
+}
+
+// Handle sharing functionality
+async function toggleSharing(subjectId, isCurrentlyShared) {
+  try {
+    const response = await fetch(`/api/subject/${subjectId}/share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      await Swal.fire({
+        title: 'Klart!',
+        text: data.message,
+        icon: 'success',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+      location.reload();
+    } else {
+      await Swal.fire({
+        title: 'Fel!',
+        text: data.message,
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    await Swal.fire({
+      title: 'Fel!',
+      text: 'An error occurred while updating sharing settings',
+      icon: 'error',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-confirm-btn'
+      }
+    });
+  }
+}
+
+// Funktion för att ta bort quiz och uppdatera kalender
+async function deleteQuizAndRefresh(quizId, subjectName) {
+    const result = await Swal.fire({
+      title: 'Ta bort quiz?',
+      html: `
+        Är du säker på att du vill ta bort detta quiz från "<strong>${subjectName}</strong>"?<br><br>
+        <ul style="text-align:left">
+          <li>Alla frågor och svar kommer att försvinna</li>
+          <li>Flashcards för detta quiz tas bort</li>
+          <li>Denna åtgärd kan inte ångras</li>
+        </ul>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Ja, ta bort',
+      cancelButtonText: 'Avbryt',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-delete-btn',
+        cancelButton: 'my-cancel-btn'
+      }
+    });
+
+    if (!result.isConfirmed) return;
+    
+    try {
+        const response = await fetch(`/api/quiz/${quizId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Visa framgång
+            await Swal.fire({
+              title: 'Borttaget!',
+              text: data.message,
+              icon: 'success',
+              customClass: {
+                popup: 'my-swal-popup',
+                confirmButton: 'my-confirm-btn'
+              }
+            });
+            
+            // Uppdatera kalendern
+            refreshCalendarData();
+            
+            // Uppdatera aktuell sida om vi är på subject-sidan
+            if (window.location.pathname.includes('/subject/')) {
+                location.reload();
+            }
+        } else {
+            await Swal.fire({
+              title: 'Fel!',
+              text: 'Fel vid borttagning: ' + data.message,
+              icon: 'error',
+              customClass: {
+                popup: 'my-swal-popup',
+                confirmButton: 'my-confirm-btn'
+              }
+            });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        await Swal.fire({
+          title: 'Fel!',
+          text: 'Ett fel uppstod vid borttagning av quiz',
+          icon: 'error',
+          customClass: {
+            popup: 'my-swal-popup',
+            confirmButton: 'my-confirm-btn'
+          }
+        });
+    }
+}
+
+// Lägg till denna funktion för att uppdatera kalendern
+function refreshCalendarData() {
+    // Hämta aktuellt datum från kalendern
+    const currentDateElement = document.getElementById('current-date');
+    if (!currentDateElement) return;
+    
+    // Uppdatera quiz-data för kalender
+    loadQuizzesForDate(getCurrentSelectedDate());
+}
+
+function updateQuizzesList(quizzes) {
+    const container = document.getElementById('quizzes-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (quizzes.length === 0) {
+        container.innerHTML = '<p class="no-quizzes">Inga quiz för detta datum</p>';
+        return;
+    }
+    
+    quizzes.forEach(quiz => {
+        const quizElement = document.createElement('div');
+        quizElement.className = 'quiz-item';
+        quizElement.innerHTML = `
+            <div class="quiz-header">
+                <h4>${quiz.title}</h4>
+                <span class="quiz-subject">${quiz.subject_name}</span>
+            </div>
+            <div class="quiz-actions">
+                <a href="/quiz/${quiz.id}" class="btn-primary">Ta Quiz</a>
+                ${quiz.can_delete ? `<button onclick="deleteQuizAndRefresh(${quiz.id}, '${quiz.subject_name}')" class="btn-delete">Ta bort</button>` : ''}
+            </div>
+        `;
+        container.appendChild(quizElement);
+    });
+}
+
+function showShareCode(code) {
+  document.getElementById('share-code-text').value = code;
+  document.getElementById('share-code-modal').style.display = 'block';
+}
+
+async function copyShareCode() {
+  const shareCodeText = document.getElementById('share-code-text');
+  shareCodeText.select();
+  try {
+    await navigator.clipboard.writeText(shareCodeText.value);
+    await Swal.fire({
+      title: 'Kopierat!',
+      text: 'Share code copied to clipboard!',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false,
+      customClass: {
+        popup: 'my-swal-popup'
+      }
+    });
+  } catch (err) {
+    // Fallback for older browsers
+    document.execCommand('copy');
+    await Swal.fire({
+      title: 'Kopierat!',
+      text: 'Share code copied to clipboard!',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false,
+      customClass: {
+        popup: 'my-swal-popup'
+      }
+    });
+  }
+}
+
+async function leaveSubject(subjectId) {
+  const result = await Swal.fire({
+    title: 'Lämna ämne?',
+    html: `
+      Är du säker på att du vill lämna detta ämne?<br><br>
+      <ul style="text-align:left">
+        <li>Du kommer inte längre ha tillgång till quiz och flashcards</li>
+        <li>Din progress i detta ämne försvinner</li>
+        <li>Du kan alltid gå med igen om du har koden</li>
+      </ul>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ja, lämna',
+    cancelButtonText: 'Nej, stanna kvar',
+    customClass: {
+      popup: 'my-swal-popup',
+      confirmButton: 'my-confirm-btn',
+      cancelButton: 'my-cancel-btn'
+    }
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    const response = await fetch(`/leave_subject/${subjectId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      await Swal.fire({
+        title: 'Klart!',
+        text: data.message,
+        icon: 'success',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+      // Redirect to index page
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      } else {
+        window.location.href = '/';
+      }
+    } else {
+      await Swal.fire({
+        title: 'Fel!',
+        text: data.message,
+        icon: 'error',
+        customClass: {
+          popup: 'my-swal-popup',
+          confirmButton: 'my-confirm-btn'
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    await Swal.fire({
+      title: 'Fel!',
+      text: 'An error occurred while leaving the subject',
+      icon: 'error',
+      customClass: {
+        popup: 'my-swal-popup',
+        confirmButton: 'my-confirm-btn'
+      }
+    });
+  }
+}
 </script>
 
 
@@ -1317,104 +2403,10 @@ document.addEventListener('DOMContentLoaded', () => {
         transition: opacity 0.2s ease;
       }
 
-      .flash-close:hover {
-        opacity: 1;
-      }
-
-      @keyframes slideIn {
-        from {
-          transform: translateX(100%);
-          opacity: 0;
-        }
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
-
-      /* === MAIN LAYOUT === */
-      .center-container {
-        display: grid;
-        grid-template-columns: 380px 1fr;
-        grid-template-rows: 1fr auto;
-        height: calc(100vh - 140px);
-        gap: 0;
-      }
-
-      /* === LEFT CONTAINER (SUBJECTS) === */
-      .left-container {
-        background-color: var(--bg-white);
-        border-right: 1px solid var(--border-color);
-        display: flex;
-        flex-direction: column;
-      }
-
-      .left-btn-container {
-        height: 70px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-bottom: 1px solid var(--border-color);
-        background-color: var(--bg-gray-50);
-      }
-
-      #left-subject-btn {
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: var(--radius-lg);
-        font-weight: 600;
-        font-size: 0.875rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-transform: uppercase;
-        letter-spacing: 0.025em;
-        box-shadow: var(--shadow-sm);
-      }
-
-      #left-subject-btn:hover {
-        background-color: var(--primary-hover);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-      }
-
-      #subject-header {
-        font-weight: 700;
-        font-size: 1.125rem;
-        color: var(--text-primary);
-        padding: 1.25rem 1.5rem 1rem;
-        background-color: var(--bg-white);
-      }
-
-      .subject-list {
-        flex: 1;
-        padding: 1rem 1.5rem;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        background-color: var(--bg-white);
-      }
-
-      .subject-list::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .subject-list::-webkit-scrollbar-track {
-        background: var(--bg-gray-100);
-        border-radius: var(--radius-sm);
-      }
-
-      .subject-list::-webkit-scrollbar-thumb {
-        background: var(--text-muted);
-        border-radius: var(--radius-sm);
-      }
 
 
-        /* Ersätt matsedels-CSS med denna kod */
 
-        /* Matsedelsikon styling */
+
       .lunch-menu-icon {
         width: 30px;
         height: 30px;
@@ -1720,6 +2712,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
+      @media (max-width: 768px) {
+        .lunch-menu-content {
+          width: 95%;
+          margin: 5% auto;
+        }
+        
+        .lunch-menu-grid {
+          grid-template-columns: 1fr;
+          gap: 15px;
+        }
+        
+        .lunch-menu-header {
+          gap: 15px;
+        }
+        
+        #menu-week-display {
+          font-size: 16px;
+          min-width: 150px;
+        }
+      }
+
       @media (max-width: 480px) {
         .lunch-menu-content {
           width: 98%;
@@ -1732,46 +2745,98 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      
-      .allergens-info {
-        margin-top: 10px;
-        padding: 8px;
-        background: #fff3cd;
-        border-radius: 4px;
-        font-size: 12px;
-        color: #856404;
+      .flash-close:hover {
+        opacity: 1;
       }
 
-      .no-menu {
-        text-align: center;
-        color: #666;
-        font-style: italic;
-        padding: 20px;
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
       }
 
-      .error-display {
-        text-align: center;
-        color: #dc3545;
-        background: #f8d7da;
-        padding: 20px;
-        border-radius: 4px;
-        margin: 20px 0;
+      /* === MAIN LAYOUT === */
+      .center-container {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        grid-template-rows: 1fr auto;
+        height: calc(100vh - 140px);
+        gap: 0;
       }
 
-      #lunch-menu-loading, #lunch-menu-error {
-        text-align: center;
-        padding: 20px;
-        margin: 20px 0;
+      /* === LEFT CONTAINER (SUBJECTS) === */
+      .left-container {
+        background-color: var(--bg-white);
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
       }
 
-      #lunch-menu-loading {
-        color: #666;
+      .left-btn-container {
+        height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 1px solid var(--border-color);
+        background-color: var(--bg-gray-50);
       }
 
-      #lunch-menu-error {
-        color: #dc3545;
-        background: #f8d7da;
-        border-radius: 4px;
+      #left-subject-btn {
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--radius-lg);
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+        box-shadow: var(--shadow-sm);
+      }
+
+      #left-subject-btn:hover {
+        background-color: var(--primary-hover);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+      }
+
+      #subject-header {
+        font-weight: 700;
+        font-size: 1.125rem;
+        color: var(--text-primary);
+        padding: 1.25rem 1.5rem 1rem;
+        background-color: var(--bg-white);
+      }
+
+      .subject-list {
+        flex: 1;
+        padding: 1rem 1.5rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        background-color: var(--bg-white);
+      }
+
+      .subject-list::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .subject-list::-webkit-scrollbar-track {
+        background: var(--bg-gray-100);
+        border-radius: var(--radius-sm);
+      }
+
+      .subject-list::-webkit-scrollbar-thumb {
+        background: var(--text-muted);
+        border-radius: var(--radius-sm);
       }
 
       .subject {
@@ -1931,7 +2996,6 @@ document.addEventListener('DOMContentLoaded', () => {
         border-right: 1px solid var(--border-color);
         display: flex;
         flex-direction: column;
-        overflow-x: hidden;
         
       }
 
@@ -1948,7 +3012,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .schedule-content {
         flex: 1;
         padding: 1.5rem;
-        
+        overflow-y: auto;
         background-color: var(--bg-white);
       }
 
@@ -2922,54 +3986,6 @@ document.addEventListener('DOMContentLoaded', () => {
         border-left: 4px solid var(--primary-color);
       }
 
-
-
-
-
-
-
-
-      /* Lägg till denna CSS i din index_styles.css */
-
-      
-
-      .loading-message,
-      .error-message {
-        text-align: center;
-        padding: 40px;
-        font-size: 16px;
-      }
-
-      .loading-message {
-        color: #6b7280;
-      }
-
-      .error-message {
-        color: #dc2626;
-      }
-
-      /* Responsiv design för matsedel */
-      @media (max-width: 768px) {
-        .lunch-menu-content {
-          width: 95%;
-          margin: 5% auto;
-        }
-        
-        .lunch-menu-grid {
-          grid-template-columns: 1fr;
-          gap: 15px;
-        }
-        
-        .lunch-menu-header {
-          gap: 15px;
-        }
-        
-        #menu-week-display {
-          font-size: 16px;
-          min-width: 150px;
-        }
-      }
-
       .event-header {
         display: flex;
         justify-content: space-between;
@@ -3121,107 +4137,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .form-group {
         margin-bottom: 1.5rem;
       }
-
-      .loading, .error {
-        text-align: center;
-        padding: 20px;
-        color: #666;
-      }
-
-      .error {
-        color: #dc2626;
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
-        border-radius: 8px;
-      }
-
-      .matsedel-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 15px;
-        padding: 10px;
-      }
-
-      .lunch-day-card {
-        background: white;
-        border-radius: 12px;
-        padding: 15px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border: 2px solid transparent;
-        transition: all 0.3s ease;
-      }
-
-      .lunch-day-card.today {
-        border-color: #4f46e5;
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
-      }
-
-      .lunch-day-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid #f3f4f6;
-      }
-
-      .lunch-day-name {
-        font-weight: bold;
-        font-size: 16px;
-        color: #1f2937;
-      }
-
-      .lunch-day-date {
-        font-size: 14px;
-        color: #6b7280;
-      }
-
-      .lunch-dishes {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .lunch-dish {
-        background: #f9fafb;
-        padding: 10px;
-        border-radius: 8px;
-        border-left: 4px solid #e5e7eb;
-      }
-
-      .lunch-dish-label {
-        font-size: 12px;
-        font-weight: bold;
-        color: #374151;
-        margin-bottom: 5px;
-      }
-
-      .lunch-dish-content {
-        font-size: 14px;
-        color: #1f2937;
-        line-height: 1.4;
-      }
-
-      .allergens-info {
-        background: #fef3c7;
-        padding: 8px;
-        border-radius: 6px;
-        font-size: 12px;
-        color: #92400e;
-        border-left: 4px solid #f59e0b;
-      }
-
-      .no-menu {
-        text-align: center;
-        color: #6b7280;
-        font-style: italic;
-        padding: 20px;
-      }
-
-
-
-
-      
 
       .form-group label {
         display: block;
