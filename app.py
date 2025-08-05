@@ -862,6 +862,36 @@ class ClassSchedule(db.Model):
     subject      = db.relationship('Subject')
 
 
+class SchoolNews(db.Model):
+    """Nyheter för skolan"""
+    __tablename__ = 'school_news'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    school_id = db.Column(db.Integer, db.ForeignKey('schools.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationer
+    school = db.relationship('School', backref='news')
+    author = db.relationship('User', backref='authored_news')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'content': self.content,
+            'author_name': self.author.get_full_name() if self.author else 'Okänd',
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def __repr__(self):
+        return f"SchoolNews('{self.title}', school_id={self.school_id})"
+
 class SchoolClass(db.Model):
     """Klass-modell för att hantera klasser inom skolor"""
     __tablename__ = 'school_classes'
@@ -1050,6 +1080,13 @@ class Quiz(db.Model):
     def __repr__(self):
         question_count = self.get_question_count()
         return f"Quiz(id={self.id}, title='{self.title}', questions={question_count}, type='{self.quiz_type}')"
+
+@app.template_filter('nl2br')
+def nl2br_filter(text):
+    if not text:
+        return text
+    from markupsafe import Markup, escape
+    return Markup(escape(text).replace('\n', '<br>\n'))
 
 
 # Hjälpfunktion för att migrera befintliga quizzes
@@ -1583,7 +1620,7 @@ def get_lunch_menu():
             'message': f'Kunde inte hämta matsedel: {str(e)}'
         }), 500
     
-    
+
 @app.route('/api/schedule/current')
 @login_required 
 def get_current_schedule():
@@ -2232,6 +2269,70 @@ def start_transcription_async(lesson_id):
     thread.daemon = True
     thread.start()
     print(f"Started transcription thread for lesson {lesson_id}")
+
+
+
+# Lägg till dessa routes i din Flask-app
+
+@app.route('/school_news')
+@login_required
+def school_news():
+    """Separat sida för alla skolnyheter"""
+    try:
+        # Kontrollera att användaren har en skola
+        if not current_user.school_id or current_user.school_id == 0:
+            flash('Du är inte kopplad till någon skola', 'warning')
+            return redirect(url_for('index'))
+        
+        # Hämta ALLA nyheter för användarens skola (inte bara 5 som på huvudsidan)
+        news = SchoolNews.query.filter_by(
+            school_id=current_user.school_id,
+            is_active=True
+        ).order_by(SchoolNews.created_at.desc()).all()
+        
+        # Hämta skolans namn
+        school = School.query.get(current_user.school_id)
+        school_name = school.name if school else "Din skola"
+        
+        return render_template('school_news.html', 
+                             news=news, 
+                             school_name=school_name)
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to load school news page: {e}")
+        flash(f'Fel vid hämtning av nyheter: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+    
+
+@app.route('/api/school_news')
+@login_required
+def api_school_news():
+    """API endpoint för att hämta skolnyheter"""
+    try:
+        if not current_user.school_id or current_user.school_id == 0:
+            return jsonify({
+                'status': 'error',
+                'message': 'Ingen skola tilldelad'
+            }), 400
+        
+        news = SchoolNews.query.filter_by(
+            school_id=current_user.school_id,
+            is_active=True
+        ).order_by(SchoolNews.created_at.desc()).all()
+        
+        return jsonify({
+            'status': 'success',
+            'news': [news_item.to_dict() for news_item in news]
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
 
 # Lägg till denna route för att manuellt starta transkribering
 @app.route('/api/lesson/<int:lesson_id>/retranscribe', methods=['POST'])
@@ -3263,11 +3364,10 @@ def leave_subject(subject_id):
         return jsonify({'status': 'error', 'message': 'Failed to leave subject'}), 500
 
 
-# Uppdatera din befintliga index route med denna kod
 @app.route('/')
 @login_required
 def index():
-    """Huvudsida som visar alla ämnen användaren har tillgång till"""
+    """Huvudsida som visar alla ämnen användaren har tillgång till och skolnyheter"""
     try:
         # Hämta alla ämnen som användaren har tillgång till (äger eller är medlem i)
         all_subjects = current_user.get_all_subjects()
@@ -3325,15 +3425,44 @@ def index():
             )
         ).count()
         
+        # NYTT: Hämta skolnyheter om användaren har en skola
+        news = []
+        school_name = None
+        if current_user.school_id and current_user.school_id != 0:
+            try:
+                # Hämta nyheter för användarens skola (senaste 5 nyheter)
+                news = SchoolNews.query.filter_by(
+                    school_id=current_user.school_id,
+                    is_active=True
+                ).order_by(SchoolNews.created_at.desc()).limit(5).all()
+                
+                # Hämta skolans namn
+                school = School.query.get(current_user.school_id)
+                school_name = school.name if school else "Din skola"
+                
+            except Exception as e:
+                print(f"[WARNING] Could not load school news: {e}")
+                # Fortsätt ändå utan nyheter
+                news = []
+        
         return render_template('index.html', 
                              owned_subjects=owned_subjects,
                              shared_subjects=shared_subjects,
-                             total_due_flashcards=total_due)
+                             total_due_flashcards=total_due,
+                             news=news,
+                             school_name=school_name)
         
     except Exception as e:
         print(f"[ERROR] Failed to load index: {e}")
-        flash('Error loading subjects', 'error')
-        return render_template('index.html', owned_subjects=[], shared_subjects=[], total_due_flashcards=0)
+        flash('Error loading page data', 'error')
+        return render_template('index.html', 
+                             owned_subjects=[], 
+                             shared_subjects=[], 
+                             total_due_flashcards=0,
+                             news=[],
+                             school_name=None)
+
+
 
 @app.route('/add_subject', methods=['POST'])
 @login_required
