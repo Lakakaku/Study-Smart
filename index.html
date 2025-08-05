@@ -42,6 +42,11 @@
       padding: 10px 20px;
       font-weight: 600;
     }
+
+
+    #sigma {
+      display:none;
+    }
   </style>
 
 </head>
@@ -82,10 +87,10 @@
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-      <div class="flash-messages-container">
+      <div class="flash-messages-container" id="sigma">
         {% for category, message in messages %}
           <div class="flash-message flash-{{ category }}">
-            {{ message }}
+            
             <button class="flash-close" onclick="this.parentElement.remove()">&times;</button>
           </div>
         {% endfor %}
