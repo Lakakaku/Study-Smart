@@ -2478,7 +2478,7 @@ async function leaveSubject(subjectId) {
       .school-news-icon {
         width: 28px;
         height: 28px;
-        color: #4f46e5;
+        color: #374151;
         cursor: pointer;
         transition: color 0.3s, transform 0.2s;
       }
@@ -4550,6 +4550,33 @@ async function leaveSubject(subjectId) {
         border: 1px solid var(--border-color);
       }
 
+      /* Extra styling för när det bara finns få nyheter */
+      .news-banner-content:has(.news-banner-item:nth-child(-n+2)) {
+        max-height: none; /* Ta bort max-height om det finns 2 eller färre nyheter */
+        overflow-y: visible;
+      }
+
+      /* Alternativ styling om du vill visa en indikation att det finns mer innehåll */
+      .news-banner-content::after {
+        content: "";
+        display: block;
+        height: 1px;
+        background: transparent;
+      }
+
+      .news-banner-content {
+        max-height: 300px; /* Begränsa höjden */
+        overflow-y: auto; /* Lägg till vertikal scroll */
+        padding: 0; /* Ta bort padding här */
+        scrollbar-width: thin; /* För Firefox */
+        scrollbar-color: #cbd5e1 #f1f5f9; /* För Firefox */
+      }
+
+      /* Anpassade scrollbar för WebKit-baserade webbläsare (Chrome, Safari, etc.) */
+      .news-banner-content::-webkit-scrollbar {
+        width: 8px;
+      }
+
       /* Skolnyheter banner */
       .school-news-banner {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -4560,6 +4587,7 @@ async function leaveSubject(subjectId) {
         padding: 20px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         position: relative;
+        overflow: hidden; 
       }
 
       .news-banner-header {
