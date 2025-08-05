@@ -97,7 +97,7 @@
       </div>
 
       {% if news and news|length > 0 %}
-      <div class="school-news-banner">
+      <div class="school-news-banner">  
         <div class="news-banner-header">
           <div class="news-banner-icon">📰</div>
           <div class="news-banner-text">
@@ -108,7 +108,7 @@
         </div>
         
         <div class="news-banner-content">
-          {% for news_item in news[:3] %}
+          {% for news_item in news %}  <!-- ÄNDRAD: Tog bort [:3] för att visa alla nyheter -->
           <div class="news-banner-item">
             <div class="news-item-header">
               <h4 class="news-item-title">{{ news_item.title }}</h4>
