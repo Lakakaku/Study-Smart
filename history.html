@@ -63,6 +63,21 @@
             letter-spacing: 0.05em;
         }
 
+        .personal-stats-header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .personal-stats-header h3 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
         .attendance-records {
             background: white;
             border-radius: 12px;
@@ -294,6 +309,62 @@
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
 
+        .clear-selection-btn {
+            background: #6b7280;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .clear-selection-btn:hover {
+            background: #4b5563;
+        }
+
+        /* Personlig statistik specifika stilar */
+        .personal-record-item {
+            border-left: 4px solid #10b981;
+            background: #f0fdf4;
+        }
+
+        .personal-record-item:hover {
+            background: #ecfdf5;
+        }
+
+        .personal-status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .personal-status-badge.present {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .personal-status-badge.late {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .personal-status-badge.absent {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .personal-status-badge.excused {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
         @media (max-width: 768px) {
             .history-container {
                 padding: 10px;
@@ -323,8 +394,7 @@
 </head>
 <body>
     <a href="{{ url_for('index') }}" class="back-link">
-        <!-- back-ikon -->
-        Tillbaka till startsidan
+        ← Tillbaka till startsidan
     </a>
 
     <!-- Klass-väljare -->
@@ -343,15 +413,17 @@
 
         <label for="student-selector">Välj elev:</label>
         <select id="student-selector" class="filter-select">
-            <option value="">Alla elever</option>
+            <option value="">Alla elever (klassstatistik)</option>
             {% for student in students %}
             <option value="{{ student.id }}">{{ student.first_name }} {{ student.last_name }}</option>
             {% endfor %}
         </select>
+
+        <button id="clear-selection" class="clear-selection-btn" style="display: none;">
+            Rensa val
+        </button>
       </div>
     </div>
-
-    
 
     <div class="history-container">
         <div class="history-header">
@@ -361,9 +433,8 @@
             </div>
         </div>
 
-        <!-- Statistiköversikt -->
-        <!-- Statistiköversikt -->
-        <div class="stats-overview">
+        <!-- Klassstatistik (visas som standard) -->
+        <div id="class-stats" class="stats-overview">
             <div class="stat-card">
                 <div class="stat-number">{{ total_lessons }}</div>
                 <div class="stat-label">Rapporterade lektioner</div>
@@ -385,17 +456,18 @@
                 <div class="stat-label">Ursäktade totalt</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">
-                    {{ avg_attendance }}%
-                </div>
+                <div class="stat-number">{{ avg_attendance }}%</div>
                 <div class="stat-label">Genomsnittlig närvaro</div>
             </div>
         </div>
 
+        <!-- Personlig statistik (dold som standard) -->
         <div id="student-stats" class="stats-overview" style="display: none;">
-        <!-- Här fylls det på via JS -->
+            <div class="personal-stats-header">
+                <h3 id="selected-student-name">Personlig statistik</h3>
+            </div>
+            <!-- Här fylls det på via JS -->
         </div>
-
 
         <!-- Datum- och ämnesfilter + export -->
         <div class="filters">
@@ -420,15 +492,16 @@
         <!-- Närvarorapporter -->
         <div class="attendance-records">
             <div class="records-header">
-                <h3>Närvarorapporter (senaste 30 dagarna)</h3>
+                <h3 id="records-title">Närvarorapporter (senaste 30 dagarna)</h3>
             </div>
             <div class="records-list" id="records-list">
                 {% if attendance_records %}
                     {% for record in attendance_records %}
                         {% set summary = summaries[record.id] %}
-                        <div class="record-item" data-date="{{ record.date }}" data-subject="{{ record.subject.name if record.subject else '' }}">
-                             data-date="{{ record.date }}"
-                             data-subject="{{ record.subject.name if record.subject else '' }}">
+                        <div class="record-item" 
+                             data-date="{{ record.date }}" 
+                             data-subject="{{ record.subject.name if record.subject else '' }}"
+                             data-record-id="{{ record.id }}">
                             <div class="record-header">
                                 <div class="record-date-time">
                                     <div class="record-date">
@@ -449,7 +522,9 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="record-stats">
+                            
+                            <!-- Klassstatistik (standard) -->
+                            <div class="record-stats class-stats-view">
                                 <div class="record-stat present">
                                     <div class="record-stat-number">{{ summary.present }}</div>
                                     <div class="record-stat-label">Närvarande</div>
@@ -462,13 +537,21 @@
                                     <div class="record-stat-number">{{ summary.absent }}</div>
                                     <div class="record-stat-label">Frånvarande</div>
                                 </div>
-
                                 <div class="record-stat excused">
                                     <div class="record-stat-number">{{ summary.get('excused', 0) }}</div>
                                     <div class="record-stat-label">Ursäktade</div>
                                 </div>
-
                             </div>
+
+                            <!-- Personlig närvaro (dold som standard) -->
+                            <div class="personal-stats-view" style="display: none;">
+                                <div class="personal-attendance-info">
+                                    <span class="personal-status-badge" data-status="unknown">Läser in...</span>
+                                    <span class="arrival-time" style="margin-left: 1rem; font-size: 0.9rem; color: #6b7280;"></span>
+                                </div>
+                                <div class="personal-notes" style="margin-top: 0.5rem; font-size: 0.9rem; color: #6b7280;"></div>
+                            </div>
+
                             {% if record.lesson_notes %}
                             <div class="record-notes">
                                 <strong>Lektionsanteckningar:</strong> {{ record.lesson_notes }}
@@ -487,28 +570,193 @@
     </div>
 
     <script>
-
-
+        // Globala variabler för att hålla all data
+        const studentStats = {{ student_stats|tojson }};
+        // FIXAD RAD 575: Använd attendance_records_json istället för attendance_records
+        const attendanceData = {{ attendance_records_json|tojson }};
+        let selectedStudentId = null;
+        let personalAttendanceData = {};
 
         document.addEventListener('DOMContentLoaded', function() {
             const dateFromInput = document.getElementById('date-from');
             const dateToInput = document.getElementById('date-to');
             const subjectFilter = document.getElementById('subject-filter');
             const recordsList = document.getElementById('records-list');
+            const studentSelector = document.getElementById('student-selector');
+            const classSelector = document.getElementById('class-selector');
+            const clearSelectionBtn = document.getElementById('clear-selection');
+            const classStatsDiv = document.getElementById('class-stats');
+            const studentStatsDiv = document.getElementById('student-stats');
+            const recordsTitle = document.getElementById('records-title');
+            const selectedStudentName = document.getElementById('selected-student-name');
             
             // Sätt standarddatum (senaste 30 dagarna)
             const today = new Date();
             const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
             
-            const classSelector = document.getElementById('class-selector');
+            dateFromInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+            dateToInput.value = today.toISOString().split('T')[0];
+            
+            // Klassväljare
             classSelector.addEventListener('change', () => {
                 window.location.href = classSelector.value;
             });
 
+            // Elevväljare
+            studentSelector.addEventListener('change', async () => {
+                const studentId = studentSelector.value;
+                selectedStudentId = studentId;
 
+                if (!studentId) {
+                    // Visa klassstatistik
+                    showClassStats();
+                } else {
+                    // Visa personlig statistik
+                    await showPersonalStats(studentId);
+                }
+            });
 
-            dateFromInput.value = thirtyDaysAgo.toISOString().split('T')[0];
-            dateToInput.value = today.toISOString().split('T')[0];
+            // Rensa val
+            clearSelectionBtn.addEventListener('click', () => {
+                studentSelector.value = '';
+                selectedStudentId = null;
+                showClassStats();
+            });
+
+            function showClassStats() {
+                classStatsDiv.style.display = 'grid';
+                studentStatsDiv.style.display = 'none';
+                clearSelectionBtn.style.display = 'none';
+                recordsTitle.textContent = 'Närvarorapporter (senaste 30 dagarna)';
+
+                // Visa klassstatistik i alla record-items
+                document.querySelectorAll('.record-item').forEach(item => {
+                    const classStats = item.querySelector('.class-stats-view');
+                    const personalStats = item.querySelector('.personal-stats-view');
+                    if (classStats) classStats.style.display = 'grid';
+                    if (personalStats) personalStats.style.display = 'none';
+                    item.classList.remove('personal-record-item');
+                });
+            }
+
+            async function showPersonalStats(studentId) {
+                const student = studentStats.find(s => s.id == studentId);
+                if (!student) return;
+
+                // Uppdatera UI
+                classStatsDiv.style.display = 'none';
+                studentStatsDiv.style.display = 'grid';
+                clearSelectionBtn.style.display = 'inline-block';
+                recordsTitle.textContent = `Närvarorapporter för ${student.name}`;
+                selectedStudentName.textContent = `${student.name} - Personlig statistik`;
+
+                // Bygg personlig statistik
+                studentStatsDiv.innerHTML = `
+                    <div class="personal-stats-header">
+                        <h3>${student.name} - Personlig statistik</h3>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${student.total}</div>
+                        <div class="stat-label">Totalt lektioner</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${student.present}</div>
+                        <div class="stat-label">Närvarande</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${student.late}</div>
+                        <div class="stat-label">Sena</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${student.absent}</div>
+                        <div class="stat-label">Frånvarande</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${student.excused}</div>
+                        <div class="stat-label">Ursäktade</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${student.rate}%</div>
+                        <div class="stat-label">Närvaro %</div>
+                    </div>
+                `;
+
+                // Hämta personlig närvarodata
+                await loadPersonalAttendanceData(studentId);
+                updatePersonalRecordItems();
+            }
+
+            async function loadPersonalAttendanceData(studentId) {
+                try {
+                    const response = await fetch(`/api/attendance/student/${studentId}/class/{{ current_class_id }}`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        personalAttendanceData = {};
+                        data.attendance_records.forEach(record => {
+                            personalAttendanceData[record.attendance_id] = record;
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error loading personal attendance data:', error);
+                }
+            }
+
+            function updatePersonalRecordItems() {
+                document.querySelectorAll('.record-item').forEach(item => {
+                    const recordId = item.dataset.recordId;
+                    const classStats = item.querySelector('.class-stats-view');
+                    const personalStats = item.querySelector('.personal-stats-view');
+                    
+                    if (classStats) classStats.style.display = 'none';
+                    if (personalStats) {
+                        personalStats.style.display = 'block';
+                        item.classList.add('personal-record-item');
+                        
+                        const personalRecord = personalAttendanceData[recordId];
+                        const statusBadge = personalStats.querySelector('.personal-status-badge');
+                        const arrivalTime = personalStats.querySelector('.arrival-time');
+                        const personalNotes = personalStats.querySelector('.personal-notes');
+                        
+                        if (personalRecord) {
+                            const status = personalRecord.status || 'unknown';
+                            const statusText = {
+                                'present': 'Närvarande',
+                                'late': 'Sen',
+                                'absent': 'Frånvarande',
+                                'excused': 'Ursäktad'
+                            }[status] || 'Okänd';
+                            
+                            statusBadge.textContent = statusText;
+                            statusBadge.className = `personal-status-badge ${status}`;
+                            statusBadge.dataset.status = status;
+                            
+                            // Visa ankomsttid om eleven var sen
+                            if (status === 'late' && personalRecord.arrival_time) {
+                                arrivalTime.textContent = `Ankomst: ${personalRecord.arrival_time}`;
+                                arrivalTime.style.display = 'inline';
+                            } else {
+                                arrivalTime.style.display = 'none';
+                            }
+                            
+                            // Visa personliga anteckningar
+                            if (personalRecord.notes) {
+                                personalNotes.textContent = `Anteckning: ${personalRecord.notes}`;
+                                personalNotes.style.display = 'block';
+                            } else {
+                                personalNotes.style.display = 'none';
+                            }
+                        } else {
+                            // Ingen data för denna elev på denna lektion
+                            statusBadge.textContent = 'Ej rapporterad';
+                            statusBadge.className = 'personal-status-badge absent';
+                            statusBadge.dataset.status = 'unknown';
+                            arrivalTime.style.display = 'none';
+                            personalNotes.style.display = 'none';
+                        }
+                    }
+                });
+            }
             
             // Samla unika ämnen för filter
             const subjects = new Set();
@@ -525,13 +773,6 @@
                     option.textContent = subject;
                     subjectFilter.appendChild(option);
                 }
-            });
-
-
-            document.getElementById('period-select').addEventListener('change', function(){
-                const url = new URL(window.location);
-                url.searchParams.set('period', this.value);
-                window.location = url.toString();
             });
             
             // Filter funktioner
@@ -561,21 +802,6 @@
                     
                     item.style.display = showItem ? 'block' : 'none';
                 });
-
-
-
-                 
-
-
-
-
-
-
-
-
-
-
-                
                 
                 // Kontrollera om några poster visas
                 const visibleItems = document.querySelectorAll('.record-item[style="display: block"], .record-item:not([style*="display: none"])');
@@ -600,57 +826,6 @@
                     }
                 }
             }
-
-
-
-
-
-
-
-            const studentStats = {{ student_stats|tojson }};
-                const studentSelector = document.getElementById('student-selector');
-                const studentStatsContainer = document.getElementById('student-stats');
-
-                studentSelector.addEventListener('change', () => {
-                const selId = studentSelector.value;
-                if (!selId) {
-                    studentStatsContainer.style.display = 'none';
-                    return;
-                }
-                // Hitta rätt statistik
-                const stats = studentStats.find(s => s.id == selId);
-                if (!stats) return;
-
-                // Bygg om HTML: ett kort per fält
-                studentStatsContainer.innerHTML = `
-                    <div class="stat-card">
-                    <div class="stat-number">${stats.total}</div>
-                    <div class="stat-label">Totalt lektioner</div>
-                    </div>
-                    <div class="stat-card">
-                    <div class="stat-number">${stats.present}</div>
-                    <div class="stat-label">Närvarande</div>
-                    </div>
-                    <div class="stat-card">
-                    <div class="stat-number">${stats.late}</div>
-                    <div class="stat-label">Sena</div>
-                    </div>
-                    <div class="stat-card">
-                    <div class="stat-number">${stats.absent}</div>
-                    <div class="stat-label">Frånvarande</div>
-                    </div>
-                    <div class="stat-card">
-                    <div class="stat-number">${stats.excused}</div>
-                    <div class="stat-label">Ursäktade</div>
-                    </div>
-                    <div class="stat-card">
-                    <div class="stat-number">${stats.rate}%</div>
-                    <div class="stat-label">Närvaro %</div>
-                    </div>
-                `;
-                studentStatsContainer.style.display = 'grid';
-                });
-                
             
             // Event listeners för filter
             dateFromInput.addEventListener('change', filterRecords);
@@ -666,33 +841,63 @@
                     return;
                 }
                 
-                let csvContent = 'Datum,Ämne,Närvarande,Sena,Frånvarande,Ursäktade,Närvaro %,Anteckningar\n';
-                document.getElementById('class-selector').addEventListener('change', function() {
-                    window.location.href = this.value;
-                });
-                visibleItems.forEach(item => {
-                    const date = item.dataset.date;
-                    const subject = item.dataset.subject || 'Okänt ämne';
-                    const stats = item.querySelectorAll('.record-stat-number');
-                    const present = stats[0]?.textContent || '0';
-                    const late = stats[1]?.textContent || '0';
-                    const absent = stats[2]?.textContent || '0';
-                    const excused = stats[3]?.textContent || '0';
-                    const attendanceRate = item.querySelector('.attendance-rate')?.textContent?.replace('% närvaro', '') || '0';
-                    const notes = item.querySelector('.record-notes')?.textContent?.replace('Lektionsanteckningar: ', '') || '';
+                let csvContent = '';
+                
+                if (selectedStudentId) {
+                    // Export för specifik elev
+                    const student = studentStats.find(s => s.id == selectedStudentId);
+                    csvContent = `Elev,Datum,Ämne,Status,Ankomsttid,Anteckningar\n`;
                     
-                    csvContent += `"${date}","${subject}","${present}","${late}","${absent}","${excused}","${attendanceRate}","${notes.replace(/"/g, '""')}"\n`;
-                });
-
-
-
+                    visibleItems.forEach(item => {
+                        const date = item.dataset.date;
+                        const subject = item.dataset.subject || 'Okänt ämne';
+                        const recordId = item.dataset.recordId;
+                        const personalRecord = personalAttendanceData[recordId];
+                        
+                        const status = personalRecord ? personalRecord.status : 'ej_rapporterad';
+                        const arrivalTime = personalRecord?.arrival_time || '';
+                        const notes = personalRecord?.notes || '';
+                        
+                        const statusText = {
+                            'present': 'Närvarande',
+                            'late': 'Sen', 
+                            'absent': 'Frånvarande',
+                            'excused': 'Ursäktad',
+                            'ej_rapporterad': 'Ej rapporterad'
+                        }[status] || 'Okänd';
+                        
+                        csvContent += `"${student.name}","${date}","${subject}","${statusText}","${arrivalTime}","${notes.replace(/"/g, '""')}"\n`;
+                    });
+                } else {
+                    // Export för hela klassen
+                    csvContent = 'Datum,Ämne,Närvarande,Sena,Frånvarande,Ursäktade,Närvaro %,Anteckningar\n';
+                    
+                    visibleItems.forEach(item => {
+                        const date = item.dataset.date;
+                        const subject = item.dataset.subject || 'Okänt ämne';
+                        const stats = item.querySelectorAll('.class-stats-view .record-stat-number');
+                        const present = stats[0]?.textContent || '0';
+                        const late = stats[1]?.textContent || '0';
+                        const absent = stats[2]?.textContent || '0';
+                        const excused = stats[3]?.textContent || '0';
+                        const attendanceRate = item.querySelector('.attendance-rate')?.textContent?.replace('% närvaro', '') || '0';
+                        const notes = item.querySelector('.record-notes')?.textContent?.replace('Lektionsanteckningar: ', '') || '';
+                        
+                        csvContent += `"${date}","${subject}","${present}","${late}","${absent}","${excused}","${attendanceRate}","${notes.replace(/"/g, '""')}"\n`;
+                    });
+                }
                 
                 // Skapa och ladda ner fil
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
                 const url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
-                link.setAttribute('download', `narvarohistorik_${new Date().toISOString().split('T')[0]}.csv`);
+                
+                const filename = selectedStudentId 
+                    ? `personlig_narvarohistorik_${new Date().toISOString().split('T')[0]}.csv`
+                    : `narvarohistorik_${new Date().toISOString().split('T')[0]}.csv`;
+                    
+                link.setAttribute('download', filename);
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
