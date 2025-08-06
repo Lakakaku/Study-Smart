@@ -2348,26 +2348,28 @@ def get_lesson_attendance(schedule_id, date):
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+
 @app.route('/attendance/history/<int:class_id>')
 @login_required
 def attendance_history(class_id):
+    # 1) Behörighet: bara lärare
     if not current_user.is_teacher():
         flash('Endast lärare kan se närvarohistorik.', 'error')
         return redirect(url_for('index'))
 
-    # 1) Alla klasser där hen är mentor
+    # 2) Alla klasser där hen är mentor
     mentor_q = SchoolClass.query.filter(
         SchoolClass.homeroom_teacher_id == current_user.id
     )
 
-    # 2) Alla klasser där hen undervisar ett ämne
+    # 3) Alla klasser där hen undervisar via Subject
     taught_class_ids = db.session.query(
         distinct(ClassSchedule.class_id)
     ).join(Subject).filter(
         Subject.user_id == current_user.id
     )
 
-    # Slå ihop
+    # 4) Slå ihop till en lista
     teacher_classes = SchoolClass.query.filter(
         or_(
             SchoolClass.id.in_(taught_class_ids),
@@ -2375,35 +2377,96 @@ def attendance_history(class_id):
         )
     ).order_by(SchoolClass.name).all()
 
+    # 5) Validera class_id, annars redirect till första giltiga
     valid_ids = {c.id for c in teacher_classes}
     if class_id not in valid_ids:
         return redirect(url_for('attendance_history', class_id=teacher_classes[0].id))
 
     school_class = SchoolClass.query.get_or_404(class_id)
 
-    thirty_days_ago = datetime.now().date() - timedelta(days=30)
+    # —————— Periodhantering ——————
+    period = request.args.get('period', '30')
+    today = datetime.now().date()
+    if period == '7':
+        start_date = today - timedelta(days=7)
+    elif period == 'all':
+        start_date = school_class.start_date or (today - timedelta(days=3650))
+    else:
+        start_date = today - timedelta(days=30)
+        period = '30'
+
+    # —————— Hämta närvarorapporter ——————
     attendance_records = Attendance.query.options(
         joinedload(Attendance.student_attendances)
     ).filter(
         Attendance.class_id == class_id,
-        Attendance.date >= thirty_days_ago
+        Attendance.date.between(start_date, today)
     ).order_by(
         Attendance.date.desc(),
         Attendance.created_at.desc()
     ).all()
 
-    # Här räknar vi samman statistik
-    summaries = {}
-    for rec in attendance_records:
-        summaries[rec.id] = rec.get_attendance_summary()
+    # — Per-lektion-summeringar —  
+    summaries = {rec.id: rec.get_attendance_summary() for rec in attendance_records}
 
-    return render_template(
-        'attendance/history.html',
-        school_class=school_class,
-        attendance_records=attendance_records,
-        summaries=summaries,
-        teacher_classes=teacher_classes,
-        current_class_id=class_id
+    # — Aggregat —  
+    total_lessons  = len(attendance_records)
+    total_students = sum(d['total']   for d in summaries.values())
+    total_present  = sum(d['present'] for d in summaries.values())
+    total_late     = sum(d['late']    for d in summaries.values())
+    total_absent   = sum(d['absent']  for d in summaries.values())
+    total_excused  = sum(d.get('excused', 0) for d in summaries.values())
+    avg_attendance = round(((total_present + total_late + total_excused) / total_students * 100) if total_students else 0, 1)
+
+    # — Hämta elever i klassen —  
+    students = User.query.filter_by(
+        class_id=class_id,
+        user_type='student'
+    ).order_by(User.last_name, User.first_name).all()
+
+    # — Per-elev-statistik —  
+    student_stats = []
+    for student in students:
+        sats = [
+            sa for rec in attendance_records
+               for sa in rec.student_attendances
+               if sa.student_id == student.id
+        ]
+        cnt_tot  = len(sats)
+        cnt_pres = sum(1 for sa in sats if sa.status == 'present')
+        cnt_late = sum(1 for sa in sats if sa.status == 'late')
+        cnt_abs  = sum(1 for sa in sats if sa.status == 'absent')
+        cnt_exc  = sum(1 for sa in sats if sa.status == 'excused')
+        rate     = round(((cnt_pres + cnt_late + cnt_exc) / cnt_tot * 100) if cnt_tot else 0, 1)
+
+        student_stats.append({
+            'name':    f"{student.first_name} {student.last_name}",
+            'total':   cnt_tot,
+            'present': cnt_pres,
+            'late':    cnt_late,
+            'absent':  cnt_abs,
+            'excused': cnt_exc,
+            'rate':    rate
+        })
+
+    # — Returnera allt till templaten —  
+    return render_template('attendance/history.html',
+        school_class       = school_class,
+        teacher_classes    = teacher_classes,
+        current_class_id   = class_id,
+        period             = period,
+
+        attendance_records = attendance_records,
+        summaries          = summaries,
+
+        total_lessons      = total_lessons,
+        total_present      = total_present,
+        total_late         = total_late,
+        total_absent       = total_absent,
+        total_excused      = total_excused,
+        avg_attendance     = avg_attendance,
+
+        student_stats      = student_stats
     )
 
 
