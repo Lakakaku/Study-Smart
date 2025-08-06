@@ -865,6 +865,28 @@ class Attendance(db.Model):
     
     def __repr__(self):
         return f"Attendance(date={self.date}, class_id={self.class_id})"
+    
+    def to_dict(self):
+        """Konvertera Attendance-objekt till dictionary för JSON-serialisering"""
+        return {
+            'id': self.id,
+            'schedule_id': self.schedule_id,
+            'date': self.date.isoformat() if self.date else None,
+            'teacher_id': self.teacher_id,
+            'class_id': self.class_id,
+            'subject_id': self.subject_id,
+            'lesson_notes': self.lesson_notes or '',
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'subject_name': self.subject.name if self.subject else 'Okänt ämne',
+            'teacher_name': f"{self.teacher.first_name} {self.teacher.last_name}" if self.teacher else 'Okänd lärare',
+            'schedule_info': {
+                'start_time': self.schedule_item.start_time if self.schedule_item else None,
+                'end_time': self.schedule_item.end_time if self.schedule_item else None,
+                'room': self.schedule_item.room if self.schedule_item else None,
+                'weekday': self.schedule_item.weekday if self.schedule_item else None
+            } if self.schedule_item else None
+        }
 
 
 class StudentAttendance(db.Model):
@@ -915,6 +937,19 @@ class School(db.Model):
     
     def __repr__(self):
         return f"School('{self.name}', code='{self.school_code}')"
+    
+    def to_dict(self):
+        """Konvertera StudentAttendance-objekt till dictionary"""
+        return {
+            'id': self.id,
+            'attendance_id': self.attendance_id,
+            'student_id': self.student_id,
+            'status': self.status,
+            'arrival_time': self.arrival_time.strftime('%H:%M') if self.arrival_time else None,
+            'notes': self.notes or '',
+            'marked_at': self.marked_at.isoformat() if self.marked_at else None,
+            'student_name': f"{self.student.first_name} {self.student.last_name}" if self.student else 'Okänd elev'
+        }
 
 
 class ClassSchedule(db.Model):
@@ -1171,6 +1206,9 @@ class Quiz(db.Model):
     def __repr__(self):
         question_count = self.get_question_count()
         return f"Quiz(id={self.id}, title='{self.title}', questions={question_count}, type='{self.quiz_type}')"
+
+
+
 
 @app.template_filter('nl2br')
 def nl2br_filter(text):
@@ -2132,6 +2170,123 @@ def extract_audio_from_video(video_path, audio_output_path):
         return False
 
 # Lägg till dessa routes i din Flask-app
+@app.route('/api/attendance/student/<int:student_id>/class/<int:class_id>')
+@login_required
+def get_student_attendance(student_id, class_id):
+    """Hämta närvarodata för en specifik elev i en klass"""
+    
+    # Kontrollera att användaren är lärare
+    if not current_user.is_teacher():
+        return jsonify({'status': 'error', 'message': 'Endast lärare kan se elevdata'}), 403
+    
+    # Kontrollera att läraren har behörighet för denna klass
+    school_class = SchoolClass.query.get_or_404(class_id)
+    
+    # Kontroll 1: Är klassföreståndare
+    can_access = school_class.homeroom_teacher_id == current_user.id
+    
+    # Kontroll 2: Undervisar i klassen
+    if not can_access:
+        taught_class_ids = db.session.query(
+            distinct(ClassSchedule.class_id)
+        ).join(Subject).filter(
+            Subject.user_id == current_user.id
+        ).subquery()
+        
+        can_access = db.session.query(taught_class_ids).filter(
+            taught_class_ids.c.class_id == class_id
+        ).first() is not None
+    
+    if not can_access:
+        return jsonify({'status': 'error', 'message': 'Ingen behörighet för denna klass'}), 403
+    
+    try:
+        # Hämta eleven
+        student = User.query.filter_by(
+            id=student_id,
+            user_type='student',
+            class_id=class_id
+        ).first()
+        
+        if not student:
+            return jsonify({'status': 'error', 'message': 'Eleven hittades inte i denna klass'}), 404
+        
+        # Hämta period från query parameters (samma som main history view)
+        period = request.args.get('period', '30')
+        today = datetime.now().date()
+        if period == '7':
+            start_date = today - timedelta(days=7)
+        elif period == 'all':
+            start_date = school_class.start_date or (today - timedelta(days=3650))
+        else:
+            start_date = today - timedelta(days=30)
+        
+        # Hämta alla närvarorapporter för klassen i perioden
+        attendance_records = Attendance.query.filter(
+            Attendance.class_id == class_id,
+            Attendance.date.between(start_date, today)
+        ).order_by(Attendance.date.desc()).all()
+        
+        # Hämta elevens specifika närvaro för varje rapport
+        student_attendance_data = []
+        for attendance in attendance_records:
+            student_attendance = StudentAttendance.query.filter_by(
+                attendance_id=attendance.id,
+                student_id=student_id
+            ).first()
+            
+            if student_attendance:
+                student_attendance_data.append({
+                    'attendance_id': attendance.id,
+                    'date': attendance.date.isoformat(),
+                    'status': student_attendance.status,
+                    'arrival_time': student_attendance.arrival_time.strftime('%H:%M') if student_attendance.arrival_time else None,
+                    'notes': student_attendance.notes or '',
+                    'subject_name': attendance.subject.name if attendance.subject else 'Okänt ämne',
+                    'lesson_notes': attendance.lesson_notes or ''
+                })
+        
+        # Beräkna sammanfattning för eleven
+        total_lessons = len(student_attendance_data)
+        present_count = sum(1 for sa in student_attendance_data if sa['status'] == 'present')
+        late_count = sum(1 for sa in student_attendance_data if sa['status'] == 'late')
+        absent_count = sum(1 for sa in student_attendance_data if sa['status'] == 'absent')
+        excused_count = sum(1 for sa in student_attendance_data if sa['status'] == 'excused')
+        
+        attendance_rate = round(
+            ((present_count + late_count + excused_count) / total_lessons * 100) if total_lessons > 0 else 0, 1
+        )
+        
+        return jsonify({
+            'status': 'success',
+            'student': {
+                'id': student.id,
+                'name': f"{student.first_name} {student.last_name}",
+                'class_name': school_class.name
+            },
+            'summary': {
+                'total_lessons': total_lessons,
+                'present': present_count,
+                'late': late_count,
+                'absent': absent_count,
+                'excused': excused_count,
+                'attendance_rate': attendance_rate
+            },
+            'attendance_records': student_attendance_data,
+            'period': period,
+            'date_range': {
+                'start': start_date.isoformat(),
+                'end': today.isoformat()
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error getting student attendance: {e}")
+        return jsonify({
+            'status': 'error', 
+            'message': 'Kunde inte hämta elevdata'
+        }), 500
+
 
 @app.route('/attendance/lesson/<int:schedule_id>/<date>')
 @login_required
@@ -2349,6 +2504,7 @@ def get_lesson_attendance(schedule_id, date):
 
 
 
+# Uppdatera din attendance_history route
 @app.route('/attendance/history/<int:class_id>')
 @login_required
 def attendance_history(class_id):
@@ -2450,6 +2606,9 @@ def attendance_history(class_id):
             'rate':    rate
         })
 
+    # *** VIKTIGT: Konvertera Attendance-objekt till dictionary för JSON ***
+    attendance_records_json = [record.to_dict() for record in attendance_records]
+
     # — Returnera allt till templaten —  
     return render_template('attendance/history.html',
         school_class       = school_class,
@@ -2457,7 +2616,8 @@ def attendance_history(class_id):
         current_class_id   = class_id,
         period             = period,
 
-        attendance_records = attendance_records,
+        attendance_records = attendance_records,  # För template-rendering
+        attendance_records_json = attendance_records_json,  # För JavaScript
         summaries          = summaries,
 
         total_lessons      = total_lessons,
@@ -2467,11 +2627,9 @@ def attendance_history(class_id):
         total_excused      = total_excused,
         avg_attendance     = avg_attendance,
 
-        
-       student_stats      = student_stats,
-       students           = students
+        student_stats      = student_stats,
+        students           = students
     )
-
 
 def compress_audio_if_needed(audio_path, max_size_mb=25):
     """Komprimera ljud om det är för stort - mer realistisk storlek"""
