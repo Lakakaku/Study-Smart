@@ -340,6 +340,14 @@
             </option>
           {% endfor %}
         </select>
+
+        <label for="student-selector">Välj elev:</label>
+        <select id="student-selector" class="filter-select">
+            <option value="">Alla elever</option>
+            {% for student in students %}
+            <option value="{{ student.id }}">{{ student.first_name }} {{ student.last_name }}</option>
+            {% endfor %}
+        </select>
       </div>
     </div>
 
@@ -382,6 +390,10 @@
                 </div>
                 <div class="stat-label">Genomsnittlig närvaro</div>
             </div>
+        </div>
+
+        <div id="student-stats" class="stats-overview" style="display: none;">
+        <!-- Här fylls det på via JS -->
         </div>
 
 
@@ -551,6 +563,18 @@
                 });
 
 
+
+                 
+
+
+
+
+
+
+
+
+
+
                 
                 
                 // Kontrollera om några poster visas
@@ -576,6 +600,57 @@
                     }
                 }
             }
+
+
+
+
+
+
+
+            const studentStats = {{ student_stats|tojson }};
+                const studentSelector = document.getElementById('student-selector');
+                const studentStatsContainer = document.getElementById('student-stats');
+
+                studentSelector.addEventListener('change', () => {
+                const selId = studentSelector.value;
+                if (!selId) {
+                    studentStatsContainer.style.display = 'none';
+                    return;
+                }
+                // Hitta rätt statistik
+                const stats = studentStats.find(s => s.id == selId);
+                if (!stats) return;
+
+                // Bygg om HTML: ett kort per fält
+                studentStatsContainer.innerHTML = `
+                    <div class="stat-card">
+                    <div class="stat-number">${stats.total}</div>
+                    <div class="stat-label">Totalt lektioner</div>
+                    </div>
+                    <div class="stat-card">
+                    <div class="stat-number">${stats.present}</div>
+                    <div class="stat-label">Närvarande</div>
+                    </div>
+                    <div class="stat-card">
+                    <div class="stat-number">${stats.late}</div>
+                    <div class="stat-label">Sena</div>
+                    </div>
+                    <div class="stat-card">
+                    <div class="stat-number">${stats.absent}</div>
+                    <div class="stat-label">Frånvarande</div>
+                    </div>
+                    <div class="stat-card">
+                    <div class="stat-number">${stats.excused}</div>
+                    <div class="stat-label">Ursäktade</div>
+                    </div>
+                    <div class="stat-card">
+                    <div class="stat-number">${stats.rate}%</div>
+                    <div class="stat-label">Närvaro %</div>
+                    </div>
+                `;
+                studentStatsContainer.style.display = 'grid';
+                });
+                
             
             // Event listeners för filter
             dateFromInput.addEventListener('change', filterRecords);
