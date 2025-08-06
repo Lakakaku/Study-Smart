@@ -40,7 +40,7 @@ from pdf2image import convert_from_path
 import os
 import json.decoder
 from flask_sqlalchemy import SQLAlchemy
-from flask_bcrypt import Bcrypts
+from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from sqlalchemy import JSON, Text, distinct, or_
 from extensions import db
@@ -49,6 +49,8 @@ import secrets
 import uuid
 import mimetypes
 basedir = os.path.abspath(os.path.dirname(__file__))
+
+from sqlalchemy.orm import joinedload
 
 
 app = Flask(__name__)
@@ -2354,12 +2356,16 @@ def attendance_history(class_id):
         return redirect(url_for('index'))
 
     # 1) Alla klasser där hen är mentor
-    mentor_q = SchoolClass.query.filter(SchoolClass.homeroom_teacher_id == current_user.id)
+    mentor_q = SchoolClass.query.filter(
+        SchoolClass.homeroom_teacher_id == current_user.id
+    )
 
-    # 2) Alla klasser där hen undervisar ett ämne (via ClassSchedule → Subject.user_id)
+    # 2) Alla klasser där hen undervisar ett ämne
     taught_class_ids = db.session.query(
         distinct(ClassSchedule.class_id)
-    ).join(Subject).filter(Subject.user_id == current_user.id)
+    ).join(Subject).filter(
+        Subject.user_id == current_user.id
+    )
 
     # Slå ihop
     teacher_classes = SchoolClass.query.filter(
@@ -2369,7 +2375,6 @@ def attendance_history(class_id):
         )
     ).order_by(SchoolClass.name).all()
 
-    # Om vald class_id inte är i listan, redirecta till första giltiga
     valid_ids = {c.id for c in teacher_classes}
     if class_id not in valid_ids:
         return redirect(url_for('attendance_history', class_id=teacher_classes[0].id))
@@ -2377,16 +2382,29 @@ def attendance_history(class_id):
     school_class = SchoolClass.query.get_or_404(class_id)
 
     thirty_days_ago = datetime.now().date() - timedelta(days=30)
-    attendance_records = Attendance.query.filter(
+    attendance_records = Attendance.query.options(
+        joinedload(Attendance.student_attendances)
+    ).filter(
         Attendance.class_id == class_id,
         Attendance.date >= thirty_days_ago
-    ).order_by(Attendance.date.desc(), Attendance.created_at.desc()).all()
+    ).order_by(
+        Attendance.date.desc(),
+        Attendance.created_at.desc()
+    ).all()
 
-    return render_template('attendance/history.html',
-                           school_class=school_class,
-                           attendance_records=attendance_records,
-                           teacher_classes=teacher_classes,
-                           current_class_id=class_id)
+    # Här räknar vi samman statistik
+    summaries = {}
+    for rec in attendance_records:
+        summaries[rec.id] = rec.get_attendance_summary()
+
+    return render_template(
+        'attendance/history.html',
+        school_class=school_class,
+        attendance_records=attendance_records,
+        summaries=summaries,
+        teacher_classes=teacher_classes,
+        current_class_id=class_id
+    )
 
 
 def compress_audio_if_needed(audio_path, max_size_mb=25):
