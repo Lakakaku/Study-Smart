@@ -323,17 +323,31 @@
 </head>
 <body>
     <a href="{{ url_for('index') }}" class="back-link">
-        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-        </svg>
+        <!-- back-ikon -->
         Tillbaka till startsidan
     </a>
+
+    <!-- Klass-väljare -->
+    <div class="filters">
+      <div class="filter-group">
+        <label for="class-selector">Välj klass:</label>
+        <select id="class-selector" class="filter-select">
+          {% for cls in teacher_classes %}
+            <option
+              value="{{ url_for('attendance_history', class_id=cls.id) }}"
+              {% if cls.id == current_class_id %} selected {% endif %}>
+              {{ cls.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
 
     <div class="history-container">
         <div class="history-header">
             <h1>📊 Närvarohistorik</h1>
             <div class="class-info">
-                {{ school_class.name }} - {{ school_class.school.name if school_class.school else 'Okänd skola' }}
+                {{ school_class.name }} – {{ school_class.school.name or 'Okänd skola' }}
             </div>
         </div>
 
@@ -341,40 +355,36 @@
         <div class="stats-overview">
             {% set total_lessons = attendance_records|length %}
             {% set total_students = 0 %}
-            {% set total_present = 0 %}
-            {% set total_late = 0 %}
-            {% set total_absent = 0 %}
-            {% set total_excused = 0 %}
-            
+            {% set total_present  = 0 %}
+            {% set total_late     = 0 %}
+            {% set total_absent   = 0 %}
+            {% set total_excused  = 0 %}
+
             {% for record in attendance_records %}
                 {% set summary = record.get_attendance_summary() %}
                 {% set total_students = total_students + summary.total %}
-                {% set total_present = total_present + summary.present %}
-                {% set total_late = total_late + summary.late %}
-                {% set total_absent = total_absent + summary.absent %}
-                {% set total_excused = total_excused + summary.excused %}
+                {% set total_present  = total_present  + summary.present %}
+                {% set total_late     = total_late     + summary.late %}
+                {% set total_absent   = total_absent   + summary.absent %}
+                {% set total_excused  = total_excused  + summary.get('excused', 0) %}
             {% endfor %}
-            
+
             <div class="stat-card">
                 <div class="stat-number">{{ total_lessons }}</div>
                 <div class="stat-label">Rapporterade lektioner</div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-number">{{ total_present }}</div>
                 <div class="stat-label">Närvarande totalt</div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-number">{{ total_late }}</div>
                 <div class="stat-label">Sena totalt</div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-number">{{ total_absent }}</div>
                 <div class="stat-label">Frånvarande totalt</div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-number">
                     {% if total_students > 0 %}
@@ -387,48 +397,46 @@
             </div>
         </div>
 
-        <!-- Filter och export -->
+        <!-- Datum- och ämnesfilter + export -->
         <div class="filters">
             <div class="filter-group">
                 <label for="date-from">Från datum:</label>
                 <input type="date" id="date-from" class="filter-input">
-                
                 <label for="date-to">Till datum:</label>
                 <input type="date" id="date-to" class="filter-input">
-                
                 <label for="subject-filter">Ämne:</label>
                 <select id="subject-filter" class="filter-select">
                     <option value="">Alla ämnen</option>
-                    {% for record in attendance_records %}
-                        {% if record.subject %}
-                            <option value="{{ record.subject.name }}">{{ record.subject.name }}</option>
-                        {% endif %}
+                    {% for rec in attendance_records %}
+                      {% if rec.subject %}
+                        <option value="{{ rec.subject.name }}">{{ rec.subject.name }}</option>
+                      {% endif %}
                     {% endfor %}
                 </select>
-                
-                <button class="export-btn" onclick="exportData()">
-                    📊 Exportera
-                </button>
+                <button class="export-btn" onclick="exportData()">📊 Exportera</button>
             </div>
         </div>
 
-        <!-- Närvaroregistreringar -->
+        <!-- Närvarorapporter -->
         <div class="attendance-records">
             <div class="records-header">
                 <h3>Närvarorapporter (senaste 30 dagarna)</h3>
             </div>
-            
             <div class="records-list" id="records-list">
                 {% if attendance_records %}
                     {% for record in attendance_records %}
                         {% set summary = record.get_attendance_summary() %}
-                        <div class="record-item" data-date="{{ record.date }}" data-subject="{{ record.subject.name if record.subject else '' }}">
+                        <div class="record-item"
+                             data-date="{{ record.date }}"
+                             data-subject="{{ record.subject.name if record.subject else '' }}">
                             <div class="record-header">
                                 <div class="record-date-time">
-                                    <div class="record-date">{{ record.date.strftime('%A, %d %B %Y') }}</div>
+                                    <div class="record-date">
+                                        {{ record.date.strftime('%A, %d %B %Y') }}
+                                    </div>
                                     <div class="record-time">
                                         {% if record.schedule_item %}
-                                            {{ record.schedule_item.start_time }} - {{ record.schedule_item.end_time }}
+                                            {{ record.schedule_item.start_time }} – {{ record.schedule_item.end_time }}
                                         {% endif %}
                                         • Rapporterat {{ record.created_at.strftime('%H:%M') }}
                                     </div>
@@ -436,12 +444,12 @@
                                 <div class="record-subject">
                                     {{ record.subject.name if record.subject else 'Okänt ämne' }}
                                     {% set rate = summary.attendance_rate %}
-                                    <div class="attendance-rate {{ 'excellent' if rate >= 90 else 'good' if rate >= 75 else 'poor' }}">
+                                    <div class="attendance-rate 
+                                         {{ 'excellent' if rate >= 90 else 'good' if rate >= 75 else 'poor' }}">
                                         {{ rate }}% närvaro
                                     </div>
                                 </div>
                             </div>
-                            
                             <div class="record-stats">
                                 <div class="record-stat present">
                                     <div class="record-stat-number">{{ summary.present }}</div>
@@ -456,11 +464,10 @@
                                     <div class="record-stat-label">Frånvarande</div>
                                 </div>
                                 <div class="record-stat excused">
-                                    <div class="record-stat-number">{{ summary.excused if summary.get('excused') else 0 }}</div>
+                                    <div class="record-stat-number">{{ summary.get('excused', 0) }}</div>
                                     <div class="record-stat-label">Ursäktade</div>
                                 </div>
                             </div>
-                            
                             {% if record.lesson_notes %}
                             <div class="record-notes">
                                 <strong>Lektionsanteckningar:</strong> {{ record.lesson_notes }}
@@ -470,9 +477,6 @@
                     {% endfor %}
                 {% else %}
                     <div class="no-records">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
                         <h3>Inga närvarorapporter hittades</h3>
                         <p>Det finns inga rapporterade närvaroregistreringar för denna klass under de senaste 30 dagarna.</p>
                     </div>
@@ -482,6 +486,9 @@
     </div>
 
     <script>
+
+
+
         document.addEventListener('DOMContentLoaded', function() {
             const dateFromInput = document.getElementById('date-from');
             const dateToInput = document.getElementById('date-to');
@@ -492,6 +499,13 @@
             const today = new Date();
             const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
             
+            const classSelector = document.getElementById('class-selector');
+            classSelector.addEventListener('change', () => {
+                window.location.href = classSelector.value;
+            });
+
+
+
             dateFromInput.value = thirtyDaysAgo.toISOString().split('T')[0];
             dateToInput.value = today.toISOString().split('T')[0];
             
@@ -539,6 +553,9 @@
                     
                     item.style.display = showItem ? 'block' : 'none';
                 });
+
+
+                
                 
                 // Kontrollera om några poster visas
                 const visibleItems = document.querySelectorAll('.record-item[style="display: block"], .record-item:not([style*="display: none"])');
@@ -579,7 +596,9 @@
                 }
                 
                 let csvContent = 'Datum,Ämne,Närvarande,Sena,Frånvarande,Ursäktade,Närvaro %,Anteckningar\n';
-                
+                document.getElementById('class-selector').addEventListener('change', function() {
+                    window.location.href = this.value;
+                });
                 visibleItems.forEach(item => {
                     const date = item.dataset.date;
                     const subject = item.dataset.subject || 'Okänt ämne';
