@@ -2440,6 +2440,7 @@ def attendance_history(class_id):
         rate     = round(((cnt_pres + cnt_late + cnt_exc) / cnt_tot * 100) if cnt_tot else 0, 1)
 
         student_stats.append({
+            'id':      student.id,        
             'name':    f"{student.first_name} {student.last_name}",
             'total':   cnt_tot,
             'present': cnt_pres,
@@ -2466,7 +2467,9 @@ def attendance_history(class_id):
         total_excused      = total_excused,
         avg_attendance     = avg_attendance,
 
-        student_stats      = student_stats
+        
+       student_stats      = student_stats,
+       students           = students
     )
 
 
