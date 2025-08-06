@@ -1162,6 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const today = new Date();
           const isToday = currentDate.toDateString() === today.toDateString();
           const isTeacher = scheduleData.user_type === 'teacher';
+          const currentDateString = currentDate.toISOString().split('T')[0];
           
           let scheduleHTML = '<div class="schedule-list">';
           
@@ -1177,32 +1178,51 @@ document.addEventListener('DOMContentLoaded', () => {
                   lessonClass += ' student-lesson';
               }
               
+              // Skapa närvaroknapp för lärare
+              let attendanceButton = '';
+              if (isTeacher && lesson.id) {
+                  attendanceButton = `
+                      <div class="lesson-actions">
+                          <button class="attendance-btn" 
+                                  onclick="openAttendance(${lesson.id}, '${currentDateString}')"
+                                  title="Rapportera närvaro för denna lektion">
+                              📊 Närvaro
+                          </button>
+                      </div>
+                  `;
+              }
+              
               scheduleHTML += `
                   <div class="${lessonClass}">
-                      <div class="schedule-time">
-                          <span class="time-start">${lesson.start_time}</span>
-                          <span class="time-separator">-</span>
-                          <span class="time-end">${lesson.end_time}</span>
+                      <div class="schedule-main">
+                          <div class="schedule-time">
+                              <span class="time-start">${lesson.start_time}</span>
+                              <span class="time-separator">-</span>
+                              <span class="time-end">${lesson.end_time}</span>
+                          </div>
+                          <div class="schedule-details">
+                              <div class="schedule-subject">${lesson.subject}</div>
+                              <div class="schedule-room">${lesson.room}</div>
+                              ${lesson.class_name ? `<div class="schedule-class">Klass: ${lesson.class_name}</div>` : ''}
+                          </div>
                       </div>
-                      <div class="schedule-details">
-                          <div class="schedule-subject">${lesson.subject}</div>
-                          <div class="schedule-room">${lesson.room}</div>
-                          ${lesson.class_name ? `<div class="schedule-class">Klass: ${lesson.class_name}</div>` : ''}
-                      </div>
+                      ${attendanceButton}
                   </div>
               `;
           });
           
           scheduleHTML += '</div>';
           
-          // Lägg till extra info för lärare
-          
-          
           scheduleContainer.innerHTML = scheduleHTML;
           
           // Markera aktuell lektion om det är idag
           if (isToday) {
               setTimeout(markCurrentLesson, 100);
+          }
+          
+          // Ladda närvarostatus för lektioner
+          if (isTeacher) {
+              loadAttendanceStatus(currentDateString);
           }
           
       } else {
@@ -1266,6 +1286,157 @@ document.addEventListener('DOMContentLoaded', () => {
   closeEventsDisplay?.addEventListener('click', () => {
     eventsDisplay.style.display = 'none';
   });
+
+
+  window.openAttendance = function(scheduleId, date) {
+      console.log(`Opening attendance for lesson ${scheduleId} on ${date}`);
+      
+      // Navigera till närvarorapporteringssidan
+      const url = `/attendance/lesson/${scheduleId}/${date}`;
+      window.location.href = url;
+  };
+
+
+  // Funktion för att ladda närvarostatus för lektioner
+  async function loadAttendanceStatus(date) {
+      try {
+          const attendanceBtns = document.querySelectorAll('.attendance-btn');
+          
+          for (const btn of attendanceBtns) {
+              const scheduleId = btn.onclick.toString().match(/openAttendance\((\d+)/)?.[1];
+              
+              if (scheduleId) {
+                  try {
+                      const response = await fetch(`/api/attendance/lesson/${scheduleId}/${date}`);
+                      const data = await response.json();
+                      
+                      if (data.status === 'success' && data.has_attendance) {
+                          // Uppdatera knappens utseende för att visa att närvaro är rapporterad
+                          btn.classList.add('attendance-completed');
+                          btn.innerHTML = '✅ Närvaro klar';
+                          btn.title = `Närvaro rapporterad. ${data.summary.present}/${data.summary.total} närvarande`;
+                          
+                          // Lägg till sammanfattningsinformation
+                          const lessonItem = btn.closest('.schedule-item');
+                          if (lessonItem && data.summary) {
+                              const summaryEl = document.createElement('div');
+                              summaryEl.className = 'attendance-summary-mini';
+                              summaryEl.innerHTML = `
+                                  <span class="mini-summary-text">
+                                      ${data.summary.present}/${data.summary.total} närvarande 
+                                      (${data.summary.attendance_rate}%)
+                                  </span>
+                              `;
+                              
+                              const existingSummary = lessonItem.querySelector('.attendance-summary-mini');
+                              if (existingSummary) {
+                                  existingSummary.replaceWith(summaryEl);
+                              } else {
+                                  lessonItem.querySelector('.schedule-details').appendChild(summaryEl);
+                              }
+                          }
+                      }
+                  } catch (error) {
+                      console.error(`Error loading attendance status for lesson ${scheduleId}:`, error);
+                  }
+              }
+          }
+      } catch (error) {
+          console.error('Error loading attendance statuses:', error);
+      }
+  }
+
+  // Lägg till denna CSS i din befintliga CSS-fil eller som style-block
+  const attendanceStyles = `
+      .schedule-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 1rem;
+      }
+
+      .schedule-main {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          flex: 1;
+      }
+
+      .lesson-actions {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+      }
+
+      .attendance-btn {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+      }
+
+      .attendance-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      }
+
+      .attendance-btn.attendance-completed {
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      }
+
+      .attendance-btn.attendance-completed:hover {
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      }
+
+      .attendance-summary-mini {
+          font-size: 0.8rem;
+          color: #10b981;
+          font-weight: 500;
+          margin-top: 0.25rem;
+      }
+
+      .mini-summary-text {
+          background: rgba(16, 185, 129, 0.1);
+          padding: 2px 6px;
+          border-radius: 4px;
+      }
+
+      @media (max-width: 768px) {
+          .schedule-item {
+              flex-direction: column;
+              align-items: stretch;
+          }
+          
+          .schedule-main {
+              flex-direction: column;
+              align-items: stretch;
+          }
+          
+          .lesson-actions {
+              justify-content: center;
+              margin-top: 0.5rem;
+          }
+          
+          .attendance-btn {
+              flex: 1;
+              justify-content: center;
+          }
+      }
+  `;
+
+  // Lägg till stilarna till dokumentet
+  if (!document.querySelector('#attendance-styles')) {
+      const styleSheet = document.createElement('style');
+      styleSheet.id = 'attendance-styles';
+      styleSheet.textContent = attendanceStyles;
+      document.head.appendChild(styleSheet);
+  }
 
 
 
@@ -3840,16 +4011,18 @@ async function leaveSubject(subjectId) {
       }
 
       .schedule-item {
-          display: flex;
-          align-items: center;
-          padding: 14px 18px;
-          background: #f8f9fa;
-          border-radius: 8px;
-          border-left: 4px solid #3498db;
-          transition: all 0.3s ease;
-          min-width: 320px;
-          margin-bottom: 5px;
-      }
+        display: flex;
+        align-items: center;
+        padding: 14px 18px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #3498db;
+        transition: all 0.3s ease;
+        min-width: 320px;
+        margin-bottom: 5px;
+        position: relative; /* Viktigt för att innehålla absolut positionerade element */
+        overflow: hidden; /* Förhindra att element går utanför */
+    }
 
       .schedule-item:hover {
           background: #e3f2fd;
@@ -3864,28 +4037,58 @@ async function leaveSubject(subjectId) {
           font-weight: 600;
           color: #2c3e50;
           font-size: 0.95rem;
+          flex-shrink: 0; /* Förhindra att tiden krymper */
       }
+
 
       .time-separator {
           margin: 0 5px;
           color: #7f8c8d;
       }
 
+      .attendance-btn {
+          position: absolute;
+          right: 12px; /* Positionera från höger kant */
+          top: 50%;
+          transform: translateY(-50%);
+          background: rgba(255, 255, 255, 0.9);
+          color: #4f46e5;
+          border: none;
+          border-radius: 6px;
+          padding: 6px 10px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          z-index: 10;
+          max-width: 45px; /* Begränsa maxbredden */
+          overflow: hidden;
+          text-overflow: ellipsis;
+      }
+
+      .attendance-btn:hover {
+          background: white;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          transform: translateY(-50%) scale(1.05);
+      }
+
       .schedule-details {
-        flex: 1;
-        margin-left: 18px; /* Ökat från 16px */
-        min-width: 0; /* Viktigt för text-overflow att fungera */
+          flex: 1;
+          margin-left: 18px;
+          min-width: 0; /* Viktigt för text-overflow att fungera */
+          margin-right: 10px; /* Lägg till marginal för närvaroknappen */
       }
 
       .schedule-subject {
-        font-weight: 600;
-        color: #2c3e50;
-        font-size: 1rem;
-        margin-bottom: 2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis; /* Lägg till ellipsis för mycket långa namn */
-        max-width: 220px; /* Begränsa bredden så det inte blir för brett */
+          font-weight: 600;
+          color: #2c3e50;
+          font-size: 1rem;
+          margin-bottom: 2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%; /* Använd full tillgänglig bredd */
       }
 
       .schedule-room {
@@ -3929,45 +4132,75 @@ async function leaveSubject(subjectId) {
 
 
       @media (max-width: 768px) {
-        .products-container {
-          grid-template-columns: 1fr;
-          padding: 1.25rem;
-          gap: 1rem;
-          max-height: calc(100vh - 400px);
-        }
-      }
+              .products-container {
+                grid-template-columns: 1fr;
+                padding: 1.25rem;
+                gap: 1rem;
+                max-height: calc(100vh - 400px);
+              }
+            }
 
-      @media (max-width: 480px) {
-        .products-container {
-          padding: 1rem;
-          gap: 1rem;
-          max-height: calc(100vh - 420px);
-        }
-      }
+            @media (max-width: 480px) {
+              .products-container {
+                padding: 1rem;
+                gap: 1rem;
+                max-height: calc(100vh - 420px);
+              }
+            }
 
-      /* Responsiv design för schema */
-      @media (max-width: 768px) {
-          .schedule-container {
-              padding: 15px;
-              margin-bottom: 15px;
-          }
-          
+            /* Responsiv design för schema */
+            @media (max-width: 768px) {
           .schedule-item {
               flex-direction: column;
               align-items: flex-start;
               padding: 12px;
+              padding-right: 12px; /* Återställ padding för mobil */
+              position: relative;
+          }
+          
+          .schedule-item.teacher-lesson {
+              padding-right: 12px; /* Ta bort extra padding på mobil */
           }
           
           .schedule-time {
               min-width: auto;
               margin-bottom: 8px;
+              width: 100%;
           }
           
-          
-          
-          .schedule-header {
-              font-size: 1.2rem;
+          .schedule-details {
+              margin-left: 0;
+              width: 100%;
+              margin-right: 0; /* Ta bort marginal på mobil */
+              margin-bottom: 8px; /* Lägg till marginal nedåt för knappen */
           }
+          
+          .schedule-subject {
+              max-width: 100%;
+              white-space: normal; /* Tillåt radbrytning på mobil */
+              overflow: visible;
+              text-overflow: initial;
+          }
+          
+          /* Närvaroknapp på mobil */
+          .attendance-btn {
+              position: relative; /* Ändra till relativ positionering */
+              right: auto;
+              top: auto;
+              transform: none;
+              align-self: flex-end; /* Placera till höger */
+              margin-top: 8px;
+              max-width: none; /* Ta bort maxbredd på mobil */
+              width: auto;
+              min-width: 60px;
+          }
+      }
+
+      .schedule-item.teacher-lesson {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-left: 4px solid #4f46e5;
+          color: white;
+          padding-right: 60px; /* Lägg till extra padding för närvaroknappen */
       }
 
       /* Schema indikator för dagens lektion */
@@ -5048,15 +5281,39 @@ async function leaveSubject(subjectId) {
       }
 
       @media (max-width: 480px) {
-        .schedule-content {
-          padding: 0.75rem;
-        }
-        
-        .schedule-header {
-          padding: 1rem 1.25rem 0.75rem;
-          font-size: 1rem;
-        }
+          .schedule-item {
+              padding: 10px;
+              min-width: 280px;
+          }
+          
+          .schedule-time {
+              font-size: 0.9rem;
+          }
+          
+          .schedule-subject {
+              font-size: 0.95rem;
+          }
+          
+          .attendance-btn {
+              font-size: 0.7rem;
+              padding: 5px 8px;
+              min-width: 50px;
+          }
       }
+
+      @media (max-width: 360px) {
+          .schedule-item {
+              min-width: 250px;
+              padding: 8px;
+          }
+          
+          .attendance-btn {
+              font-size: 0.65rem;
+              padding: 4px 6px;
+              min-width: 45px;
+          }
+      }
+
 
 
       @media (max-width: 768px) {
