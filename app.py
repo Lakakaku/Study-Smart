@@ -819,6 +819,76 @@ def init_database():
             print(f"Error committing database changes: {e}")
             db.session.rollback()
 
+
+
+
+# Lägg till dessa modeller i din Flask-app (models.py eller liknande)
+
+class Attendance(db.Model):
+    """Närvarorapport för en specifik lektion"""
+    __tablename__ = 'attendance'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    schedule_id = db.Column(db.Integer, db.ForeignKey('class_schedule.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)  # Vilket datum lektionen genomfördes
+    teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'), nullable=False)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)
+    lesson_notes = db.Column(db.Text)  # Anteckningar om lektionen
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationer
+    schedule_item = db.relationship('ClassSchedule', backref='attendance_records')
+    teacher = db.relationship('User', foreign_keys=[teacher_id], backref='taught_lessons')
+    school_class = db.relationship('SchoolClass', backref='attendance_records')
+    subject = db.relationship('Subject', backref='attendance_records')
+    student_attendances = db.relationship('StudentAttendance', backref='attendance_session', 
+                                        cascade='all, delete-orphan')
+    
+    def get_attendance_summary(self):
+        """Hämta sammanfattning av närvaro för denna lektion"""
+        total_students = len(self.student_attendances)
+        present_students = len([s for s in self.student_attendances if s.status == 'present'])
+        absent_students = len([s for s in self.student_attendances if s.status == 'absent'])
+        late_students = len([s for s in self.student_attendances if s.status == 'late'])
+        
+        return {
+            'total': total_students,
+            'present': present_students,
+            'absent': absent_students,
+            'late': late_students,
+            'attendance_rate': round((present_students + late_students) / total_students * 100, 1) if total_students > 0 else 0
+        }
+    
+    def __repr__(self):
+        return f"Attendance(date={self.date}, class_id={self.class_id})"
+
+
+class StudentAttendance(db.Model):
+    """Enskild elevs närvaro för en specifik lektion"""
+    __tablename__ = 'student_attendance'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    attendance_id = db.Column(db.Integer, db.ForeignKey('attendance.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    status = db.Column(db.String(20), nullable=False)  # 'present', 'absent', 'late', 'excused'
+    arrival_time = db.Column(db.DateTime)  # När eleven kom (för sena ankomster)
+    notes = db.Column(db.Text)  # Anteckningar om eleven specifikt
+    marked_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Unique constraint - en elev kan bara ha en närvaromarkering per lektion
+    __table_args__ = (db.UniqueConstraint('attendance_id', 'student_id', name='unique_student_attendance'),)
+    
+    # Relationer
+    student = db.relationship('User', foreign_keys=[student_id], backref='attendance_records')
+    
+    def __repr__(self):
+        return f"StudentAttendance(student_id={self.student_id}, status='{self.status}')"
+
+
+
+
 class School(db.Model):
     """Skola-modell för att hantera olika skolor"""
     __tablename__ = 'schools'
@@ -860,6 +930,25 @@ class ClassSchedule(db.Model):
     # Relationer (valfritt)
     school_class = db.relationship('SchoolClass', backref='schedule')
     subject      = db.relationship('Subject')
+
+    def get_students_for_lesson(self):
+        """Hämta alla elever som ska gå på denna lektion (baserat på class_id)"""
+        return User.query.filter(
+            User.class_id == self.class_id,
+            User.user_type == 'student',
+            User.is_active == True
+        ).order_by(User.last_name, User.first_name).all()
+
+    def get_attendance_for_date(self, date):
+        """Hämta närvarorapport för denna lektion på ett specifikt datum"""
+        return Attendance.query.filter_by(
+            schedule_id=self.id,
+            date=date
+        ).first()
+
+    def has_attendance_for_date(self, date):
+        """Kontrollera om närvaro redan är rapporterad för detta datum"""
+        return self.get_attendance_for_date(date) is not None
 
 
 class SchoolNews(db.Model):
@@ -2040,7 +2129,251 @@ def extract_audio_from_video(video_path, audio_output_path):
         print(f"Error extracting audio: {str(e)}")
         return False
 
+# Lägg till dessa routes i din Flask-app
 
+@app.route('/attendance/lesson/<int:schedule_id>/<date>')
+@login_required
+def attendance_lesson(schedule_id, date):
+    """Visa närvarorapporteringssida för en specifik lektion"""
+    
+    # Kontrollera att användaren är lärare
+    if not current_user.is_teacher():
+        flash('Endast lärare kan rapportera närvaro.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        # Validera datum
+        lesson_date = datetime.strptime(date, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Ogiltigt datumformat.', 'error')
+        return redirect(url_for('index'))
+    
+    # Hämta lektionen från schemat
+    schedule_item = ClassSchedule.query.get_or_404(schedule_id)
+    
+    # Kontrollera att läraren har behörighet att rapportera för denna lektion
+    # (äger ämnet, är klassföreståndare, eller undervisar ämnet)
+    can_report = False
+    
+    # Kontroll 1: Är klassföreståndare
+    if schedule_item.school_class.homeroom_teacher_id == current_user.id:
+        can_report = True
+    
+    # Kontrol 2: Undervisar ämnet
+    if schedule_item.subject_id:
+        subject = Subject.query.get(schedule_item.subject_id)
+        if subject and subject.user_id == current_user.id:
+            can_report = True
+        
+        # Eller om läraren undervisar ämnet enligt teacher_subjects
+        if current_user.teacher_subjects:
+            teacher_subjects = [s.strip().lower() for s in current_user.teacher_subjects.split(',')]
+            if subject and subject.name.lower() in teacher_subjects:
+                can_report = True
+    
+    # Kontroll 3: Samma skola
+    if schedule_item.school_class.school_id != current_user.school_id:
+        can_report = False
+    
+    if not can_report:
+        flash('Du har inte behörighet att rapportera närvaro för denna lektion.', 'error')
+        return redirect(url_for('index'))
+    
+    # Hämta alla elever i klassen
+    students = schedule_item.get_students_for_lesson()
+    
+    # Kontrollera om närvaro redan är rapporterad
+    existing_attendance = schedule_item.get_attendance_for_date(lesson_date)
+    
+    # Om närvaro redan existerar, hämta befintlig data
+    student_attendance_data = {}
+    if existing_attendance:
+        for sa in existing_attendance.student_attendances:
+            student_attendance_data[sa.student_id] = {
+                'status': sa.status,
+                'notes': sa.notes or '',
+                'arrival_time': sa.arrival_time.strftime('%H:%M') if sa.arrival_time else ''
+            }
+    
+    return render_template('attendance/report_attendance.html',
+                         schedule_item=schedule_item,
+                         lesson_date=lesson_date,
+                         students=students,
+                         existing_attendance=existing_attendance,
+                         student_attendance_data=student_attendance_data)
+
+
+@app.route('/api/attendance/save', methods=['POST'])
+@login_required
+def save_attendance():
+    """Spara närvarorapport"""
+    
+    if not current_user.is_teacher():
+        return jsonify({'status': 'error', 'message': 'Endast lärare kan rapportera närvaro'}), 403
+    
+    try:
+        data = request.get_json()
+        
+        schedule_id = data.get('schedule_id')
+        date_str = data.get('date')
+        lesson_notes = data.get('lesson_notes', '')
+        attendance_data = data.get('attendance_data', {})
+        
+        # Validera input
+        if not schedule_id or not date_str:
+            return jsonify({'status': 'error', 'message': 'Saknar obligatorisk data'}), 400
+        
+        lesson_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        schedule_item = ClassSchedule.query.get(schedule_id)
+        
+        if not schedule_item:
+            return jsonify({'status': 'error', 'message': 'Lektion hittades inte'}), 404
+        
+        # Kontrollera behörighet (samma som ovan)
+        can_report = False
+        if schedule_item.school_class.homeroom_teacher_id == current_user.id:
+            can_report = True
+        elif schedule_item.subject_id:
+            subject = Subject.query.get(schedule_item.subject_id)
+            if subject and subject.user_id == current_user.id:
+                can_report = True
+        
+        if not can_report:
+            return jsonify({'status': 'error', 'message': 'Ingen behörighet'}), 403
+        
+        # Hitta eller skapa närvarorapport
+        attendance = Attendance.query.filter_by(
+            schedule_id=schedule_id,
+            date=lesson_date
+        ).first()
+        
+        if not attendance:
+            attendance = Attendance(
+                schedule_id=schedule_id,
+                date=lesson_date,
+                teacher_id=current_user.id,
+                class_id=schedule_item.class_id,
+                subject_id=schedule_item.subject_id,
+                lesson_notes=lesson_notes
+            )
+            db.session.add(attendance)
+            db.session.flush()  # För att få ID
+        else:
+            # Uppdatera befintlig
+            attendance.lesson_notes = lesson_notes
+            attendance.updated_at = datetime.utcnow()
+        
+        # Ta bort befintlig elevnärvaro för denna lektion
+        StudentAttendance.query.filter_by(attendance_id=attendance.id).delete()
+        
+        # Lägg till ny elevnärvaro
+        for student_id_str, student_data in attendance_data.items():
+            student_id = int(student_id_str)
+            status = student_data.get('status', 'present')
+            notes = student_data.get('notes', '')
+            arrival_time_str = student_data.get('arrival_time', '')
+            
+            # Parsa ankomsttid om den finns
+            arrival_time = None
+            if arrival_time_str and status == 'late':
+                try:
+                    arrival_time = datetime.combine(
+                        lesson_date,
+                        datetime.strptime(arrival_time_str, '%H:%M').time()
+                    )
+                except ValueError:
+                    pass  # Ignorera felaktig tidsformatering
+            
+            student_attendance = StudentAttendance(
+                attendance_id=attendance.id,
+                student_id=student_id,
+                status=status,
+                arrival_time=arrival_time,
+                notes=notes
+            )
+            db.session.add(student_attendance)
+        
+        db.session.commit()
+        
+        # Hämta sammanfattning
+        summary = attendance.get_attendance_summary()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Närvaro sparad framgångsrikt',
+            'summary': summary
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error saving attendance: {e}")
+        return jsonify({'status': 'error', 'message': 'Fel vid sparande av närvaro'}), 500
+
+
+@app.route('/api/attendance/lesson/<int:schedule_id>/<date>')
+@login_required
+def get_lesson_attendance(schedule_id, date):
+    """Hämta närvarodata för en specifik lektion"""
+    
+    if not current_user.is_teacher():
+        return jsonify({'status': 'error', 'message': 'Ingen behörighet'}), 403
+    
+    try:
+        lesson_date = datetime.strptime(date, '%Y-%m-%d').date()
+        schedule_item = ClassSchedule.query.get_or_404(schedule_id)
+        
+        # Hämta närvarorapport om den finns
+        attendance = schedule_item.get_attendance_for_date(lesson_date)
+        
+        if attendance:
+            summary = attendance.get_attendance_summary()
+            return jsonify({
+                'status': 'success',
+                'has_attendance': True,
+                'attendance_id': attendance.id,
+                'lesson_notes': attendance.lesson_notes,
+                'summary': summary,
+                'last_updated': attendance.updated_at.isoformat()
+            })
+        else:
+            return jsonify({
+                'status': 'success',
+                'has_attendance': False
+            })
+            
+    except Exception as e:
+        print(f"Error getting attendance: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/attendance/history/<int:class_id>')
+@login_required
+def attendance_history(class_id):
+    """Visa närvarohistorik för en klass"""
+    
+    if not current_user.is_teacher():
+        flash('Endast lärare kan se närvarohistorik.', 'error')
+        return redirect(url_for('index'))
+    
+    school_class = SchoolClass.query.get_or_404(class_id)
+    
+    # Kontrollera behörighet
+    if (school_class.school_id != current_user.school_id or 
+        school_class.homeroom_teacher_id != current_user.id):
+        flash('Du har inte behörighet att se denna information.', 'error')
+        return redirect(url_for('index'))
+    
+    # Hämta närvarohistorik för klassen (senaste 30 dagarna)
+    thirty_days_ago = datetime.now().date() - timedelta(days=30)
+    
+    attendance_records = Attendance.query.filter(
+        Attendance.class_id == class_id,
+        Attendance.date >= thirty_days_ago
+    ).order_by(Attendance.date.desc(), Attendance.created_at.desc()).all()
+    
+    return render_template('attendance/history.html',
+                         school_class=school_class,
+                         attendance_records=attendance_records)
 
 def compress_audio_if_needed(audio_path, max_size_mb=25):
     """Komprimera ljud om det är för stort - mer realistisk storlek"""
