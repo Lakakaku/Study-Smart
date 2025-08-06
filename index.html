@@ -1062,9 +1062,71 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+
+  // Add function to check teacher setup
+  window.checkTeacherSetup = async function() {
+      try {
+          const response = await fetch('/api/teacher/setup_schedule');
+          const data = await response.json();
+          
+          if (data.status === 'success') {
+              const info = data.teacher_info;
+              let message = `
+                  <h4>Lärarinformation</h4>
+                  <p><strong>Namn:</strong> ${info.name}</p>
+                  <p><strong>Skola:</strong> ${info.school_name}</p>
+                  <p><strong>Undervisningsämnen:</strong> ${info.teacher_subjects?.join(', ') || 'Inga ämnen angivna'}</p>
+                  <p><strong>Egna ämnen:</strong> ${info.owned_subjects?.map(s => s.name).join(', ') || 'Inga'}</p>
+                  <p><strong>Klassföreståndare:</strong> ${info.is_homeroom_teacher ? info.homeroom_classes?.map(c => c.name).join(', ') : 'Nej'}</p>
+              `;
+              
+              if (info.teacher_subjects?.length === 0 && info.owned_subjects?.length === 0) {
+                  message += `
+                      <hr>
+                      <p style="color: orange;">⚠️ Du har inga undervisningsämnen angivna. Kontakta administratören för att uppdatera din profil.</p>
+                  `;
+              }
+              
+              await Swal.fire({
+                  title: 'Lärarinställningar',
+                  html: message,
+                  icon: 'info',
+                  confirmButtonText: 'OK',
+                  customClass: {
+                      popup: 'my-swal-popup',
+                      confirmButton: 'my-confirm-btn'
+                  }
+              });
+          } else {
+              await Swal.fire({
+                  title: 'Fel',
+                  text: data.message || 'Kunde inte hämta lärarinformation',
+                  icon: 'error',
+                  customClass: {
+                      popup: 'my-swal-popup',
+                      confirmButton: 'my-confirm-btn'
+                  }
+              });
+          }
+      } catch (error) {
+          console.error('Error checking teacher setup:', error);
+          await Swal.fire({
+              title: 'Fel',
+              text: 'Nätverksfel vid kontroll av lärarinställningar',
+              icon: 'error',
+              customClass: {
+                  popup: 'my-swal-popup',
+                  confirmButton: 'my-confirm-btn'
+              }
+          });
+      }
+  };
+
   async function loadScheduleForDate(date) {
       try {
           const dateString = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+          console.log(`[DEBUG] Loading schedule for date: ${dateString}`);
+          
           const response = await fetch(`/api/schedule/${dateString}`);
           
           if (!response.ok) {
@@ -1073,6 +1135,11 @@ document.addEventListener('DOMContentLoaded', () => {
           
           const data = await response.json();
           console.log('[DEBUG] Schedule data received:', data);
+          
+          // Visa debug info för lärare
+          if (data.debug_info) {
+              console.log('[DEBUG] Teacher debug info:', data.debug_info);
+          }
           
           displaySchedule(data);
           
@@ -1094,14 +1161,24 @@ document.addEventListener('DOMContentLoaded', () => {
       if (scheduleData.status === 'success' && scheduleData.schedule.length > 0) {
           const today = new Date();
           const isToday = currentDate.toDateString() === today.toDateString();
+          const isTeacher = scheduleData.user_type === 'teacher';
           
-          let scheduleHTML = `
-              
-          `;
+          let scheduleHTML = '<div class="schedule-list">';
           
           scheduleData.schedule.forEach(lesson => {
+              // Olika styling baserat på användartyp och lektionstyp
+              let lessonClass = 'schedule-item';
+              if (isTeacher) {
+                  lessonClass += ' teacher-lesson';
+                  if (lesson.type === 'homeroom') {
+                      lessonClass += ' homeroom-lesson';
+                  }
+              } else {
+                  lessonClass += ' student-lesson';
+              }
+              
               scheduleHTML += `
-                  <div class="schedule-item">
+                  <div class="${lessonClass}">
                       <div class="schedule-time">
                           <span class="time-start">${lesson.start_time}</span>
                           <span class="time-separator">-</span>
@@ -1110,12 +1187,17 @@ document.addEventListener('DOMContentLoaded', () => {
                       <div class="schedule-details">
                           <div class="schedule-subject">${lesson.subject}</div>
                           <div class="schedule-room">${lesson.room}</div>
+                          ${lesson.class_name ? `<div class="schedule-class">Klass: ${lesson.class_name}</div>` : ''}
                       </div>
                   </div>
               `;
           });
           
           scheduleHTML += '</div>';
+          
+          // Lägg till extra info för lärare
+          
+          
           scheduleContainer.innerHTML = scheduleHTML;
           
           // Markera aktuell lektion om det är idag
@@ -1124,14 +1206,31 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           
       } else {
-          const message = scheduleData.message || 'Inget schema för idag';
+          let message = 'Inget schema för idag';
+          
+          if (scheduleData.message) {
+              message = scheduleData.message;
+          } else if (scheduleData.user_type === 'teacher') {
+              message = 'Ingen undervisning schemalagd idag';
+          }
+          
           scheduleContainer.innerHTML = `
               <div class="no-schedule">
                   <p>${message}</p>
+                  ${scheduleData.user_type === 'teacher' ? `
+                      <div class="teacher-schedule-help">
+                          <small>
+                              Tips: Kontrollera att dina ämnen är korrekt inställda i profilen.<br>
+                              <a href="#" onclick="checkTeacherSetup()">Kontrollera lärarinställningar</a>
+                          </small>
+                      </div>
+                  ` : ''}
               </div>
           `;
       }
   }
+
+
 
 
   function displayScheduleError(errorMessage) {
@@ -2540,6 +2639,115 @@ async function leaveSubject(subjectId) {
         box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
       }
 
+
+
+      /* Lägg till denna CSS i din befintliga CSS-fil (index_styles.css) */
+
+      /* Särskild styling för lärarschema */
+      .teacher-lesson {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-left: 4px solid #4f46e5;
+          color: white;
+      }
+
+      .teacher-lesson .schedule-subject {
+          font-weight: 600;
+          font-size: 1.1em;
+      }
+
+      .teacher-lesson .schedule-class {
+          font-size: 0.85em;
+          opacity: 0.9;
+          margin-top: 2px;
+          color:black;
+      }
+
+      .teacher-lesson .schedule-role {
+          font-size: 0.8em;
+          background: rgba(255, 255, 255, 0.2);
+          padding: 2px 6px;
+          border-radius: 10px;
+          display: inline-block;
+          margin-top: 4px;
+      }
+
+      /* Förbättra student-lektioner också */
+      .student-lesson {
+          background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+          border-left: 4px solid #0984e3;
+          color: white;
+      }
+
+      /* Aktuell lektion markering */
+      .teacher-lesson.current-lesson {
+          border-left-color: #00b894;
+          box-shadow: 0 0 15px rgba(0, 184, 148, 0.4);
+          animation: pulse-teacher 2s infinite;
+      }
+
+      .student-lesson.current-lesson {
+          border-left-color: #00b894;
+          box-shadow: 0 0 15px rgba(0, 184, 148, 0.4);
+          animation: pulse-student 2s infinite;
+      }
+
+      @keyframes pulse-teacher {
+          0% {
+              box-shadow: 0 0 15px rgba(0, 184, 148, 0.4);
+          }
+          50% {
+              box-shadow: 0 0 25px rgba(0, 184, 148, 0.7);
+          }
+          100% {
+              box-shadow: 0 0 15px rgba(0, 184, 148, 0.4);
+          }
+      }
+
+      @keyframes pulse-student {
+          0% {
+              box-shadow: 0 0 15px rgba(9, 132, 227, 0.4);
+          }
+          50% {
+              box-shadow: 0 0 25px rgba(9, 132, 227, 0.7);
+          }
+          100% {
+              box-shadow: 0 0 15px rgba(9, 132, 227, 0.4);
+          }
+      }
+
+      /* Förbättra schema-headern */
+      .schedule-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 15px;
+      }
+
+      .schedule-header h3 {
+          margin: 0;
+          color: #2d3748;
+      }
+
+      .user-role-badge {
+          background: #e2e8f0;
+          color: #4a5568;
+          padding: 4px 12px;
+          border-radius: 15px;
+          font-size: 0.75em;
+          font-weight: 600;
+          text-transform: uppercase;
+      }
+
+      .user-role-badge.teacher {
+          background: #667eea;
+          color: white;
+      }
+
+      .user-role-badge.student {
+          background: #74b9ff;
+          color: white;
+      }
+
       .lunch-menu-close {
         position: absolute;
         right: 15px;
@@ -3207,7 +3415,7 @@ async function leaveSubject(subjectId) {
       .schedule-content {
         flex: 1;
         padding: 1.5rem;
-        overflow-y: auto;
+        
         background-color: var(--bg-white);
       }
 
