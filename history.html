@@ -365,6 +365,60 @@
             color: #3730a3;
         }
 
+        /* Nya stilar för tidsperiod filter */
+        .timespan-controls {
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 1rem;
+        }
+
+        .timespan-filter {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .timespan-select {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: white;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .timespan-info {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .custom-date-range {
+            display: none;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .custom-date-range.active {
+            display: flex;
+        }
+
+        .loading-stats {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+            font-style: italic;
+        }
+
         @media (max-width: 768px) {
             .history-container {
                 padding: 10px;
@@ -381,6 +435,16 @@
             }
             
             .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .timespan-filter {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .custom-date-range {
                 flex-direction: column;
                 align-items: stretch;
             }
@@ -425,6 +489,32 @@
       </div>
     </div>
 
+    <!-- Tidsperiod kontroller -->
+    <div class="filters">
+        <div class="timespan-controls">
+            <div class="timespan-filter">
+                <label for="timespan-selector">📅 Tidsperiod:</label>
+                <select id="timespan-selector" class="timespan-select">
+                    <option value="30days">Senaste 30 dagarna</option>
+                    <option value="7days">Senaste veckan</option>
+                    <option value="month">Denna månad</option>
+                    <option value="semester">Detta läsår/termin</option>
+                    <option value="all">Totalt (alla datum)</option>
+                    <option value="custom">Anpassat datumintervall</option>
+                </select>
+                <span id="timespan-info" class="timespan-info">Visar senaste 30 dagarna</span>
+            </div>
+            
+            <div id="custom-date-range" class="custom-date-range">
+                <label for="custom-date-from">Från:</label>
+                <input type="date" id="custom-date-from" class="filter-input">
+                <label for="custom-date-to">Till:</label>
+                <input type="date" id="custom-date-to" class="filter-input">
+                <button id="apply-custom-range" class="export-btn" style="background: #667eea;">Tillämpa</button>
+            </div>
+        </div>
+    </div>
+
     <div class="history-container">
         <div class="history-header">
             <h1>📊 Närvarohistorik</h1>
@@ -436,27 +526,27 @@
         <!-- Klassstatistik (visas som standard) -->
         <div id="class-stats" class="stats-overview">
             <div class="stat-card">
-                <div class="stat-number">{{ total_lessons }}</div>
+                <div class="stat-number" id="total-lessons-stat">{{ total_lessons }}</div>
                 <div class="stat-label">Rapporterade lektioner</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{ total_present }}</div>
+                <div class="stat-number" id="total-present-stat">{{ total_present }}</div>
                 <div class="stat-label">Närvarande totalt</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{ total_late }}</div>
+                <div class="stat-number" id="total-late-stat">{{ total_late }}</div>
                 <div class="stat-label">Sena totalt</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{ total_absent }}</div>
+                <div class="stat-number" id="total-absent-stat">{{ total_absent }}</div>
                 <div class="stat-label">Frånvarande totalt</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{ total_excused }}</div>
+                <div class="stat-number" id="total-excused-stat">{{ total_excused }}</div>
                 <div class="stat-label">Ursäktade totalt</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{ avg_attendance }}%</div>
+                <div class="stat-number" id="avg-attendance-stat">{{ avg_attendance }}%</div>
                 <div class="stat-label">Genomsnittlig närvaro</div>
             </div>
         </div>
@@ -572,10 +662,248 @@
     <script>
         // Globala variabler för att hålla all data
         const studentStats = {{ student_stats|tojson }};
-        // FIXAD RAD 575: Använd attendance_records_json istället för attendance_records
         const attendanceData = {{ attendance_records_json|tojson }};
         let selectedStudentId = null;
         let personalAttendanceData = {};
+        let currentTimespan = '30days';
+
+        // Tidsspann beräkningar
+        function getTimespanDates(timespan) {
+            const today = new Date();
+            const dates = { from: null, to: today };
+
+            switch(timespan) {
+                case '7days':
+                    dates.from = new Date(today.getTime() - (7 * 24 * 60 * 60 * 1000));
+                    break;
+                case '30days':
+                    dates.from = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+                    break;
+                case 'month':
+                    dates.from = new Date(today.getFullYear(), today.getMonth(), 1);
+                    break;
+                case 'semester':
+                    // Approximation: augusti till juni
+                    const currentMonth = today.getMonth();
+                    if (currentMonth >= 7) { // Augusti och framåt = hösttermin
+                        dates.from = new Date(today.getFullYear(), 7, 1); // 1 augusti
+                    } else { // Januari till juli = vårtermin
+                        dates.from = new Date(today.getFullYear(), 0, 1); // 1 januari
+                    }
+                    break;
+                case 'all':
+                    dates.from = new Date('2000-01-01'); // Mycket tidigt datum
+                    break;
+                case 'custom':
+                    // Hanteras separat
+                    return null;
+                default:
+                    dates.from = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+            }
+
+            return dates;
+        }
+
+        function getTimespanDescription(timespan) {
+            const descriptions = {
+                '7days': 'Visar senaste 7 dagarna',
+                '30days': 'Visar senaste 30 dagarna', 
+                'month': 'Visar denna månad',
+                'semester': 'Visar detta läsår/termin',
+                'all': 'Visar alla datum',
+                'custom': 'Anpassat datumintervall'
+            };
+            return descriptions[timespan] || 'Okänd tidsperiod';
+        }
+
+        function updateTimespanInfo(timespan) {
+            const infoElement = document.getElementById('timespan-info');
+            infoElement.textContent = getTimespanDescription(timespan);
+        }
+
+        function calculateStatsForTimespan(timespan, customFrom = null, customTo = null) {
+            let fromDate, toDate;
+
+            if (timespan === 'custom' && customFrom && customTo) {
+                fromDate = new Date(customFrom);
+                toDate = new Date(customTo);
+            } else if (timespan !== 'custom') {
+                const dates = getTimespanDates(timespan);
+                if (!dates) return null;
+                fromDate = dates.from;
+                toDate = dates.to;
+            } else {
+                return null;
+            }
+
+            // Filtrera attendance records baserat på tidsperiod
+            const filteredRecords = attendanceData.filter(record => {
+                const recordDate = new Date(record.date);
+                return recordDate >= fromDate && recordDate <= toDate;
+            });
+
+            // Beräkna statistik för klassöversikt
+            let totalLessons = filteredRecords.length;
+            let totalPresent = 0;
+            let totalLate = 0; 
+            let totalAbsent = 0;
+            let totalExcused = 0;
+
+            filteredRecords.forEach(record => {
+                const summary = record.summary || {};
+                totalPresent += summary.present || 0;
+                totalLate += summary.late || 0;
+                totalAbsent += summary.absent || 0;
+                totalExcused += summary.excused || 0;
+            });
+
+            const totalStudentRecords = totalPresent + totalLate + totalAbsent + totalExcused;
+            const avgAttendance = totalStudentRecords > 0 ? 
+                Math.round(((totalPresent + totalLate) / totalStudentRecords) * 100) : 0;
+
+            return {
+                totalLessons,
+                totalPresent,
+                totalLate,
+                totalAbsent,
+                totalExcused,
+                avgAttendance,
+                filteredRecords
+            };
+        }
+
+        function calculatePersonalStatsForTimespan(studentId, timespan, customFrom = null, customTo = null) {
+            let fromDate, toDate;
+
+            if (timespan === 'custom' && customFrom && customTo) {
+                fromDate = new Date(customFrom);
+                toDate = new Date(customTo);
+            } else if (timespan !== 'custom') {
+                const dates = getTimespanDates(timespan);
+                if (!dates) return null;
+                fromDate = dates.from;
+                toDate = dates.to;
+            } else {
+                return null;
+            }
+
+            // Filtrera personlig attendance data
+            const filteredPersonalData = Object.entries(personalAttendanceData)
+                .filter(([recordId, record]) => {
+                    const attendanceRecord = attendanceData.find(ar => ar.id == recordId);
+                    if (!attendanceRecord) return false;
+                    const recordDate = new Date(attendanceRecord.date);
+                    return recordDate >= fromDate && recordDate <= toDate;
+                })
+                .map(([recordId, record]) => record);
+
+            let present = 0, late = 0, absent = 0, excused = 0;
+
+            filteredPersonalData.forEach(record => {
+                switch(record.status) {
+                    case 'present': present++; break;
+                    case 'late': late++; break;
+                    case 'absent': absent++; break;
+                    case 'excused': excused++; break;
+                }
+            });
+
+            const total = present + late + absent + excused;
+            const rate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
+
+            return {
+                total,
+                present, 
+                late,
+                absent,
+                excused,
+                rate
+            };
+        }
+
+        function updateClassStats(stats) {
+            if (!stats) return;
+            
+            document.getElementById('total-lessons-stat').textContent = stats.totalLessons;
+            document.getElementById('total-present-stat').textContent = stats.totalPresent;
+            document.getElementById('total-late-stat').textContent = stats.totalLate;
+            document.getElementById('total-absent-stat').textContent = stats.totalAbsent;
+            document.getElementById('total-excused-stat').textContent = stats.totalExcused;
+            document.getElementById('avg-attendance-stat').textContent = stats.avgAttendance + '%';
+        }
+
+        function updatePersonalStats(studentId, stats) {
+            if (!stats) return;
+
+            const student = studentStats.find(s => s.id == studentId);
+            if (!student) return;
+
+            const studentStatsDiv = document.getElementById('student-stats');
+            studentStatsDiv.innerHTML = `
+                <div class="personal-stats-header">
+                    <h3>${student.name} - Personlig statistik</h3>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.total}</div>
+                    <div class="stat-label">Totalt lektioner</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.present}</div>
+                    <div class="stat-label">Närvarande</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.late}</div>
+                    <div class="stat-label">Sena</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.absent}</div>
+                    <div class="stat-label">Frånvarande</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.excused}</div>
+                    <div class="stat-label">Ursäktade</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.rate}%</div>
+                    <div class="stat-label">Närvaro %</div>
+                </div>
+            `;
+        }
+
+        function filterRecordsByTimespan(timespan, customFrom = null, customTo = null) {
+            let fromDate, toDate;
+
+            if (timespan === 'custom' && customFrom && customTo) {
+                fromDate = new Date(customFrom);
+                toDate = new Date(customTo);
+            } else if (timespan !== 'custom') {
+                const dates = getTimespanDates(timespan);
+                if (!dates) return;
+                fromDate = dates.from;
+                toDate = dates.to;
+            } else {
+                return;
+            }
+
+            // Uppdatera datum filter inputs
+            const dateFromInput = document.getElementById('date-from');
+            const dateToInput = document.getElementById('date-to');
+            dateFromInput.value = fromDate.toISOString().split('T')[0];
+            dateToInput.value = toDate.toISOString().split('T')[0];
+
+            // Kör befintlig filter funktion
+            filterRecords();
+
+            // Uppdatera records titel
+            const recordsTitle = document.getElementById('records-title');
+            const timespanText = getTimespanDescription(timespan);
+            if (selectedStudentId) {
+                const student = studentStats.find(s => s.id == selectedStudentId);
+                recordsTitle.textContent = `Närvarorapporter för ${student.name} (${timespanText.toLowerCase()})`;
+            } else {
+                recordsTitle.textContent = `Närvarorapporter (${timespanText.toLowerCase()})`;
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
             const dateFromInput = document.getElementById('date-from');
@@ -590,12 +918,87 @@
             const recordsTitle = document.getElementById('records-title');
             const selectedStudentName = document.getElementById('selected-student-name');
             
+            // Nya element för tidsperiod
+            const timespanSelector = document.getElementById('timespan-selector');
+            const customDateRange = document.getElementById('custom-date-range');
+            const customDateFrom = document.getElementById('custom-date-from');
+            const customDateTo = document.getElementById('custom-date-to');
+            const applyCustomRange = document.getElementById('apply-custom-range');
+            
             // Sätt standarddatum (senaste 30 dagarna)
             const today = new Date();
             const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
             
             dateFromInput.value = thirtyDaysAgo.toISOString().split('T')[0];
             dateToInput.value = today.toISOString().split('T')[0];
+            
+            // Tidsperiod väljare
+            timespanSelector.addEventListener('change', function() {
+                const selectedTimespan = this.value;
+                currentTimespan = selectedTimespan;
+                updateTimespanInfo(selectedTimespan);
+                
+                if (selectedTimespan === 'custom') {
+                    customDateRange.classList.add('active');
+                } else {
+                    customDateRange.classList.remove('active');
+                    
+                    // Beräkna och uppdatera statistik
+                    const stats = calculateStatsForTimespan(selectedTimespan);
+                    if (stats) {
+                        updateClassStats(stats);
+                        
+                        // Om en elev är vald, uppdatera även personlig statistik
+                        if (selectedStudentId) {
+                            const personalStats = calculatePersonalStatsForTimespan(selectedStudentId, selectedTimespan);
+                            if (personalStats) {
+                                updatePersonalStats(selectedStudentId, personalStats);
+                            }
+                        }
+                    }
+                    
+                    // Filtrera synliga records
+                    filterRecordsByTimespan(selectedTimespan);
+                }
+            });
+            
+            // Anpassat datumintervall
+            applyCustomRange.addEventListener('click', function() {
+                const fromDate = customDateFrom.value;
+                const toDate = customDateTo.value;
+                
+                if (!fromDate || !toDate) {
+                    alert('Vänligen välj både från- och till-datum.');
+                    return;
+                }
+                
+                if (new Date(fromDate) > new Date(toDate)) {
+                    alert('Från-datum kan inte vara senare än till-datum.');
+                    return;
+                }
+                
+                // Beräkna och uppdatera statistik
+                const stats = calculateStatsForTimespan('custom', fromDate, toDate);
+                if (stats) {
+                    updateClassStats(stats);
+                    
+                    // Om en elev är vald, uppdatera även personlig statistik
+                    if (selectedStudentId) {
+                        const personalStats = calculatePersonalStatsForTimespan(selectedStudentId, 'custom', fromDate, toDate);
+                        if (personalStats) {
+                            updatePersonalStats(selectedStudentId, personalStats);
+                        }
+                    }
+                }
+                
+                // Filtrera synliga records
+                filterRecordsByTimespan('custom', fromDate, toDate);
+                
+                // Uppdatera info text
+                const fromStr = new Date(fromDate).toLocaleDateString('sv-SE');
+                const toStr = new Date(toDate).toLocaleDateString('sv-SE');
+                document.getElementById('timespan-info').textContent = `Anpassat: ${fromStr} - ${toStr}`;
+            });
             
             // Klassväljare
             classSelector.addEventListener('change', () => {
@@ -627,7 +1030,10 @@
                 classStatsDiv.style.display = 'grid';
                 studentStatsDiv.style.display = 'none';
                 clearSelectionBtn.style.display = 'none';
-                recordsTitle.textContent = 'Närvarorapporter (senaste 30 dagarna)';
+                
+                // Uppdatera titel baserat på tidsperiod
+                const timespanText = getTimespanDescription(currentTimespan);
+                recordsTitle.textContent = `Närvarorapporter (${timespanText.toLowerCase()})`;
 
                 // Visa klassstatistik i alla record-items
                 document.querySelectorAll('.record-item').forEach(item => {
@@ -637,6 +1043,19 @@
                     if (personalStats) personalStats.style.display = 'none';
                     item.classList.remove('personal-record-item');
                 });
+                
+                // Uppdatera klassstatistik baserat på aktuell tidsperiod
+                if (currentTimespan === 'custom') {
+                    const fromDate = customDateFrom.value;
+                    const toDate = customDateTo.value;
+                    if (fromDate && toDate) {
+                        const stats = calculateStatsForTimespan('custom', fromDate, toDate);
+                        if (stats) updateClassStats(stats);
+                    }
+                } else {
+                    const stats = calculateStatsForTimespan(currentTimespan);
+                    if (stats) updateClassStats(stats);
+                }
             }
 
             async function showPersonalStats(studentId) {
@@ -647,42 +1066,61 @@
                 classStatsDiv.style.display = 'none';
                 studentStatsDiv.style.display = 'grid';
                 clearSelectionBtn.style.display = 'inline-block';
-                recordsTitle.textContent = `Närvarorapporter för ${student.name}`;
+                
+                const timespanText = getTimespanDescription(currentTimespan);
+                recordsTitle.textContent = `Närvarorapporter för ${student.name} (${timespanText.toLowerCase()})`;
                 selectedStudentName.textContent = `${student.name} - Personlig statistik`;
-
-                // Bygg personlig statistik
-                studentStatsDiv.innerHTML = `
-                    <div class="personal-stats-header">
-                        <h3>${student.name} - Personlig statistik</h3>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${student.total}</div>
-                        <div class="stat-label">Totalt lektioner</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${student.present}</div>
-                        <div class="stat-label">Närvarande</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${student.late}</div>
-                        <div class="stat-label">Sena</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${student.absent}</div>
-                        <div class="stat-label">Frånvarande</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${student.excused}</div>
-                        <div class="stat-label">Ursäktade</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${student.rate}%</div>
-                        <div class="stat-label">Närvaro %</div>
-                    </div>
-                `;
 
                 // Hämta personlig närvarodata
                 await loadPersonalAttendanceData(studentId);
+                
+                // Beräkna personlig statistik baserat på aktuell tidsperiod
+                let personalStats;
+                if (currentTimespan === 'custom') {
+                    const fromDate = customDateFrom.value;
+                    const toDate = customDateTo.value;
+                    if (fromDate && toDate) {
+                        personalStats = calculatePersonalStatsForTimespan(studentId, 'custom', fromDate, toDate);
+                    }
+                } else {
+                    personalStats = calculatePersonalStatsForTimespan(studentId, currentTimespan);
+                }
+                
+                if (personalStats) {
+                    updatePersonalStats(studentId, personalStats);
+                } else {
+                    // Fallback till original data
+                    studentStatsDiv.innerHTML = `
+                        <div class="personal-stats-header">
+                            <h3>${student.name} - Personlig statistik</h3>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${student.total}</div>
+                            <div class="stat-label">Totalt lektioner</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${student.present}</div>
+                            <div class="stat-label">Närvarande</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${student.late}</div>
+                            <div class="stat-label">Sena</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${student.absent}</div>
+                            <div class="stat-label">Frånvarande</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${student.excused}</div>
+                            <div class="stat-label">Ursäktade</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${student.rate}%</div>
+                            <div class="stat-label">Närvaro %</div>
+                        </div>
+                    `;
+                }
+
                 updatePersonalRecordItems();
             }
 
@@ -842,11 +1280,12 @@
                 }
                 
                 let csvContent = '';
+                const timespanText = getTimespanDescription(currentTimespan);
                 
                 if (selectedStudentId) {
                     // Export för specifik elev
                     const student = studentStats.find(s => s.id == selectedStudentId);
-                    csvContent = `Elev,Datum,Ämne,Status,Ankomsttid,Anteckningar\n`;
+                    csvContent = `Elev,Datum,Ämne,Status,Ankomsttid,Anteckningar,Tidsperiod\n`;
                     
                     visibleItems.forEach(item => {
                         const date = item.dataset.date;
@@ -866,11 +1305,11 @@
                             'ej_rapporterad': 'Ej rapporterad'
                         }[status] || 'Okänd';
                         
-                        csvContent += `"${student.name}","${date}","${subject}","${statusText}","${arrivalTime}","${notes.replace(/"/g, '""')}"\n`;
+                        csvContent += `"${student.name}","${date}","${subject}","${statusText}","${arrivalTime}","${notes.replace(/"/g, '""')}","${timespanText}"\n`;
                     });
                 } else {
                     // Export för hela klassen
-                    csvContent = 'Datum,Ämne,Närvarande,Sena,Frånvarande,Ursäktade,Närvaro %,Anteckningar\n';
+                    csvContent = 'Datum,Ämne,Närvarande,Sena,Frånvarande,Ursäktade,Närvaro %,Anteckningar,Tidsperiod\n';
                     
                     visibleItems.forEach(item => {
                         const date = item.dataset.date;
@@ -883,7 +1322,7 @@
                         const attendanceRate = item.querySelector('.attendance-rate')?.textContent?.replace('% närvaro', '') || '0';
                         const notes = item.querySelector('.record-notes')?.textContent?.replace('Lektionsanteckningar: ', '') || '';
                         
-                        csvContent += `"${date}","${subject}","${present}","${late}","${absent}","${excused}","${attendanceRate}","${notes.replace(/"/g, '""')}"\n`;
+                        csvContent += `"${date}","${subject}","${present}","${late}","${absent}","${excused}","${attendanceRate}","${notes.replace(/"/g, '""')}","${timespanText}"\n`;
                     });
                 }
                 
@@ -893,9 +1332,10 @@
                 const url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
                 
+                const timespanSuffix = currentTimespan.replace('days', 'd').replace('month', 'm').replace('semester', 's').replace('all', 'total').replace('custom', 'custom');
                 const filename = selectedStudentId 
-                    ? `personlig_narvarohistorik_${new Date().toISOString().split('T')[0]}.csv`
-                    : `narvarohistorik_${new Date().toISOString().split('T')[0]}.csv`;
+                    ? `personlig_narvarohistorik_${timespanSuffix}_${new Date().toISOString().split('T')[0]}.csv`
+                    : `narvarohistorik_${timespanSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
                     
                 link.setAttribute('download', filename);
                 link.style.visibility = 'hidden';
@@ -903,6 +1343,9 @@
                 link.click();
                 document.body.removeChild(link);
             };
+
+            // Gör filterRecords globalt tillgänglig
+            window.filterRecords = filterRecords;
         });
     </script>
 </body>
