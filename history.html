@@ -1,0 +1,611 @@
+<!-- templates/attendance/history.html -->
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Närvarohistorik - {{ school_class.name }} - Study Smart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index_styles.css') }}">
+    <style>
+        .history-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .history-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .history-header h1 {
+            margin: 0 0 0.5rem 0;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .class-info {
+            font-size: 1.1rem;
+            opacity: 0.95;
+        }
+
+        .stats-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .attendance-records {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .records-header {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .records-header h3 {
+            margin: 0;
+            color: #374151;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .records-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            transition: background-color 0.2s ease;
+        }
+
+        .record-item:hover {
+            background: #f9fafb;
+        }
+
+        .record-item:last-child {
+            border-bottom: none;
+        }
+
+        .record-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .record-date-time {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .record-date {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .record-time {
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+
+        .record-subject {
+            font-size: 1rem;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .record-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .record-stat {
+            text-align: center;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .record-stat.present {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .record-stat.late {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .record-stat.absent {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .record-stat.excused {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .record-stat-number {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .record-stat-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .record-notes {
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            color: #374151;
+            font-style: italic;
+            margin-top: 1rem;
+        }
+
+        .attendance-rate {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .attendance-rate.excellent {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .attendance-rate.good {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .attendance-rate.poor {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .no-records {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+
+        .no-records svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .back-link {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: white;
+            color: #374151;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            z-index: 1000;
+        }
+
+        .back-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .filters {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            margin-bottom: 2rem;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-input {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: white;
+        }
+
+        .export-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .history-container {
+                padding: 10px;
+            }
+            
+            .record-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 1rem;
+            }
+            
+            .record-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .back-link {
+                position: static;
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="{{ url_for('index') }}" class="back-link">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+        Tillbaka till startsidan
+    </a>
+
+    <div class="history-container">
+        <div class="history-header">
+            <h1>📊 Närvarohistorik</h1>
+            <div class="class-info">
+                {{ school_class.name }} - {{ school_class.school.name if school_class.school else 'Okänd skola' }}
+            </div>
+        </div>
+
+        <!-- Statistiköversikt -->
+        <div class="stats-overview">
+            {% set total_lessons = attendance_records|length %}
+            {% set total_students = 0 %}
+            {% set total_present = 0 %}
+            {% set total_late = 0 %}
+            {% set total_absent = 0 %}
+            {% set total_excused = 0 %}
+            
+            {% for record in attendance_records %}
+                {% set summary = record.get_attendance_summary() %}
+                {% set total_students = total_students + summary.total %}
+                {% set total_present = total_present + summary.present %}
+                {% set total_late = total_late + summary.late %}
+                {% set total_absent = total_absent + summary.absent %}
+                {% set total_excused = total_excused + summary.excused %}
+            {% endfor %}
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ total_lessons }}</div>
+                <div class="stat-label">Rapporterade lektioner</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ total_present }}</div>
+                <div class="stat-label">Närvarande totalt</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ total_late }}</div>
+                <div class="stat-label">Sena totalt</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ total_absent }}</div>
+                <div class="stat-label">Frånvarande totalt</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">
+                    {% if total_students > 0 %}
+                        {{ ((total_present + total_late + total_excused) / total_students * 100)|round(1) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </div>
+                <div class="stat-label">Genomsnittlig närvaro</div>
+            </div>
+        </div>
+
+        <!-- Filter och export -->
+        <div class="filters">
+            <div class="filter-group">
+                <label for="date-from">Från datum:</label>
+                <input type="date" id="date-from" class="filter-input">
+                
+                <label for="date-to">Till datum:</label>
+                <input type="date" id="date-to" class="filter-input">
+                
+                <label for="subject-filter">Ämne:</label>
+                <select id="subject-filter" class="filter-select">
+                    <option value="">Alla ämnen</option>
+                    {% for record in attendance_records %}
+                        {% if record.subject %}
+                            <option value="{{ record.subject.name }}">{{ record.subject.name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                
+                <button class="export-btn" onclick="exportData()">
+                    📊 Exportera
+                </button>
+            </div>
+        </div>
+
+        <!-- Närvaroregistreringar -->
+        <div class="attendance-records">
+            <div class="records-header">
+                <h3>Närvarorapporter (senaste 30 dagarna)</h3>
+            </div>
+            
+            <div class="records-list" id="records-list">
+                {% if attendance_records %}
+                    {% for record in attendance_records %}
+                        {% set summary = record.get_attendance_summary() %}
+                        <div class="record-item" data-date="{{ record.date }}" data-subject="{{ record.subject.name if record.subject else '' }}">
+                            <div class="record-header">
+                                <div class="record-date-time">
+                                    <div class="record-date">{{ record.date.strftime('%A, %d %B %Y') }}</div>
+                                    <div class="record-time">
+                                        {% if record.schedule_item %}
+                                            {{ record.schedule_item.start_time }} - {{ record.schedule_item.end_time }}
+                                        {% endif %}
+                                        • Rapporterat {{ record.created_at.strftime('%H:%M') }}
+                                    </div>
+                                </div>
+                                <div class="record-subject">
+                                    {{ record.subject.name if record.subject else 'Okänt ämne' }}
+                                    {% set rate = summary.attendance_rate %}
+                                    <div class="attendance-rate {{ 'excellent' if rate >= 90 else 'good' if rate >= 75 else 'poor' }}">
+                                        {{ rate }}% närvaro
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="record-stats">
+                                <div class="record-stat present">
+                                    <div class="record-stat-number">{{ summary.present }}</div>
+                                    <div class="record-stat-label">Närvarande</div>
+                                </div>
+                                <div class="record-stat late">
+                                    <div class="record-stat-number">{{ summary.late }}</div>
+                                    <div class="record-stat-label">Sena</div>
+                                </div>
+                                <div class="record-stat absent">
+                                    <div class="record-stat-number">{{ summary.absent }}</div>
+                                    <div class="record-stat-label">Frånvarande</div>
+                                </div>
+                                <div class="record-stat excused">
+                                    <div class="record-stat-number">{{ summary.excused if summary.get('excused') else 0 }}</div>
+                                    <div class="record-stat-label">Ursäktade</div>
+                                </div>
+                            </div>
+                            
+                            {% if record.lesson_notes %}
+                            <div class="record-notes">
+                                <strong>Lektionsanteckningar:</strong> {{ record.lesson_notes }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-records">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <h3>Inga närvarorapporter hittades</h3>
+                        <p>Det finns inga rapporterade närvaroregistreringar för denna klass under de senaste 30 dagarna.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dateFromInput = document.getElementById('date-from');
+            const dateToInput = document.getElementById('date-to');
+            const subjectFilter = document.getElementById('subject-filter');
+            const recordsList = document.getElementById('records-list');
+            
+            // Sätt standarddatum (senaste 30 dagarna)
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+            
+            dateFromInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+            dateToInput.value = today.toISOString().split('T')[0];
+            
+            // Samla unika ämnen för filter
+            const subjects = new Set();
+            document.querySelectorAll('.record-item').forEach(item => {
+                const subject = item.dataset.subject;
+                if (subject) subjects.add(subject);
+            });
+            
+            // Uppdatera ämnesfilter
+            subjects.forEach(subject => {
+                if (!document.querySelector(`option[value="${subject}"]`)) {
+                    const option = document.createElement('option');
+                    option.value = subject;
+                    option.textContent = subject;
+                    subjectFilter.appendChild(option);
+                }
+            });
+            
+            // Filter funktioner
+            function filterRecords() {
+                const fromDate = new Date(dateFromInput.value);
+                const toDate = new Date(dateToInput.value);
+                const selectedSubject = subjectFilter.value;
+                
+                document.querySelectorAll('.record-item').forEach(item => {
+                    const itemDate = new Date(item.dataset.date);
+                    const itemSubject = item.dataset.subject;
+                    
+                    let showItem = true;
+                    
+                    // Datum filter
+                    if (dateFromInput.value && itemDate < fromDate) {
+                        showItem = false;
+                    }
+                    if (dateToInput.value && itemDate > toDate) {
+                        showItem = false;
+                    }
+                    
+                    // Ämnes filter
+                    if (selectedSubject && itemSubject !== selectedSubject) {
+                        showItem = false;
+                    }
+                    
+                    item.style.display = showItem ? 'block' : 'none';
+                });
+                
+                // Kontrollera om några poster visas
+                const visibleItems = document.querySelectorAll('.record-item[style="display: block"], .record-item:not([style*="display: none"])');
+                const noRecords = document.querySelector('.no-records');
+                
+                if (visibleItems.length === 0 && !noRecords) {
+                    const noResultsDiv = document.createElement('div');
+                    noResultsDiv.className = 'no-records';
+                    noResultsDiv.id = 'no-filter-results';
+                    noResultsDiv.innerHTML = `
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <h3>Inga resultat hittades</h3>
+                        <p>Inga närvarorapporter matchar de valda filtren.</p>
+                    `;
+                    recordsList.appendChild(noResultsDiv);
+                } else if (visibleItems.length > 0) {
+                    const existingNoResults = document.getElementById('no-filter-results');
+                    if (existingNoResults) {
+                        existingNoResults.remove();
+                    }
+                }
+            }
+            
+            // Event listeners för filter
+            dateFromInput.addEventListener('change', filterRecords);
+            dateToInput.addEventListener('change', filterRecords);
+            subjectFilter.addEventListener('change', filterRecords);
+            
+            // Export funktion
+            window.exportData = function() {
+                const visibleItems = document.querySelectorAll('.record-item:not([style*="display: none"])');
+                
+                if (visibleItems.length === 0) {
+                    alert('Inga data att exportera med nuvarande filter.');
+                    return;
+                }
+                
+                let csvContent = 'Datum,Ämne,Närvarande,Sena,Frånvarande,Ursäktade,Närvaro %,Anteckningar\n';
+                
+                visibleItems.forEach(item => {
+                    const date = item.dataset.date;
+                    const subject = item.dataset.subject || 'Okänt ämne';
+                    const stats = item.querySelectorAll('.record-stat-number');
+                    const present = stats[0]?.textContent || '0';
+                    const late = stats[1]?.textContent || '0';
+                    const absent = stats[2]?.textContent || '0';
+                    const excused = stats[3]?.textContent || '0';
+                    const attendanceRate = item.querySelector('.attendance-rate')?.textContent?.replace('% närvaro', '') || '0';
+                    const notes = item.querySelector('.record-notes')?.textContent?.replace('Lektionsanteckningar: ', '') || '';
+                    
+                    csvContent += `"${date}","${subject}","${present}","${late}","${absent}","${excused}","${attendanceRate}","${notes.replace(/"/g, '""')}"\n`;
+                });
+                
+                // Skapa och ladda ner fil
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `narvarohistorik_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+        });
+    </script>
+</body>
+</html>
