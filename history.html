@@ -361,7 +361,7 @@
             {% set total_excused  = 0 %}
 
             {% for record in attendance_records %}
-                {% set summary = record.get_attendance_summary() %}
+                {% set summary = summaries[record.id] %}
                 {% set total_students = total_students + summary.total %}
                 {% set total_present  = total_present  + summary.present %}
                 {% set total_late     = total_late     + summary.late %}
@@ -425,8 +425,8 @@
             <div class="records-list" id="records-list">
                 {% if attendance_records %}
                     {% for record in attendance_records %}
-                        {% set summary = record.get_attendance_summary() %}
-                        <div class="record-item"
+                        {% set summary = summaries[record.id] %}
+                        <div class="record-item" data-date="{{ record.date }}" data-subject="{{ record.subject.name if record.subject else '' }}">
                              data-date="{{ record.date }}"
                              data-subject="{{ record.subject.name if record.subject else '' }}">
                             <div class="record-header">
@@ -444,9 +444,8 @@
                                 <div class="record-subject">
                                     {{ record.subject.name if record.subject else 'Okänt ämne' }}
                                     {% set rate = summary.attendance_rate %}
-                                    <div class="attendance-rate 
-                                         {{ 'excellent' if rate >= 90 else 'good' if rate >= 75 else 'poor' }}">
-                                        {{ rate }}% närvaro
+                                    <div class="attendance-rate {{ 'excellent' if summary.attendance_rate >= 90 else 'good' if summary.attendance_rate >= 75 else 'poor' }}">
+                                        {{ summary.attendance_rate }}% närvaro
                                     </div>
                                 </div>
                             </div>
@@ -463,10 +462,12 @@
                                     <div class="record-stat-number">{{ summary.absent }}</div>
                                     <div class="record-stat-label">Frånvarande</div>
                                 </div>
+
                                 <div class="record-stat excused">
                                     <div class="record-stat-number">{{ summary.get('excused', 0) }}</div>
                                     <div class="record-stat-label">Ursäktade</div>
                                 </div>
+
                             </div>
                             {% if record.lesson_notes %}
                             <div class="record-notes">
