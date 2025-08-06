@@ -343,6 +343,8 @@
       </div>
     </div>
 
+    
+
     <div class="history-container">
         <div class="history-header">
             <h1>📊 Närvarohistorik</h1>
@@ -352,23 +354,8 @@
         </div>
 
         <!-- Statistiköversikt -->
+        <!-- Statistiköversikt -->
         <div class="stats-overview">
-            {% set total_lessons = attendance_records|length %}
-            {% set total_students = 0 %}
-            {% set total_present  = 0 %}
-            {% set total_late     = 0 %}
-            {% set total_absent   = 0 %}
-            {% set total_excused  = 0 %}
-
-            {% for record in attendance_records %}
-                {% set summary = summaries[record.id] %}
-                {% set total_students = total_students + summary.total %}
-                {% set total_present  = total_present  + summary.present %}
-                {% set total_late     = total_late     + summary.late %}
-                {% set total_absent   = total_absent   + summary.absent %}
-                {% set total_excused  = total_excused  + summary.get('excused', 0) %}
-            {% endfor %}
-
             <div class="stat-card">
                 <div class="stat-number">{{ total_lessons }}</div>
                 <div class="stat-label">Rapporterade lektioner</div>
@@ -386,16 +373,17 @@
                 <div class="stat-label">Frånvarande totalt</div>
             </div>
             <div class="stat-card">
+                <div class="stat-number">{{ total_excused }}</div>
+                <div class="stat-label">Ursäktade totalt</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-number">
-                    {% if total_students > 0 %}
-                        {{ ((total_present + total_late + total_excused) / total_students * 100)|round(1) }}%
-                    {% else %}
-                        0%
-                    {% endif %}
+                    {{ avg_attendance }}%
                 </div>
                 <div class="stat-label">Genomsnittlig närvaro</div>
             </div>
         </div>
+
 
         <!-- Datum- och ämnesfilter + export -->
         <div class="filters">
@@ -526,6 +514,13 @@
                     subjectFilter.appendChild(option);
                 }
             });
+
+
+            document.getElementById('period-select').addEventListener('change', function(){
+                const url = new URL(window.location);
+                url.searchParams.set('period', this.value);
+                window.location = url.toString();
+            });
             
             // Filter funktioner
             function filterRecords() {
@@ -613,6 +608,9 @@
                     
                     csvContent += `"${date}","${subject}","${present}","${late}","${absent}","${excused}","${attendanceRate}","${notes.replace(/"/g, '""')}"\n`;
                 });
+
+
+
                 
                 // Skapa och ladda ner fil
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
