@@ -1,0 +1,671 @@
+<!-- templates/attendance/report_attendance.html -->
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Närvarorapportering - Study Smart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index_styles.css') }}">
+    <style>
+        .attendance-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .attendance-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .attendance-header h1 {
+            margin: 0 0 0.5rem 0;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .lesson-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+            font-size: 0.95rem;
+            opacity: 0.95;
+        }
+
+        .lesson-info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .lesson-info-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .attendance-form {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .form-section {
+            padding: 2rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .form-section:last-child {
+            border-bottom: none;
+        }
+
+        .form-section h3 {
+            margin: 0 0 1.5rem 0;
+            color: #374151;
+            font-weight: 600;
+            font-size: 1.25rem;
+        }
+
+        .lesson-notes {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            resize: vertical;
+            transition: border-color 0.2s ease;
+        }
+
+        .lesson-notes:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .students-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .student-card {
+            display: flex;
+            align-items: center;
+            padding: 1.5rem;
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .student-card:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .student-info {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .student-name {
+            font-weight: 600;
+            color: #374151;
+            font-size: 1.1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .student-details {
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+
+        .attendance-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .status-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .status-btn {
+            padding: 8px 16px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-transform: capitalize;
+        }
+
+        .status-btn:hover {
+            border-color: #d1d5db;
+        }
+
+        .status-btn.active {
+            color: white;
+            border-color: transparent;
+        }
+
+        .status-btn.present.active {
+            background: #10b981;
+        }
+
+        .status-btn.late.active {
+            background: #f59e0b;
+        }
+
+        .status-btn.absent.active {
+            background: #ef4444;
+        }
+
+        .status-btn.excused.active {
+            background: #8b5cf6;
+        }
+
+        .additional-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .time-input {
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            width: 80px;
+        }
+
+        .notes-input {
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            width: 150px;
+        }
+
+        .save-section {
+            background: #f8fafc;
+        }
+
+        .save-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .save-status {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .save-status.saving {
+            color: #f59e0b;
+        }
+
+        .save-status.saved {
+            color: #10b981;
+        }
+
+        .save-status.error {
+            color: #ef4444;
+        }
+
+        .attendance-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 1rem;
+            text-align: center;
+        }
+
+        .summary-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .summary-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .summary-label {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .back-link {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: white;
+            color: #374151;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            z-index: 1000;
+        }
+
+        .back-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        @media (max-width: 768px) {
+            .attendance-container {
+                padding: 10px;
+            }
+            
+            .student-card {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 1rem;
+            }
+            
+            .attendance-controls {
+                justify-content: center;
+            }
+            
+            .save-buttons {
+                flex-direction: column-reverse;
+                align-items: stretch;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="{{ url_for('index') }}" class="back-link">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+        Tillbaka till startsidan
+    </a>
+
+    <div class="attendance-container">
+        <div class="attendance-header">
+            <h1>📊 Närvarorapportering</h1>
+            <div class="lesson-info">
+                <div class="lesson-info-item">
+                    <svg class="lesson-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <span>{{ lesson_date.strftime('%A, %d %B %Y') }}</span>
+                </div>
+                <div class="lesson-info-item">
+                    <svg class="lesson-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>{{ schedule_item.start_time }} - {{ schedule_item.end_time }}</span>
+                </div>
+                <div class="lesson-info-item">
+                    <svg class="lesson-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                    <span>{{ schedule_item.subject.name if schedule_item.subject else 'Okänt ämne' }}</span>
+                </div>
+                <div class="lesson-info-item">
+                    <svg class="lesson-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                    <span>{{ schedule_item.school_class.name }} ({{ schedule_item.room or 'Okänt rum' }})</span>
+                </div>
+                <div class="lesson-info-item">
+                    <svg class="lesson-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <span>{{ students|length }} elever</span>
+                </div>
+            </div>
+        </div>
+
+        {% if existing_attendance %}
+        <div class="attendance-summary" id="attendance-summary">
+            <h3 style="margin: 0 0 1rem 0; text-align: center;">Närvarosammanfattning</h3>
+            <div class="summary-grid" id="summary-grid">
+                <!-- Sammanfattningen kommer att uppdateras via JavaScript -->
+            </div>
+        </div>
+        {% endif %}
+
+        <form class="attendance-form" id="attendance-form">
+            <div class="form-section">
+                <h3>Lektionsanteckningar</h3>
+                <textarea 
+                    class="lesson-notes" 
+                    id="lesson-notes" 
+                    placeholder="Skriv anteckningar om lektionen här (valfritt)..."
+                >{{ existing_attendance.lesson_notes if existing_attendance else '' }}</textarea>
+            </div>
+
+            <div class="form-section">
+                <h3>Elevnärvaro</h3>
+                <div class="students-grid">
+                    {% for student in students %}
+                    <div class="student-card" data-student-id="{{ student.id }}">
+                        <div class="student-info">
+                            <div class="student-name">
+                                {{ student.get_full_name() }}
+                            </div>
+                            <div class="student-details">
+                                {% if student.personal_number %}
+                                    {{ student.personal_number[:8] }}****
+                                {% else %}
+                                    ID: {{ student.id }}
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="attendance-controls">
+                            <div class="status-buttons">
+                                <button type="button" class="status-btn present {{ 'active' if student_attendance_data.get(student.id, {}).get('status', 'present') == 'present' else '' }}" 
+                                        data-status="present">Närvarande</button>
+                                <button type="button" class="status-btn late {{ 'active' if student_attendance_data.get(student.id, {}).get('status') == 'late' else '' }}" 
+                                        data-status="late">Sen</button>
+                                <button type="button" class="status-btn absent {{ 'active' if student_attendance_data.get(student.id, {}).get('status') == 'absent' else '' }}" 
+                                        data-status="absent">Frånvarande</button>
+                                <button type="button" class="status-btn excused {{ 'active' if student_attendance_data.get(student.id, {}).get('status') == 'excused' else '' }}" 
+                                        data-status="excused">Ursäktad</button>
+                            </div>
+
+                            <div class="additional-controls">
+                                <input type="time" 
+                                       class="time-input arrival-time" 
+                                       placeholder="Ankomsttid" 
+                                       title="Ankomsttid (för sena elever)"
+                                       value="{{ student_attendance_data.get(student.id, {}).get('arrival_time', '') }}"
+                                       style="display: {{ 'block' if student_attendance_data.get(student.id, {}).get('status') == 'late' else 'none' }};">
+
+                                <input type="text" 
+                                       class="notes-input student-notes" 
+                                       placeholder="Anteckningar" 
+                                       title="Anteckningar om eleven"
+                                       value="{{ student_attendance_data.get(student.id, {}).get('notes', '') }}">
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-section save-section">
+                <div class="save-buttons">
+                    <div class="save-status" id="save-status"></div>
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary">Avbryt</a>
+                    <button type="submit" class="btn btn-primary" id="save-btn">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Spara närvaro
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('attendance-form');
+            const saveBtn = document.getElementById('save-btn');
+            const saveStatus = document.getElementById('save-status');
+            const summaryGrid = document.getElementById('summary-grid');
+            
+            // Hantera statusknapp-klick
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('status-btn')) {
+                    e.preventDefault();
+                    
+                    const studentCard = e.target.closest('.student-card');
+                    const studentId = studentCard.dataset.studentId;
+                    const status = e.target.dataset.status;
+                    const arrivalTimeInput = studentCard.querySelector('.arrival-time');
+                    
+                    // Ta bort aktiv status från alla knappar för denna elev
+                    studentCard.querySelectorAll('.status-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    
+                    // Lägg till aktiv status på klickad knapp
+                    e.target.classList.add('active');
+                    
+                    // Visa/dölj ankomsttid-fält baserat på status
+                    if (status === 'late') {
+                        arrivalTimeInput.style.display = 'block';
+                        if (!arrivalTimeInput.value) {
+                            // Sätt aktuell tid som default för sena elever
+                            const now = new Date();
+                            const hours = String(now.getHours()).padStart(2, '0');
+                            const minutes = String(now.getMinutes()).padStart(2, '0');
+                            arrivalTimeInput.value = `${hours}:${minutes}`;
+                        }
+                    } else {
+                        arrivalTimeInput.style.display = 'none';
+                        arrivalTimeInput.value = '';
+                    }
+                    
+                    // Uppdatera sammanfattning
+                    updateSummary();
+                }
+            });
+            
+            // Uppdatera sammanfattning när något ändras
+            function updateSummary() {
+                if (!summaryGrid) return;
+                
+                const studentCards = document.querySelectorAll('.student-card');
+                const summary = {
+                    total: studentCards.length,
+                    present: 0,
+                    late: 0,
+                    absent: 0,
+                    excused: 0
+                };
+                
+                studentCards.forEach(card => {
+                    const activeBtn = card.querySelector('.status-btn.active');
+                    if (activeBtn) {
+                        const status = activeBtn.dataset.status;
+                        summary[status]++;
+                    }
+                });
+                
+                const attendanceRate = summary.total > 0 ? 
+                    Math.round(((summary.present + summary.late + summary.excused) / summary.total) * 100) : 0;
+                
+                summaryGrid.innerHTML = `
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.total}</div>
+                        <div class="summary-label">Totalt</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.present}</div>
+                        <div class="summary-label">Närvarande</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.late}</div>
+                        <div class="summary-label">Sena</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.absent}</div>
+                        <div class="summary-label">Frånvarande</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number">${summary.excused}</div>
+                        <div class="summary-label">Ursäktade</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number">${attendanceRate}%</div>
+                        <div class="summary-label">Närvaro</div>
+                    </div>
+                `;
+            }
+            
+            // Hantera formulärsubmission
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                saveBtn.disabled = true;
+                saveStatus.textContent = 'Sparar...';
+                saveStatus.className = 'save-status saving';
+                
+                try {
+                    // Samla data från formuläret
+                    const attendanceData = {};
+                    const studentCards = document.querySelectorAll('.student-card');
+                    
+                    studentCards.forEach(card => {
+                        const studentId = card.dataset.studentId;
+                        const activeBtn = card.querySelector('.status-btn.active');
+                        const arrivalTime = card.querySelector('.arrival-time').value;
+                        const notes = card.querySelector('.student-notes').value;
+                        
+                        if (activeBtn) {
+                            attendanceData[studentId] = {
+                                status: activeBtn.dataset.status,
+                                arrival_time: arrivalTime,
+                                notes: notes
+                            };
+                        }
+                    });
+                    
+                    const formData = {
+                        schedule_id: {{ schedule_item.id }},
+                        date: '{{ lesson_date.strftime('%Y-%m-%d') }}',
+                        lesson_notes: document.getElementById('lesson-notes').value,
+                        attendance_data: attendanceData
+                    };
+                    
+                    const response = await fetch('/api/attendance/save', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        saveStatus.textContent = 'Sparat!';
+                        saveStatus.className = 'save-status saved';
+                        
+                        // Visa sammanfattning
+                        if (!document.getElementById('attendance-summary')) {
+                            const header = document.querySelector('.attendance-header');
+                            const summaryDiv = document.createElement('div');
+                            summaryDiv.className = 'attendance-summary';
+                            summaryDiv.id = 'attendance-summary';
+                            summaryDiv.innerHTML = `
+                                <h3 style="margin: 0 0 1rem 0; text-align: center;">Närvarosammanfattning</h3>
+                                <div class="summary-grid" id="summary-grid"></div>
+                            `;
+                            header.parentNode.insertBefore(summaryDiv, header.nextSibling);
+                        }
+                        updateSummary();
+                        
+                    } else {
+                        saveStatus.textContent = 'Fel vid sparande: ' + result.message;
+                        saveStatus.className = 'save-status error';
+                    }
+                    
+                } catch (error) {
+                    console.error('Error saving attendance:', error);
+                    saveStatus.textContent = 'Nätverksfel vid sparande';
+                    saveStatus.className = 'save-status error';
+                } finally {
+                    saveBtn.disabled = false;
+                    
+                    // Rensa statusmeddelande efter 3 sekunder
+                    setTimeout(() => {
+                        saveStatus.textContent = '';
+                        saveStatus.className = 'save-status';
+                    }, 3000);
+                }
+            });
+            
+            // Uppdatera sammanfattning vid sidladdning om det finns befintlig data
+            updateSummary();
+        });
+    </script>
+</body>
+</html>
