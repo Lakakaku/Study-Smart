@@ -860,23 +860,23 @@
             let html = '';
             reports.forEach(report => {
                 const statusClass = `status-${report.status}`;
-                const itemClass = report.status;
-                
                 html += `
-                    <div class="absence-item ${itemClass}">
-                        <div class="absence-meta">
-                            <span><strong>${report.subject}</strong> - ${formatDate(report.date)}</span>
-                            <span class="status-badge ${statusClass}">${getStatusText(report.status)}</span>
-                        </div>
-                        <div><strong>Typ:</strong> ${getAbsenceTypeText(report.type)}</div>
-                        <div><strong>Orsak:</strong> ${report.reason}</div>
-                        <div style="font-size: 0.8rem; color: #718096; margin-top: 0.5rem;">
-                            Anmäld: ${formatDateTime(report.created_at)}
-                        </div>
+                <div class="absence-item ${statusClass}">
+                    <div class="absence-meta">
+                    <span><strong>${report.subject}</strong> - ${formatDate(report.date)}</span>
+                    <span class="status-badge ${statusClass}">${getStatusText(report.status)}</span>
                     </div>
+                    <div><strong>Typ:</strong> ${getAbsenceTypeText(report.type)}</div>
+                    <div><strong>Orsak:</strong> ${report.reason}</div>
+                    <div style="font-size: 0.8rem; color: #718096; margin-top: 0.5rem;">
+                    Anmäld: ${formatDateTime(report.created_at)}
+                    </div>
+                    <button class="btn btn-secondary" onclick="deleteAbsence(${report.id})">
+                    Ta bort
+                    </button>
+                </div>
                 `;
             });
-            
             container.innerHTML = html;
         }
 
@@ -890,6 +890,31 @@
                 </div>
             `;
         }
+
+
+
+        async function deleteAbsence(reportId) {
+            if (!confirm('Är du säker på att du vill ta bort denna frånvaroanmälan?')) return;
+
+            try {
+                const response = await fetch(`/api/parent/report-absence/${reportId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                showFlashMessage('Frånvaroanmälan borttagen!', 'success');
+                loadAbsenceReports();
+                loadSchedule();
+                } else {
+                alert(result.message || 'Fel vid borttagning');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Ett fel uppstod vid borttagning av anmälan');
+            }
+        }
+
 
         function showError(containerId, message) {
             const container = document.getElementById(containerId);
