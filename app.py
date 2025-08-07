@@ -2317,6 +2317,46 @@ def get_parent_schedule(week):
         }), 500
 
 
+@app.route('/api/parent/report-absence/<int:report_id>', methods=['DELETE'])
+@login_required
+def delete_absence_report(report_id):
+    """Ta bort en frånvaroanmälan och återställ närvaro för barnet"""
+    if not current_user.is_parent():
+        return jsonify({'status': 'error', 'message': 'Ingen behörighet'}), 403
+
+    child = current_user.get_child()
+    if not child:
+        return jsonify({'status': 'error', 'message': 'Inget barn kopplat'}), 404
+
+    report = ParentAbsenceReport.query.get_or_404(report_id)
+    if report.student_id != child.id or report.parent_id != current_user.id:
+        return jsonify({'status': 'error', 'message': 'Du kan inte ta bort denna anmälan'}), 403
+
+    try:
+        # 1) Hitta alla attendance-sessioner för det datumet
+        attendances = Attendance.query.filter_by(date=report.lesson_date).all()
+
+        # 2) För varje session, ta bort StudentAttendance för den här eleven
+        for att in attendances:
+            sa = StudentAttendance.query.filter_by(
+                attendance_id=att.id,
+                student_id=child.id
+            ).first()
+            if sa and sa.notes and 'Frånvaro anmäld av förälder' in sa.notes:
+                db.session.delete(sa)
+
+        # 3) Ta bort själva frånvaroanmälan
+        db.session.delete(report)
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'Frånvaroanmälan borttagen'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting absence report: {e}")
+        return jsonify({'status': 'error', 'message': 'Fel vid borttagning'}), 500
+
+
+
+
 @app.route('/api/parent/report-absence', methods=['POST'])
 @login_required
 def report_absence():
@@ -3176,32 +3216,31 @@ def get_lesson_attendance(schedule_id, date):
     if not current_user.is_teacher():
         return jsonify({'status': 'error', 'message': 'Ingen behörighet'}), 403
     
-    try:
-        lesson_date = datetime.strptime(date, '%Y-%m-%d').date()
-        schedule_item = ClassSchedule.query.get_or_404(schedule_id)
-        
-        # Hämta närvarorapport om den finns
-        attendance = schedule_item.get_attendance_for_date(lesson_date)
-        
-        if attendance:
-            summary = attendance.get_attendance_summary()
-            return jsonify({
-                'status': 'success',
-                'has_attendance': True,
-                'attendance_id': attendance.id,
-                'lesson_notes': attendance.lesson_notes,
-                'summary': summary,
-                'last_updated': attendance.updated_at.isoformat()
-            })
-        else:
-            return jsonify({
-                'status': 'success',
-                'has_attendance': False
-            })
-            
-    except Exception as e:
-        print(f"Error getting attendance: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    lesson_date = datetime.strptime(date, '%Y-%m-%d').date()
+    schedule_item = ClassSchedule.query.get_or_404(schedule_id)
+
+    # hämta ev. attendance
+    attendance = schedule_item.get_attendance_for_date(lesson_date)
+
+    # räkna antal elever i klassen
+    total_students = len(schedule_item.get_students_for_lesson())
+
+    if attendance:
+        summary = attendance.get_attendance_summary()
+        # här avgör vi om *alla* elever är registrerade, inte bara en
+        fully_reported = (summary['total'] == total_students)
+        return jsonify({
+            'status': 'success',
+            'has_attendance': fully_reported,
+            'attendance_id': attendance.id,
+            'summary': summary,
+            'last_updated': attendance.updated_at.isoformat()
+        })
+    else:
+        return jsonify({
+            'status': 'success',
+            'has_attendance': False
+        })
 
 
 
