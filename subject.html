@@ -183,6 +183,154 @@
   margin-bottom: 12px;
 }
 
+
+/* CSS för betygssystemet - lägg till i din CSS-fil */
+
+/* Betygssektion för lärare */
+.grade-section {
+  margin: 15px 0;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+}
+
+.grade-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.grade-value {
+  font-weight: bold;
+  color: #28a745;
+  font-size: 16px;
+}
+
+.no-grade {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.grade-meta {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.grade-button {
+  padding: 6px 12px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.grade-button:hover {
+  background: #0056b3;
+}
+
+/* Betygsdropdown */
+.grade-dropdown {
+  position: relative;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 100;
+}
+
+.grade-dropdown-header {
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.grade-options {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.grade-option {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  font-weight: 500;
+}
+
+.grade-option:hover {
+  background: #e9ecef;
+}
+
+.remove-grade {
+  grid-column: 1 / -1;
+  background: #dc3545 !important;
+  color: white !important;
+  border-color: #dc3545 !important;
+}
+
+.remove-grade:hover {
+  background: #c82333 !important;
+}
+
+/* Betygsvisning för studenter */
+.student-grade-section {
+  margin: 20px 0;
+  padding: 20px;
+  background: linear-gradient(135deg, #28a745, #20c997);
+  border-radius: 10px;
+  text-align: center;
+  color: white;
+}
+
+.grade-display-large {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.grade-label {
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.grade-value-large {
+  font-size: 48px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.grade-date {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* Responsiv design */
+@media (max-width: 768px) {
+  .grade-options {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .grade-value-large {
+    font-size: 36px;
+  }
+  
+  .grade-display {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+}
+
 .quiz-description {
   position: relative;
 }
@@ -1757,6 +1905,29 @@ body .main-layout + .shared-files-section {
         font-weight: bold;
         font-size: 1.1rem;
         color: #333;
+    }
+
+    /* CSS för betygsvisning i uppgiftslistan - lägg till i din CSS-fil */
+
+    .assignment-grade-display {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .assignment-grade-label {
+      font-size: 14px;
+      color: #6c757d;
+    }
+
+    .assignment-grade-value {
+      font-weight: bold;
+      font-size: 16px;
+      color: #28a745;
+      padding: 2px 8px;
+      background: rgba(40, 167, 69, 0.1);
+      border-radius: 4px;
     }
 
     .document-type {
@@ -5363,6 +5534,9 @@ body .main-layout + .shared-files-section {
     }
 
 
+    // Lägg till denna funktion för att uppdatera renderAssignments med betygsvisning
+
+    // Ersätt renderAssignments funktionen
     function renderAssignments(assignmentsList) {
       const container = document.getElementById('assignments-list');
       if (!container) return;
@@ -5393,6 +5567,19 @@ body .main-layout + .shared-files-section {
         } else if (isOverdue) {
           statusClass = 'overdue';
           statusText = 'Försenad';
+        }
+
+        // Betygsvisning för studenter
+        let gradeDisplay = '';
+        if (userRole !== 'owner' && assignment.submission_status === 'submitted') {
+          if (assignment.grade !== null && assignment.grade !== undefined) {
+            gradeDisplay = `
+              <div class="assignment-grade-display">
+                <span class="assignment-grade-label">Betyg:</span>
+                <span class="assignment-grade-value">${assignment.grade}/10</span>
+              </div>
+            `;
+          }
         }
 
         // Knappar för ägare
@@ -5442,6 +5629,7 @@ body .main-layout + .shared-files-section {
                   ${dueDate ? `<span>Förfaller: ${dueDate}</span>` : ''}
                   ${userRole === 'owner' ? `<span>👥 ${assignment.submission_count || 0} inlämningar</span>` : ''}
                 </div>
+                ${gradeDisplay}
               </div>
               ${userRole !== 'owner' ? `<span class="assignment-status ${statusClass}">${statusText}</span>` : ''}
             </div>
@@ -5579,7 +5767,28 @@ body .main-layout + .shared-files-section {
       }
     }
 
+    // Ersätt showMySubmissionModal funktionen
+
     function showMySubmissionModal(submission) {
+      // Betygssektion för studenter
+      let gradeSection = '';
+      if (submission.grade !== null && submission.grade !== undefined) {
+        gradeSection = `
+          <div class="student-grade-section">
+            <div class="grade-display-large">
+              <div class="grade-label">Ditt betyg:</div>
+              <div class="grade-value-large">${submission.grade}/10</div>
+              ${submission.graded_at ? `
+                <div class="grade-date">
+                  Satt ${new Date(submission.graded_at).toLocaleString('sv-SE')}
+                  ${submission.graded_by_name ? ` av ${submission.graded_by_name}` : ''}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }
+
       const modalHtml = `
         <div id="student-submission-modal" class="submissions-modal" style="display: flex;">
           <div class="submissions-modal-content">
@@ -5591,6 +5800,8 @@ body .main-layout + .shared-files-section {
               <div class="student-submission-details">
                 <p><strong>Inlämnad:</strong> ${new Date(submission.submitted_at).toLocaleString('sv-SE')}</p>
                 ${submission.comment ? `<p><strong>Min kommentar:</strong> ${escapeHtml(submission.comment)}</p>` : ''}
+                
+                ${gradeSection}
                 
                 <div class="submission-files">
                   <h4>Inlämnade filer:</h4>
@@ -5629,7 +5840,6 @@ body .main-layout + .shared-files-section {
                   </div>
                 </div>
 
-                <!-- Ångra inlämning-knapp -->
                 <div class="submission-actions">
                   <button class="undo-submission-btn" onclick="undoSubmission(${submission.assignment_id})">
                     Ångra Inlämning
@@ -5776,9 +5986,12 @@ body .main-layout + .shared-files-section {
     }
 
 
+    // Ersätt befintliga renderSubmissions funktionen
+
     function renderSubmissions(submissions) {
       const container = document.getElementById('submissions-list');
       if (!container) return;
+      
       if (!submissions.length) {
         container.innerHTML = '<div class="no-submissions">Inga inlämningar än.</div>';
         return;
@@ -5786,6 +5999,54 @@ body .main-layout + .shared-files-section {
 
       container.innerHTML = submissions.map(sub => {
         const seenChecked = sub.seen ? 'checked' : '';
+        
+        // Betygsvisning och dropdown
+        let gradeSection = '';
+        if (sub.grade !== null && sub.grade !== undefined) {
+          gradeSection = `
+            <div class="grade-section">
+              <div class="grade-display" id="grade-display-${sub.id}">
+                <span class="grade-value">Betyg: ${sub.grade}/10</span>
+                ${sub.graded_at ? `
+                  <span class="grade-meta">
+                    Satt ${new Date(sub.graded_at).toLocaleString('sv-SE')}
+                    ${sub.graded_by_name ? ` av ${sub.graded_by_name}` : ''}
+                  </span>
+                ` : ''}
+              </div>
+              <button class="grade-button" onclick="showGradeDropdown(${sub.id})">
+                Ändra betyg
+              </button>
+            </div>
+          `;
+        } else {
+          gradeSection = `
+            <div class="grade-section">
+              <div class="grade-display" id="grade-display-${sub.id}">
+                <span class="no-grade">Inget betyg</span>
+              </div>
+              <button class="grade-button" onclick="showGradeDropdown(${sub.id})">
+                Sätt betyg
+              </button>
+            </div>
+          `;
+        }
+
+        // Betygsdropdown
+        const gradeDropdown = `
+          <div class="grade-dropdown" id="grade-dropdown-${sub.id}" style="display: none;">
+            <div class="grade-dropdown-header">Välj betyg (1-10):</div>
+            <div class="grade-options">
+              ${Array.from({length: 10}, (_, i) => i + 1).map(grade => 
+                `<button class="grade-option" onclick="setGrade(${sub.id}, ${grade})">${grade}</button>`
+              ).join('')}
+              <button class="grade-option remove-grade" onclick="setGrade(${sub.id}, null)">
+                Ta bort betyg
+              </button>
+            </div>
+          </div>
+        `;
+
         return `
           <div class="submission-item" data-submission-id="${sub.id}">
             <label class="seen-label">
@@ -5806,7 +6067,9 @@ body .main-layout + .shared-files-section {
               </span>
             </div>
 
-            <!-- NYTT: studentens egen kommentar -->
+            ${gradeSection}
+            ${gradeDropdown}
+
             ${sub.comment ? `
               <div class="student-comment">
                 <strong>Studentens kommentar:</strong>
@@ -5814,8 +6077,6 @@ body .main-layout + .shared-files-section {
               </div>
             ` : ''}
 
-
-            <!-- NYTT: inlämnade filer -->
             ${sub.files && sub.files.length ? `
               <div class="submission-files">
                 <h4>Inlämnade filer:</h4>
@@ -5833,10 +6094,6 @@ body .main-layout + .shared-files-section {
               </div>
             ` : ''}
 
-
-
-
-
             <div class="comment-section" id="comment-section-${sub.id}" style="display: block;">
               <textarea id="comment-input-${sub.id}"
                         placeholder="Skriv kommentar..."></textarea>
@@ -5849,18 +6106,12 @@ body .main-layout + .shared-files-section {
         `;
       }).join('');
 
-
-
-
-      // --- NYTT: efter att vi satt innerHTML, ladda alla kommentarer direkt ---
-     submissions.forEach(sub => {
-        // se till att kommentarssektionen är öppen
+      // Ladda kommentarer för alla inlämningar
+      submissions.forEach(sub => {
         const commentSection = document.getElementById(`comment-section-${sub.id}`);
         if (commentSection) commentSection.style.display = 'block';
-        // hämta och rendera befintliga kommentarer
         loadComments(sub.id);
       });
-
 
       // Bind event på checkboxar
       container.querySelectorAll('.seen-checkbox').forEach(cb => {
@@ -5871,6 +6122,15 @@ body .main-layout + .shared-files-section {
             updateUnseenBadge();
           }
         });
+      });
+
+      // Stäng dropdowns när man klickar utanför
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.grade-section')) {
+          document.querySelectorAll('.grade-dropdown').forEach(dropdown => {
+            dropdown.style.display = 'none';
+          });
+        }
       });
     }
 
@@ -6012,7 +6272,68 @@ body .main-layout + .shared-files-section {
 
 
 
+    // Lägg till efter befintliga JavaScript funktioner
 
+    // Sätt betyg på inlämning
+    async function setGrade(submissionId, grade) {
+      try {
+        const response = await fetch(`/api/submission/${submissionId}/set_grade`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ grade: grade })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          showAlert(data.message, 'success');
+          
+          // Uppdatera UI
+          const gradeDisplay = document.getElementById(`grade-display-${submissionId}`);
+          if (gradeDisplay) {
+            if (grade === null) {
+              gradeDisplay.innerHTML = `
+                <span class="no-grade">Inget betyg</span>
+              `;
+            } else {
+              gradeDisplay.innerHTML = `
+                <span class="grade-value">Betyg: ${grade}/10</span>
+                <span class="grade-meta">
+                  Satt ${new Date(data.graded_at).toLocaleString('sv-SE')} av ${data.graded_by_name}
+                </span>
+              `;
+            }
+          }
+          
+          // Stäng dropdown
+          const dropdown = document.getElementById(`grade-dropdown-${submissionId}`);
+          if (dropdown) {
+            dropdown.style.display = 'none';
+          }
+          
+        } else {
+          throw new Error(data.message || 'Kunde inte sätta betyg');
+        }
+      } catch (error) {
+        console.error('Error setting grade:', error);
+        showAlert('Fel vid betygssättning: ' + error.message, 'error');
+      }
+    }
+
+    // Visa betygsdropdown
+    function showGradeDropdown(submissionId) {
+      // Dölj alla andra dropdowns
+      document.querySelectorAll('.grade-dropdown').forEach(dropdown => {
+        dropdown.style.display = 'none';
+      });
+      
+      const dropdown = document.getElementById(`grade-dropdown-${submissionId}`);
+      if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+      }
+    }
 
 
 
