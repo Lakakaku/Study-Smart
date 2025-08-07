@@ -80,6 +80,14 @@
 
       <button id="btn-2" class="head-btn">KALENDER</button>
 
+      {% if current_user.is_teacher() and current_user.class_id %}
+        <a href="{{ url_for('attendance_history', class_id=current_user.class_id) }}"
+          class="head-btn"
+          style="margin-left: .5rem; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+          📜 Historik
+        </a>
+      {% endif %}
+
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="user_icon" role="img" aria-label="User Icon">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
       </svg>
@@ -3584,7 +3592,7 @@ async function leaveSubject(subjectId) {
       .schedule-content {
         flex: 1;
         padding: 1.5rem;
-        
+        overflow-y: auto;
         background-color: var(--bg-white);
       }
 
@@ -4009,15 +4017,18 @@ async function leaveSubject(subjectId) {
       }
 
       .schedule-item {
-          display: flex;
-          align-items: center;
-          padding: 14px 18px;
-          background: #f8f9fa;
-          border-radius: 8px;
-          border-left: 4px solid #3498db;
-          transition: all 0.3s ease;
-          min-width: 320px;
-          margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;        /* <-- Tillåter radbrytning */
+        padding: 14px 18px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #3498db;
+        transition: all 0.3s ease;
+        min-width: 320px;
+        margin-bottom: 5px;
       }
 
       .schedule-item:hover {
@@ -4114,6 +4125,15 @@ async function leaveSubject(subjectId) {
         }
       }
 
+      /* Säkerställ att huvuddelen (tid + detaljer) krymper korrekt */
+      .schedule-main {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex: 1 1 auto;         /* <-- Flex-grow och flex-shrink */
+        min-width: 0;           /* <-- Viktigt för text-overflow */
+      }
+
       /* Responsiv design för schema */
       @media (max-width: 768px) {
           .schedule-container {
@@ -4122,14 +4142,23 @@ async function leaveSubject(subjectId) {
           }
           
           .schedule-item {
-              flex-direction: column;
-              align-items: flex-start;
-              padding: 12px;
+            flex-direction: column;
+            align-items: stretch;
           }
           
           .schedule-time {
               min-width: auto;
               margin-bottom: 8px;
+          }
+
+          .schedule-main {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .lesson-actions {
+            justify-content: flex-end;
+            margin-top: 0.75rem;
           }
           
           
@@ -5225,6 +5254,14 @@ async function leaveSubject(subjectId) {
           padding: 1rem 1.25rem 0.75rem;
           font-size: 1rem;
         }
+      }
+
+      .lesson-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 0 0 auto;         /* <-- Förhindra att knappen krymper */
+        margin-top: 0.5rem;     /* <-- Ger lite luft om den bryts ner */
       }
 
 
