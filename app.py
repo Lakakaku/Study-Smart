@@ -497,6 +497,22 @@ class User(db.Model, UserMixin):
     teacher_subjects = db.Column(db.String(200))  # för lärare
     qualifications = db.Column(db.Text)  # för lärare
     is_active = db.Column(db.Boolean, default=True)
+
+    parent_student_id = db.Column(db.Integer, db.ForeignKey('user.id'))  # Vilket barn föräldern tillhör
+    student_code = db.Column(db.String(20), unique=True)  # Unik kod för elever som föräldrar använder för att koppla sig
+
+
+    parent_child = db.relationship('User', remote_side=[id], backref='parents')
+
+    def is_parent(self):
+        """Kontrollera om användaren är förälder"""
+        return self.user_type == 'parent'
+    
+    def get_child(self):
+        """Hämta barnets användarobjekt (för föräldrar)"""
+        if self.is_parent() and self.parent_student_id:
+            return User.query.get(self.parent_student_id)
+        return None
     
     # Resten av dina befintliga kolumner och relationer...
     subjects = db.relationship('Subject', backref='owner', lazy=True, cascade='all, delete-orphan')
@@ -822,6 +838,50 @@ def init_database():
             db.session.rollback()
 
 
+class ParentAbsenceReport(db.Model):
+    """Frånvaroanmälningar från föräldrar"""
+    __tablename__ = 'parent_absence_reports'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lesson_date = db.Column(db.Date, nullable=False)
+    lesson_time = db.Column(db.String(20))  # t.ex. "08:00-09:00"
+    subject_name = db.Column(db.String(100), nullable=False)
+    absence_type = db.Column(db.String(50), nullable=False)  # sjukdom, läkarbesök, etc.
+    reason = db.Column(db.Text, nullable=False)
+    parent_phone = db.Column(db.String(20))
+    status = db.Column(db.String(20), default='pending')  # pending, approved, denied
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('user.id'))  # lärare som granskat
+    reviewed_at = db.Column(db.DateTime)
+    review_comment = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationer
+    student = db.relationship('User', foreign_keys=[student_id], backref='absence_reports_as_student')
+    parent = db.relationship('User', foreign_keys=[parent_id], backref='absence_reports_as_parent')
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by], backref='reviewed_absence_reports')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'student_id': self.student_id,
+            'student_name': f"{self.student.first_name} {self.student.last_name}" if self.student else 'Okänd elev',
+            'parent_id': self.parent_id,
+            'parent_name': f"{self.parent.first_name} {self.parent.last_name}" if self.parent else 'Okänd förälder',
+            'date': self.lesson_date.isoformat(),
+            'time': self.lesson_time,
+            'subject': self.subject_name,
+            'type': self.absence_type,
+            'reason': self.reason,
+            'parent_phone': self.parent_phone,
+            'status': self.status,
+            'reviewed_by': self.reviewer.get_full_name() if self.reviewer else None,
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
+            'review_comment': self.review_comment,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
 
 
 # Lägg till dessa modeller i din Flask-app (models.py eller liknande)
@@ -2168,6 +2228,647 @@ def extract_audio_from_video(video_path, audio_output_path):
     except Exception as e:
         print(f"Error extracting audio: {str(e)}")
         return False
+
+@app.route('/parent')
+@login_required
+def parent_index():
+    """Huvudsida för föräldrar"""
+    if not current_user.is_parent():
+        flash('Denna sida är endast för föräldrar.', 'error')
+        return redirect(url_for('index'))
+    
+    # Hämta barnets information
+    child = current_user.get_child()
+    if not child:
+        flash('Inget barn kopplat till ditt konto. Kontakta skolan.', 'error')
+        return redirect(url_for('index'))
+    
+    return render_template('parent_index.html', child=child)
+
+
+@app.route('/api/parent/schedule/<week>')
+@login_required
+def get_parent_schedule(week):
+    """Hämta schema för förälderns barn för en specifik vecka"""
+    if not current_user.is_parent():
+        return jsonify({'status': 'error', 'message': 'Ingen behörighet'}), 403
+    
+    child = current_user.get_child()
+    if not child:
+        return jsonify({'status': 'error', 'message': 'Inget barn kopplat'}), 404
+    
+    try:
+        # Parse veckonummer (format: 2024-W45)
+        year, week_num = week.split('-W')
+        year = int(year)
+        week_num = int(week_num)
+        
+        # Beräkna måndagens datum för veckan
+        jan_4 = datetime(year, 1, 4)
+        monday = jan_4 + timedelta(days=7 * (week_num - 1) - jan_4.weekday())
+        
+        # Hämta schema för veckan
+        schedule_items = []
+        weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag']
+        
+        for i, weekday in enumerate(weekdays):
+            current_date = monday + timedelta(days=i)
+            
+            # Hämta schema för denna dag
+            schedule_query = db.session.query(ClassSchedule).filter_by(
+                class_id=child.class_id,
+                weekday=weekday
+            ).order_by(ClassSchedule.start_time).all()
+            
+            for item in schedule_query:
+                subject_name = "Matematik"  # Default
+                if item.subject_id:
+                    subject = Subject.query.get(item.subject_id)
+                    if subject:
+                        subject_name = subject.name
+                
+                schedule_items.append({
+                    'id': item.id,
+                    'date': current_date.strftime('%Y-%m-%d'),
+                    'weekday': weekday,
+                    'weekday_sv': weekday.title(),
+                    'start_time': item.start_time,
+                    'end_time': item.end_time,
+                    'subject': subject_name,
+                    'room': item.room or 'Okänt rum'
+                })
+        
+        return jsonify({
+            'status': 'success',
+            'schedule': schedule_items,
+            'week': week,
+            'child': {
+                'id': child.id,
+                'name': f"{child.first_name} {child.last_name}",
+                'class_name': child.school_class.name if child.school_class else 'Ingen klass'
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error getting parent schedule: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Kunde inte hämta schema'
+        }), 500
+
+
+@app.route('/api/parent/report-absence', methods=['POST'])
+@login_required
+def report_absence():
+    """Rapportera frånvaro för förälderns barn"""
+    if not current_user.is_parent():
+        return jsonify({'status': 'error', 'message': 'Ingen behörighet'}), 403
+    
+    child = current_user.get_child()
+    if not child:
+        return jsonify({'status': 'error', 'message': 'Inget barn kopplat'}), 404
+    
+    data = request.get_json()
+    # Validera data
+    required_fields = ['date', 'type', 'reason', 'parent_phone']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({'status': 'error', 'message': f'Fält "{field}" krävs'}), 400
+    
+    lesson_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+    
+    # 1) ParentAbsenceReport
+    absence_report = ParentAbsenceReport(
+        student_id=child.id,
+        parent_id=current_user.id,
+        lesson_date=lesson_date,
+        lesson_time=data.get('lesson_time', ''),
+        subject_name=data.get('subject_name', ''),
+        absence_type=data['type'],
+        reason=data['reason'],
+        parent_phone=data['parent_phone']
+    )
+    db.session.add(absence_report)
+    
+    # 2) Hitta eller skapa Attendance
+    schedule_id = data.get('schedule_id')
+    attendance = None
+    if schedule_id:
+        attendance = Attendance.query.filter_by(
+            schedule_id=schedule_id,
+            date=lesson_date
+        ).first()
+    
+    if not attendance:
+        # Hämta homeroom-lärare som fallback
+        homeroom_teacher = None
+        if child.school_class and child.school_class.homeroom_teacher_id:
+            homeroom_teacher = child.school_class.homeroom_teacher_id
+        
+        attendance = Attendance(
+            schedule_id=schedule_id or None,
+            date=lesson_date,
+            teacher_id=homeroom_teacher,     # sätter aldrig None nu
+            class_id=child.class_id,
+            subject_id=None,
+            lesson_notes=None
+        )
+        db.session.add(attendance)
+        db.session.flush()
+    
+    # 3) StudentAttendance som absent
+    existing = StudentAttendance.query.filter_by(
+        attendance_id=attendance.id,
+        student_id=child.id
+    ).first()
+    if not existing:
+        student_att = StudentAttendance(
+            attendance_id=attendance.id,
+            student_id=child.id,
+            status='absent',
+            arrival_time=None,
+            notes=f'Frånvaro anmäld av förälder: {absence_report.reason}'
+        )
+        db.session.add(student_att)
+    
+    # 4) Commit
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Fel vid sparande'}), 500
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Frånvaroanmälan skickad och närvaro markerad',
+        'report_id': absence_report.id
+    })
+
+
+
+
+@app.route('/api/parent/absence-reports')
+@login_required
+def get_parent_absence_reports():
+    """Hämta alla frånvaroanmälningar för förälderns barn"""
+    if not current_user.is_parent():
+        return jsonify({'status': 'error', 'message': 'Ingen behörighet'}), 403
+    
+    child = current_user.get_child()
+    if not child:
+        return jsonify({'status': 'error', 'message': 'Inget barn kopplat'}), 404
+    
+    try:
+        # Hämta alla anmälningar för barnet, sorterade efter datum (nyaste först)
+        reports = ParentAbsenceReport.query.filter_by(
+            student_id=child.id
+        ).order_by(ParentAbsenceReport.created_at.desc()).all()
+        
+        return jsonify({
+            'status': 'success',
+            'reports': [report.to_dict() for report in reports]
+        })
+        
+    except Exception as e:
+        print(f"Error getting absence reports: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Kunde inte hämta frånvaroanmälningar'
+        }), 500
+
+
+
+@app.route('/api/teacher/absence-report/<int:report_id>/review', methods=['POST'])
+@login_required
+def review_absence_report(report_id):
+    """Granska och godkänn/neka frånvaroanmälan"""
+    if not current_user.is_teacher():
+        return jsonify({'status': 'error', 'message': 'Ingen behörighet'}), 403
+    
+    try:
+        report = ParentAbsenceReport.query.get_or_404(report_id)
+        data = request.get_json()
+        
+        # Validera att läraren har behörighet att granska denna anmälan
+        can_review = False
+        
+        # Kontrollera om läraren äger ämnet
+        owned_subjects = Subject.query.filter_by(user_id=current_user.id).all()
+        subject_names = [s.name for s in owned_subjects]
+        if report.subject_name in subject_names:
+            can_review = True
+        
+        # Kontrollera om läraren är klassföreståndare för eleven
+        if report.student and report.student.school_class:
+            if report.student.school_class.homeroom_teacher_id == current_user.id:
+                can_review = True
+        
+        if not can_review:
+            return jsonify({
+                'status': 'error',
+                'message': 'Du har inte behörighet att granska denna anmälan'
+            }), 403
+        
+        # Uppdatera anmälan
+        new_status = data.get('status')  # 'approved' eller 'denied'
+        review_comment = data.get('comment', '')
+        
+        if new_status not in ['approved', 'denied']:
+            return jsonify({
+                'status': 'error',
+                'message': 'Ogiltig status'
+            }), 400
+        
+        report.status = new_status
+        report.review_comment = review_comment
+        report.reviewed_by = current_user.id
+        report.reviewed_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Skicka notifikation till föräldern (implementera senare)
+        # send_review_notification_to_parent(report)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Anmälan {new_status}',
+            'report': report.to_dict()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error reviewing absence report: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Fel vid granskning av anmälan'
+        }), 500
+
+
+# Template för lärare att granska frånvaroanmälningar
+@app.route('/teacher/absence-reports')
+@login_required
+def teacher_absence_reports():
+    """Visa frånvaroanmälningar från föräldrar för lärare"""
+    if not current_user.is_teacher():
+        flash('Endast lärare kan se frånvaroanmälningar.', 'error')
+        return redirect(url_for('index'))
+    
+    # Hämta anmälningar för klasser/ämnen som läraren är ansvarig för
+    teacher_reports = []
+    
+    # Metod 1: Baserat på ämnen som läraren äger
+    owned_subjects = Subject.query.filter_by(user_id=current_user.id).all()
+    subject_names = [s.name for s in owned_subjects]
+    
+    if subject_names:
+        subject_reports = ParentAbsenceReport.query.filter(
+            ParentAbsenceReport.subject_name.in_(subject_names)
+        ).order_by(ParentAbsenceReport.created_at.desc()).all()
+        teacher_reports.extend(subject_reports)
+    
+    # Metod 2: Baserat på klasser där läraren är klassföreståndare
+    homeroom_classes = SchoolClass.query.filter_by(homeroom_teacher_id=current_user.id).all()
+    for school_class in homeroom_classes:
+        class_students = User.query.filter_by(
+            class_id=school_class.id,
+            user_type='student'
+        ).all()
+        student_ids = [s.id for s in class_students]
+        
+        if student_ids:
+            class_reports = ParentAbsenceReport.query.filter(
+                ParentAbsenceReport.student_id.in_(student_ids)
+            ).order_by(ParentAbsenceReport.created_at.desc()).all()
+            teacher_reports.extend(class_reports)
+    
+    # Ta bort dubletter
+    seen_ids = set()
+    unique_reports = []
+    for report in teacher_reports:
+        if report.id not in seen_ids:
+            unique_reports.append(report)
+            seen_ids.add(report.id)
+    
+    return render_template_string('''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Frånvaroanmälningar - Lärarvy</title>
+        <style>
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                max-width: 1200px; 
+                margin: 0 auto; 
+                padding: 20px;
+                background: #f5f7fa;
+            }
+            .header {
+                background: white;
+                padding: 2rem;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                margin-bottom: 2rem;
+                text-align: center;
+            }
+            .reports-container {
+                display: grid;
+                gap: 1rem;
+            }
+            .report-card {
+                background: white;
+                padding: 1.5rem;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                border-left: 4px solid #4299e1;
+            }
+            .report-card.pending { border-left-color: #ed8936; }
+            .report-card.approved { border-left-color: #48bb78; }
+            .report-card.denied { border-left-color: #f56565; }
+            
+            .report-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1rem;
+            }
+            .status-badge {
+                padding: 0.25rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                font-weight: bold;
+                text-transform: uppercase;
+            }
+            .status-pending { background: #fef5e7; color: #dd7200; }
+            .status-approved { background: #f0fff4; color: #22543d; }
+            .status-denied { background: #fed7d7; color: #c53030; }
+            
+            .review-form {
+                background: #f7fafc;
+                padding: 1rem;
+                border-radius: 6px;
+                margin-top: 1rem;
+            }
+            .form-group {
+                margin-bottom: 1rem;
+            }
+            .form-group label {
+                display: block;
+                margin-bottom: 0.5rem;
+                font-weight: 500;
+            }
+            .form-group textarea {
+                width: 100%;
+                padding: 0.5rem;
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                resize: vertical;
+                height: 60px;
+            }
+            .btn {
+                padding: 0.5rem 1rem;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-right: 0.5rem;
+            }
+            .btn-approve { background: #48bb78; color: white; }
+            .btn-deny { background: #f56565; color: white; }
+            .btn:hover { opacity: 0.9; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>👩‍🏫 Frånvaroanmälningar</h1>
+            <p>Granska och hantera frånvaroanmälningar från föräldrar</p>
+        </div>
+        
+        <div class="reports-container">
+            {% if unique_reports %}
+                {% for report in unique_reports %}
+                <div class="report-card {{ report.status }}">
+                    <div class="report-header">
+                        <div>
+                            <h3>{{ report.student.first_name }} {{ report.student.last_name }}</h3>
+                            <p>{{ report.subject_name }} - {{ report.lesson_date.strftime('%Y-%m-%d') }}</p>
+                        </div>
+                        <span class="status-badge status-{{ report.status }}">
+                            {{ 'Väntar' if report.status == 'pending' else ('Godkänd' if report.status == 'approved' else 'Nekad') }}
+                        </span>
+                    </div>
+                    
+                    <div>
+                        <p><strong>Typ:</strong> {{ report.absence_type }}</p>
+                        <p><strong>Orsak:</strong> {{ report.reason }}</p>
+                        <p><strong>Förälder:</strong> {{ report.parent.first_name }} {{ report.parent.last_name }} ({{ report.parent_phone }})</p>
+                        <p><strong>Anmäld:</strong> {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        
+                        {% if report.status != 'pending' %}
+                            <p><strong>Granskad av:</strong> {{ report.reviewer.get_full_name() if report.reviewer else 'Okänd' }}</p>
+                            <p><strong>Granskad:</strong> {{ report.reviewed_at.strftime('%Y-%m-%d %H:%M') if report.reviewed_at else 'Okänt' }}</p>
+                            {% if report.review_comment %}
+                                <p><strong>Kommentar:</strong> {{ report.review_comment }}</p>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    
+                    {% if report.status == 'pending' %}
+                    <div class="review-form">
+                        <div class="form-group">
+                            <label>Kommentar (valfritt):</label>
+                            <textarea id="comment-{{ report.id }}" placeholder="Lägg till en kommentar..."></textarea>
+                        </div>
+                        <button class="btn btn-approve" onclick="reviewReport({{ report.id }}, 'approved')">
+                            ✅ Godkänn
+                        </button>
+                        <button class="btn btn-deny" onclick="reviewReport({{ report.id }}, 'denied')">
+                            ❌ Neka
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="report-card">
+                    <p style="text-align: center; color: #718096;">Inga frånvaroanmälningar att granska.</p>
+                </div>
+            {% endif %}
+        </div>
+        
+        <script>
+            async function reviewReport(reportId, status) {
+                const comment = document.getElementById(`comment-${reportId}`).value;
+                
+                try {
+                    const response = await fetch(`/api/teacher/absence-report/${reportId}/review`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            status: status,
+                            comment: comment
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        alert(`Anmälan ${status === 'approved' ? 'godkänd' : 'nekad'}!`);
+                        location.reload();
+                    } else {
+                        alert(result.message || 'Ett fel uppstod');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Ett fel uppstod vid granskning av anmälan');
+                }
+            }
+        </script>
+    </body>
+    </html>
+    ''', unique_reports=unique_reports)
+
+
+# Hjälpfunktioner för att generera testdata
+def generate_student_code():
+    """Generera en unik elevkod"""
+    while True:
+        code = f"ST{datetime.now().year}{random.randint(1000, 9999)}"
+        if not User.query.filter_by(student_code=code).first():
+            return code
+
+
+def setup_parent_test_data():
+    """Skapa testdata för föräldrasystemet"""
+    with app.app_context():
+        try:
+            # Skapa en testskola om den inte finns
+            test_school = School.query.filter_by(name="Testskolan").first()
+            if not test_school:
+                test_school = School(
+                    name="Testskolan",
+                    address="Testgatan 1",
+                    city="Stockholm",
+                    postal_code="12345",
+                    phone="08-123 456 78",
+                    email="info@testskolan.se",
+                    school_code="TEST001"
+                )
+                db.session.add(test_school)
+                db.session.commit()
+            
+            # Skapa en testklass
+            test_class = SchoolClass.query.filter_by(name="5A").first()
+            if not test_class:
+                test_class = SchoolClass(
+                    name="5A",
+                    school_id=test_school.id,
+                    description="Femte klass A",
+                    year_level=5
+                )
+                db.session.add(test_class)
+                db.session.commit()
+            
+            # Skapa en testelev med elevkod
+            student_code = generate_student_code()
+            test_student = User.query.filter_by(username="testelev").first()
+            if not test_student:
+                hashed_pw = bcrypt.generate_password_hash("password123").decode('utf-8')
+                test_student = User(
+                    username="testelev",
+                    email="testelev@test.se",
+                    password_hash=hashed_pw,
+                    user_type="student",
+                    first_name="Anna",
+                    last_name="Testsson",
+                    school_id=test_school.id,
+                    class_id=test_class.id,
+                    student_code=student_code
+                )
+                db.session.add(test_student)
+                db.session.commit()
+            
+            # Uppdatera befintlig elev med elevkod om den saknas
+            if not test_student.student_code:
+                test_student.student_code = generate_student_code()
+                db.session.commit()
+            
+            # Skapa en testförälder
+            test_parent = User.query.filter_by(username="testforalder").first()
+            if not test_parent:
+                hashed_pw = bcrypt.generate_password_hash("password123").decode('utf-8')
+                test_parent = User(
+                    username="testforalder",
+                    email="testforalder@test.se",
+                    password_hash=hashed_pw,
+                    user_type="parent",
+                    first_name="Maria",
+                    last_name="Testsson",
+                    parent_student_id=test_student.id,
+                    school_id=test_student.school_id
+                )
+                db.session.add(test_parent)
+                db.session.commit()
+            
+            # Skapa några ämnen och schema
+            test_subject = Subject.query.filter_by(name="Matematik").first()
+            if not test_subject:
+                test_subject = Subject(
+                    name="Matematik",
+                    description="Grundläggande matematik",
+                    user_id=1  # Antag att första användaren är en lärare
+                )
+                db.session.add(test_subject)
+                db.session.commit()
+            
+            # Skapa schema för klassen
+            schedule_items = [
+                {"weekday": "måndag", "start_time": "08:00", "end_time": "09:00", "subject": "Matematik", "room": "Sal 101"},
+                {"weekday": "måndag", "start_time": "09:15", "end_time": "10:15", "subject": "Svenska", "room": "Sal 102"},
+                {"weekday": "tisdag", "start_time": "08:00", "end_time": "09:00", "subject": "Engelska", "room": "Sal 103"},
+                {"weekday": "tisdag", "start_time": "09:15", "end_time": "10:15", "subject": "NO", "room": "Sal 201"},
+                {"weekday": "onsdag", "start_time": "08:00", "end_time": "09:00", "subject": "Matematik", "room": "Sal 101"},
+            ]
+            
+            for item in schedule_items:
+                existing_schedule = ClassSchedule.query.filter_by(
+                    class_id=test_class.id,
+                    weekday=item["weekday"],
+                    start_time=item["start_time"]
+                ).first()
+                
+                if not existing_schedule:
+                    schedule = ClassSchedule(
+                        class_id=test_class.id,
+                        weekday=item["weekday"],
+                        start_time=item["start_time"],
+                        end_time=item["end_time"],
+                        subject_id=test_subject.id if item["subject"] == "Matematik" else None,
+                        room=item["room"]
+                    )
+                    db.session.add(schedule)
+            
+            db.session.commit()
+            print("✓ Testdata för föräldrasystemet skapad!")
+            print(f"✓ Elev: testelev/password123 (elevkod: {test_student.student_code})")
+            print("✓ Förälder: testforalder/password123")
+            
+        except Exception as e:
+            print(f"Fel vid skapande av testdata: {e}")
+            db.session.rollback()
+
+
+def initialize_parent_system():
+    """Initiera föräldrasystemet"""
+    with app.app_context():
+        # Skapa tabeller
+        db.create_all()
+        
+        # Skapa testdata (endast i utvecklingsmiljö)
+        if app.config.get('ENV') == 'development':
+            setup_parent_test_data()
+        
+        print("✓ Föräldrasystemet initierat!")
 
 # Lägg till dessa routes i din Flask-app
 @app.route('/api/attendance/student/<int:student_id>/class/<int:class_id>')
@@ -6349,6 +7050,15 @@ def register():
         email = request.form['email'].strip().lower()
         email_confirm = request.form['email_confirm'].strip().lower()
         password = request.form['password']
+        user_type = request.form['user_type']  # 'student', 'teacher', eller 'parent'
+        
+        # För föräldrar
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        student_code = request.form.get('student_code', '').strip() if user_type == 'parent' else None
+
+        # Initialize student variable
+        student = None
 
         # Validation
         if len(username) < 3:
@@ -6363,6 +7073,27 @@ def register():
         if len(password) < 6:
             flash('Lösenord måste vara minst 6 tecken långt.', 'danger')
             return redirect(url_for('register'))
+        if user_type not in ['student', 'teacher', 'parent']:
+            flash('Ogiltigt kontotyp.', 'danger')
+            return redirect(url_for('register'))
+        
+        # Validering för föräldrar
+        if user_type == 'parent':
+            if not first_name or not last_name:
+                flash('För- och efternamn krävs för föräldrakonton.', 'danger')
+                return redirect(url_for('register'))
+            if not student_code:
+                flash('Elevkod krävs för att koppla till ditt barn.', 'danger')
+                return redirect(url_for('register'))
+            
+            # Kontrollera att elevkoden finns
+            student = User.query.filter_by(
+                student_code=student_code, 
+                user_type='student'
+            ).first()
+            if not student:
+                flash('Elevkoden hittades inte. Kontakta skolan för korrekt kod.', 'danger')
+                return redirect(url_for('register'))
 
         # Check existing username or email
         if User.query.filter_by(username=username).first():
@@ -6374,52 +7105,293 @@ def register():
 
         # Create user
         hashed_pw = bcrypt.generate_password_hash(password).decode('utf-8')
-        user = User(username=username, email=email, password_hash=hashed_pw)
+        user = User(
+            username=username, 
+            email=email, 
+            password_hash=hashed_pw,
+            user_type=user_type,
+            first_name=first_name,
+            last_name=last_name
+        )
+        
+        # För föräldrar, koppla till barnet
+        if user_type == 'parent' and student_code and student:
+            user.parent_student_id = student.id
+            user.school_id = student.school_id  # Samma skola som barnet
+        
         db.session.add(user)
         db.session.commit()
-        flash('Kontot skapades! Nu kan du logga in.', 'success')
+        
+        # Fix: Use student variable safely with a fallback
+        if user_type == 'parent' and student:
+            success_message = f'Föräldrakonto skapat och kopplat till {student.first_name} {student.last_name}! Nu kan du logga in.'
+        else:
+            success_messages = {
+                'student': 'Elevkonto skapat! Nu kan du logga in.',
+                'teacher': 'Lärarkonto skapat! Kontakta administratören för att få behörigheter.',
+                'parent': 'Föräldrakonto skapat! Nu kan du logga in.'
+            }
+            success_message = success_messages.get(user_type, 'Kontot skapades! Nu kan du logga in.')
+        
+        flash(success_message, 'success')
         return redirect(url_for('login'))
 
-    # Render form
+    # Render form (rest of the template stays the same)
     return render_template_string('''
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Registrera - Flashcards</title>
+        <title>Registrera - Skol-system</title>
         <style>
-            body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
-            input { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
-            button { background: #007bff; color: white; padding: 10px; border: none; width: 100%; cursor: pointer; }
-            button:hover { background: #0056b3; }
-            .flash-messages { margin: 10px 0; }
-            .alert { padding: 10px; margin: 5px 0; border-radius: 4px; }
-            .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-            .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                max-width: 500px; 
+                margin: 50px auto; 
+                padding: 20px;
+                background: #f5f7fa;
+            }
+            .registration-container {
+                background: white;
+                padding: 40px;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+            h2 {
+                text-align: center;
+                color: #2d3748;
+                margin-bottom: 30px;
+            }
+            .form-group {
+                margin-bottom: 20px;
+            }
+            label { 
+                display: block;
+                margin-bottom: 5px;
+                font-weight: 500;
+                color: #4a5568;
+            }
+            input, select { 
+                width: 100%; 
+                padding: 12px; 
+                margin: 5px 0;
+                box-sizing: border-box;
+                border: 2px solid #e2e8f0;
+                border-radius: 6px;
+                font-size: 16px;
+            }
+            input:focus, select:focus {
+                outline: none;
+                border-color: #4299e1;
+            }
+            button { 
+                background: #4299e1; 
+                color: white; 
+                padding: 14px; 
+                border: none; 
+                width: 100%; 
+                cursor: pointer;
+                border-radius: 6px;
+                font-size: 16px;
+                font-weight: 500;
+                margin-top: 10px;
+            }
+            button:hover { background: #3182ce; }
+            .flash-messages { margin: 20px 0; }
+            .alert { 
+                padding: 12px; 
+                margin: 10px 0; 
+                border-radius: 6px;
+                border-left: 4px solid;
+            }
+            .alert-danger { 
+                background: #fed7d7; 
+                color: #c53030; 
+                border-color: #e53e3e;
+            }
+            .alert-success { 
+                background: #c6f6d5; 
+                color: #22543d; 
+                border-color: #38a169;
+            }
+            .user-type-selector {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 15px;
+                margin: 20px 0;
+            }
+            .user-type-option {
+                text-align: center;
+                padding: 20px;
+                border: 2px solid #e2e8f0;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .user-type-option:hover {
+                border-color: #4299e1;
+                background: #ebf8ff;
+            }
+            .user-type-option.selected {
+                border-color: #4299e1;
+                background: #ebf8ff;
+            }
+            .user-type-icon {
+                font-size: 2em;
+                margin-bottom: 10px;
+            }
+            .parent-fields {
+                display: none;
+                background: #f7fafc;
+                padding: 20px;
+                border-radius: 8px;
+                margin-top: 20px;
+            }
+            .parent-fields.show {
+                display: block;
+            }
+            .help-text {
+                font-size: 0.9em;
+                color: #718096;
+                margin-top: 5px;
+            }
+            .back-link {
+                text-align: center;
+                margin-top: 20px;
+            }
+            .back-link a {
+                color: #4299e1;
+                text-decoration: none;
+            }
         </style>
     </head>
     <body>
-        <h2>Registrera nytt konto</h2>
-        <div class="flash-messages">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+        <div class="registration-container">
+            <h2>Skapa nytt konto</h2>
+            
+            <div class="flash-messages">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+            
+            <form method="POST" id="registrationForm">
+                <div class="form-group">
+                    <label>Välj kontotyp:</label>
+                    <div class="user-type-selector">
+                        <div class="user-type-option" data-type="student">
+                            <div class="user-type-icon">🎓</div>
+                            <div><strong>Elev</strong></div>
+                            <div class="help-text">För elever</div>
+                        </div>
+                        <div class="user-type-option" data-type="teacher">
+                            <div class="user-type-icon">👩‍🏫</div>
+                            <div><strong>Lärare</strong></div>
+                            <div class="help-text">För lärare</div>
+                        </div>
+                        <div class="user-type-option" data-type="parent">
+                            <div class="user-type-icon">👨‍👩‍👧‍👦</div>
+                            <div><strong>Förälder</strong></div>
+                            <div class="help-text">För föräldrar</div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="user_type" id="user_type" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="username">Användarnamn:</label>
+                    <input type="text" name="username" id="username" required minlength="3">
+                </div>
+
+                <div class="form-group">
+                    <label for="email">E-postadress:</label>
+                    <input type="email" name="email" id="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="email_confirm">Bekräfta e-postadress:</label>
+                    <input type="email" name="email_confirm" id="email_confirm" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Lösenord:</label>
+                    <input type="password" name="password" id="password" required minlength="6">
+                </div>
+
+                <!-- Ytterligare fält för föräldrar -->
+                <div id="parent-fields" class="parent-fields">
+                    <h3>Föräldrauppgifter</h3>
+                    
+                    <div class="form-group">
+                        <label for="first_name">Förnamn:</label>
+                        <input type="text" name="first_name" id="first_name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="last_name">Efternamn:</label>
+                        <input type="text" name="last_name" id="last_name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="student_code">Elevkod (för att koppla till ditt barn):</label>
+                        <input type="text" name="student_code" id="student_code" placeholder="t.ex. ST2024001">
+                        <div class="help-text">
+                            Du får elevkoden från skolan eller ditt barn. Den behövs för att koppla ditt konto till rätt elev.
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="submit-btn" disabled>Skapa konto</button>
+            </form>
+            
+            <div class="back-link">
+                <a href="{{ url_for('login') }}">Redan registrerad? Logga in här</a>
+            </div>
         </div>
-        <form method="POST">
-            <label>Användarnamn:</label>
-            <input name="username" required minlength="3">
-            <label>E-postadress:</label>
-            <input type="email" name="email" required>
-            <label>Bekräfta e-postadress:</label>
-            <input type="email" name="email_confirm" required>
-            <label>Lösenord:</label>
-            <input type="password" name="password" required minlength="6">
-            <button type="submit">Registrera</button>
-        </form>
-        <p><a href="{{ url_for('login') }}">Redan registrerad? Logga in här.</a></p>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const userTypeOptions = document.querySelectorAll('.user-type-option');
+                const userTypeInput = document.getElementById('user_type');
+                const parentFields = document.getElementById('parent-fields');
+                const submitBtn = document.getElementById('submit-btn');
+
+                userTypeOptions.forEach(option => {
+                    option.addEventListener('click', function() {
+                        // Remove selected class from all options
+                        userTypeOptions.forEach(opt => opt.classList.remove('selected'));
+                        
+                        // Add selected class to clicked option
+                        this.classList.add('selected');
+                        
+                        // Set the hidden input value
+                        const selectedType = this.dataset.type;
+                        userTypeInput.value = selectedType;
+                        
+                        // Show/hide parent fields
+                        if (selectedType === 'parent') {
+                            parentFields.classList.add('show');
+                            // Make parent fields required
+                            document.getElementById('first_name').required = true;
+                            document.getElementById('last_name').required = true;
+                            document.getElementById('student_code').required = true;
+                        } else {
+                            parentFields.classList.remove('show');
+                            // Make parent fields not required
+                            document.getElementById('first_name').required = false;
+                            document.getElementById('last_name').required = false;
+                            document.getElementById('student_code').required = false;
+                        }
+                        
+                        // Enable submit button
+                        submitBtn.disabled = false;
+                    });
+                });
+            });
+        </script>
     </body>
     </html>
     ''')
@@ -6442,7 +7414,11 @@ def login():
             login_user(user)
             flash(f'Välkommen {user.username}!', 'success')
             next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('home'))
+            if next_page:
+                return redirect(next_page)
+            if user.is_parent():
+                return redirect(url_for('parent_index'))
+            return redirect(url_for('index'))    
         else:
             flash('Fel användarnamn/e-post eller lösenord.', 'danger')
 
@@ -9226,6 +10202,7 @@ def daily_quiz_all(date):
 
 
 if __name__ == '__main__':
+    initialize_parent_system()
     
     with app.app_context():
         migrate_database()
