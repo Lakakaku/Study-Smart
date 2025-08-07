@@ -10236,7 +10236,7 @@ def daily_quiz_all(date):
 
 
 
-
+  
 
 
 
