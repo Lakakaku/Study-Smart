@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Föräldrasida - {{ child.first_name }} {{ child.last_name }}</title>
+    <style>
+        :root {
+            --primary-color: #4299e1;
+            --secondary-color: #667eea;
+            --success-color: #48bb78;
+            --warning-color: #ed8936;
+            --danger-color: #f56565;
+            --light-gray: #f7fafc;
+            --medium-gray: #e2e8f0;
+            --dark-gray: #4a5568;
+            --text-color: #2d3748;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--light-gray);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .child-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .child-avatar {
+            width: 80px;
+            height: 80px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .child-details h2 {
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .child-details p {
+            color: var(--dark-gray);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .section {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .section h3 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .date-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .date-selector label {
+            font-weight: 500;
+            color: var(--dark-gray);
+        }
+
+        .date-selector input,
+        .date-selector select {
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--medium-gray);
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .schedule-day {
+            border: 1px solid var(--medium-gray);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .day-header {
+            background: var(--light-gray);
+            padding: 1rem;
+            font-weight: bold;
+            color: var(--text-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .lesson {
+            padding: 1rem;
+            border-bottom: 1px solid var(--medium-gray);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .lesson:last-child {
+            border-bottom: none;
+        }
+
+        .lesson:hover {
+            background: var(--light-gray);
+        }
+
+        .lesson-info {
+            flex: 1;
+        }
+
+        .lesson-time {
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .lesson-subject {
+            font-size: 1.1rem;
+            margin: 0.25rem 0;
+        }
+
+        .lesson-room {
+            color: var(--dark-gray);
+            font-size: 0.9rem;
+        }
+
+        .absence-btn {
+            background: var(--warning-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+
+        .absence-btn:hover {
+            background: #dd7200;
+        }
+
+        .absence-btn.reported {
+            background: var(--danger-color);
+        }
+
+        .absence-btn.reported:hover {
+            background: #e53e3e;
+        }
+
+        .absence-form {
+            background: var(--light-gray);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .absence-form h4 {
+            margin-bottom: 1rem;
+            color: var(--text-color);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--dark-gray);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--medium-gray);
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            height: 80px;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #3182ce;
+        }
+
+        .btn-secondary {
+            background: var(--medium-gray);
+            color: var(--dark-gray);
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .absence-reports {
+            margin-top: 1rem;
+        }
+
+        .absence-item {
+            background: #fef5e7;
+            border-left: 4px solid var(--warning-color);
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .absence-item.approved {
+            background: #f0fff4;
+            border-left-color: var(--success-color);
+        }
+
+        .absence-item.denied {
+            background: #fed7d7;
+            border-left-color: var(--danger-color);
+        }
+
+        .absence-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--dark-gray);
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background: #fef5e7;
+            color: #dd7200;
+        }
+
+        .status-approved {
+            background: #f0fff4;
+            color: #22543d;
+        }
+
+        .status-denied {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .no-schedule {
+            text-align: center;
+            padding: 2rem;
+            color: var(--dark-gray);
+        }
+
+        .no-schedule svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            color: var(--medium-gray);
+        }
+
+        .logout-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logout-btn:hover {
+            background: #e53e3e;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            overflow-y: auto;
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 600px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .child-info {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .date-selector {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .lesson {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .form-buttons {
+                flex-direction: column;
+            }
+        }
+
+        .flash-messages {
+            margin-bottom: 2rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .alert-danger {
+            background: #fed7d7;
+            color: #c53030;
+            border: 1px solid #feb2b2;
+        }
+
+        .alert-info {
+            background: #ebf8ff;
+            color: #2a69ac;
+            border: 1px solid #90cdf4;
+        }
+    </style>
+</head>
+<body>
+    <a href="/logout" class="logout-btn" onclick="return confirm('Är du säker på att du vill logga ut?')">
+        🚪 Logga ut
+    </a>
+
+    <div class="container">
+        <div class="header">
+            <h1>👨‍👩‍👧‍👦 Föräldrasida</h1>
+            <div class="child-info">
+                <div class="child-avatar">
+                    {{ child.first_name[0] }}{{ child.last_name[0] }}
+                </div>
+                <div class="child-details">
+                    <h2>{{ child.first_name }} {{ child.last_name }}</h2>
+                    <p>{{ child.get_class_name() }} • {{ child.get_school_name() }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <div class="main-content">
+            <!-- Schema sektion -->
+            <div class="section">
+                <h3>📅 Schema</h3>
+                
+                <div class="date-selector">
+                    <label for="week-selector">Välj vecka:</label>
+                    <input type="week" id="week-selector">
+                    <button class="btn btn-primary" onclick="loadSchedule()">Ladda schema</button>
+                </div>
+
+                <div id="schedule-container">
+                    <div class="no-schedule">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <h4>Välj en vecka för att visa schema</h4>
+                        <p>Schema och lektioner visas här när du väljer en vecka.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frånvaroanmälningar sektion -->
+            <div class="section">
+                <h3>📝 Frånvaroanmälningar</h3>
+                
+                <div id="absence-reports">
+                    <div class="no-schedule">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <h4>Inga frånvaroanmälningar ännu</h4>
+                        <p>Rapporterade frånvaroanmälningar visas här.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Frånvaroanmälan modal -->
+        <div id="absence-modal" class="modal">
+            <div class="modal-content">
+                <h3>📝 Anmäl frånvaro</h3>
+                
+                <div class="absence-form">
+                    <h4 id="modal-lesson-info">Lektion detaljer</h4>
+                    
+                    <form id="absence-form">
+                        <div class="form-group">
+                            <label for="absence-type">Typ av frånvaro:</label>
+                            <select id="absence-type" name="absence-type" required>
+                                <option value="">Välj typ</option>
+                                <option value="sjukdom">Sjukdom</option>
+                                <option value="läkarbesök">Läkarbesök</option>
+                                <option value="tandläkarbesök">Tandläkarbesök</option>
+                                <option value="familjeangelegenhet">Familjeangelegenhet</option>
+                                <option value="övrig">Övrig orsak</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="absence-reason">Beskrivning/Orsak:</label>
+                            <textarea id="absence-reason" name="absence-reason" placeholder="Beskriv orsaken till frånvaron..." required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="absence-date">Datum för frånvaro:</label>
+                            <input type="date" id="absence-date" name="absence-date" required readonly>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="parent-phone">Ditt telefonnummer:</label>
+                            <input type="tel" id="parent-phone" name="parent-phone" placeholder="070-123 45 67" required>
+                        </div>
+
+                        <div class="form-buttons">
+                            <button type="button" class="btn btn-secondary" onclick="closeAbsenceModal()">Avbryt</button>
+                            <button type="submit" class="btn btn-primary">Skicka anmälan</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Globala variabler
+        let currentChild = {{ child.id if child else 'null' }};
+        let selectedLesson = null;
+        let currentSchedule = [];
+        let absenceReports = [];
+
+        // Sätt aktuell vecka som standard
+        document.addEventListener('DOMContentLoaded', function() {
+            const weekSelector = document.getElementById('week-selector');
+            const today = new Date();
+            const year = today.getFullYear();
+            const week = getWeekNumber(today);
+            weekSelector.value = `${year}-W${week.toString().padStart(2, '0')}`;
+            
+            // Ladda initial data
+            loadAbsenceReports();
+        });
+
+        // Hämta veckonummer
+        function getWeekNumber(date) {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        }
+
+
+        async function reportQuickAbsence(lesson) {
+
+            
+
+            // 1) Fråga efter orsak
+            const reason = window.prompt(
+                `Ange orsak till frånvaro för ${lesson.subject} den ${lesson.date}:`,
+                ''
+            );
+            if (!reason) {
+                alert('Du måste ange en orsak för att kunna rapportera frånvaro.');
+                return;
+            }
+
+            // 2) Fråga efter telefonnummer
+            const phone = window.prompt(
+                'Ange ditt telefonnummer (t.ex. 070-123 45 67):',
+                ''
+            );
+            if (!phone) {
+                alert('Du måste ange ett telefonnummer för att kunna rapportera frånvaro.');
+                return;
+            }
+
+            // 3) Bygg payload enligt API
+            const absenceData = {
+                student_id: currentChild,
+                date: lesson.date,
+                time: `${lesson.start_time} - ${lesson.end_time}`,
+                subject: lesson.subject,
+                type: 'sjukdom',   // eller hårdkoda/utöka prompt om du vill
+                schedule_id: lesson.id,
+                reason: reason,
+                parent_phone: phone
+            };
+
+            try {
+                const response = await fetch('/api/parent/report-absence', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(absenceData)
+                });
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                alert('Frånvaro anmäld!');
+                loadAbsenceReports();
+                loadSchedule();
+                } else {
+                alert(result.message || 'Fel vid frånvarorapportering');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Ett fel uppstod vid frånvarorapporteringen');
+            }
+            }
+
+
+
+        // Ladda schema för vald vecka
+        async function loadSchedule() {
+            const weekSelector = document.getElementById('week-selector');
+            const selectedWeek = weekSelector.value;
+            
+            if (!selectedWeek) {
+                alert('Vänligen välj en vecka');
+                return;
+            }
+
+            try {
+                showLoading('schedule-container');
+                
+                const response = await fetch(`/api/parent/schedule/${selectedWeek}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    currentSchedule = data.schedule;
+                    displaySchedule(data.schedule);
+                } else {
+                    showError('schedule-container', data.message || 'Kunde inte ladda schema');
+                }
+            } catch (error) {
+                console.error('Error loading schedule:', error);
+                showError('schedule-container', 'Ett fel uppstod vid laddning av schema');
+            }
+        }
+
+        // Visa schema
+        function displaySchedule(schedule) {
+            const container = document.getElementById('schedule-container');
+            
+            if (!schedule || schedule.length === 0) {
+                container.innerHTML = `
+                    <div class="no-schedule">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <h4>Inget schema för denna vecka</h4>
+                        <p>Det finns inga schemalagda lektioner för den valda veckan.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Gruppera lektioner per dag
+            const scheduleByDay = groupScheduleByDay(schedule);
+            
+            let html = '';
+            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+            
+            weekdays.forEach(day => {
+                const dayLessons = scheduleByDay[day] || [];
+                
+                html += `
+                    <div class="schedule-day">
+                        <div class="day-header">
+                            <span>${day.charAt(0).toUpperCase() + day.slice(1)}</span>
+                            <span>${dayLessons.length} lektioner</span>
+                        </div>
+                `;
+                
+                if (dayLessons.length === 0) {
+                    html += `
+                        <div class="lesson" style="justify-content: center; color: #718096;">
+                            Inga lektioner denna dag
+                        </div>
+                    `;
+                } else {
+                    dayLessons.forEach(lesson => {
+                        const hasAbsenceReport = absenceReports.some(report => 
+                            report.lesson_date === lesson.date && report.subject_name === lesson.subject
+                        );
+                        
+                        html += `
+                            <div class="lesson">
+                                <div class="lesson-info">
+                                <div class="lesson-time">${lesson.start_time} - ${lesson.end_time}</div>
+                                <div class="lesson-subject">${lesson.subject}</div>
+                                <div class="lesson-room">📍 ${lesson.room}</div>
+                                </div>
+                                <button
+                                class="absence-btn ${hasAbsenceReport ? 'reported' : ''}"
+                                onclick='reportQuickAbsence(${JSON.stringify(lesson)})'>
+                                ${hasAbsenceReport ? 'Frånvaro anmäld' : 'Anmäl frånvaro'}
+                                </button>
+                            </div>
+                        `;
+                    });
+                }
+                
+                html += '</div>';
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Gruppera schema per dag
+        function groupScheduleByDay(schedule) {
+            const grouped = {};
+            
+            schedule.forEach(lesson => {
+                const day = lesson.weekday;
+                if (!grouped[day]) {
+                    grouped[day] = [];
+                }
+                grouped[day].push(lesson);
+            });
+            
+            // Sortera lektioner inom varje dag efter tid
+            Object.keys(grouped).forEach(day => {
+                grouped[day].sort((a, b) => a.start_time.localeCompare(b.start_time));
+            });
+            
+            return grouped;
+        }
+
+        // Öppna frånvaroanmälan modal
+        function openAbsenceModal(lesson) {
+            selectedLesson = lesson;
+            const modal = document.getElementById('absence-modal');
+            const lessonInfo = document.getElementById('modal-lesson-info');
+            const dateInput = document.getElementById('absence-date');
+            
+            lessonInfo.textContent = `${lesson.subject} - ${lesson.start_time} - ${lesson.end_time} (${lesson.weekday})`;
+            dateInput.value = lesson.date;
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Stäng frånvaroanmälan modal
+        function closeAbsenceModal() {
+            const modal = document.getElementById('absence-modal');
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            
+            // Rensa formulär
+            document.getElementById('absence-form').reset();
+            selectedLesson = null;
+        }
+
+        // Hantera frånvaroanmälan
+        document.getElementById('absence-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!selectedLesson) {
+                alert('Ingen lektion vald');
+                return;
+            }
+            
+            const formData = new FormData(e.target);
+            const absenceData = {
+                lesson_date: formData.get('absence-date'),
+                lesson_time: `${selectedLesson.start_time} - ${selectedLesson.end_time}`,
+                subject_name: selectedLesson.subject,
+                type: formData.get('absence-type'),
+                reason: formData.get('absence-reason'),
+                parent_phone: formData.get('parent-phone'),
+                student_id: currentChild
+            };
+            
+            try {
+                const response = await fetch('/api/parent/report-absence', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(absenceData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    showFlashMessage('Frånvaroanmälan skickad!', 'success');
+                    closeAbsenceModal();
+                    loadAbsenceReports();
+                    loadSchedule(); // Uppdatera schema för att visa anmäld status
+                } else {
+                    alert(result.message || 'Fel vid skickning av anmälan');
+                }
+            } catch (error) {
+                console.error('Error reporting absence:', error);
+                alert('Ett fel uppstod vid skickning av anmälan');
+            }
+        });
+
+        // Ladda frånvaroanmälningar
+        async function loadAbsenceReports() {
+            try {
+                const response = await fetch('/api/parent/absence-reports');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    absenceReports = data.reports;
+                    displayAbsenceReports(data.reports);
+                } else {
+                    console.error('Error loading absence reports:', data.message);
+                }
+            } catch (error) {
+                console.error('Error loading absence reports:', error);
+            }
+        }
+
+        // Visa frånvaroanmälningar
+        function displayAbsenceReports(reports) {
+            const container = document.getElementById('absence-reports');
+            
+            if (!reports || reports.length === 0) {
+                container.innerHTML = `
+                    <div class="no-schedule">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <h4>Inga frånvaroanmälningar ännu</h4>
+                        <p>Rapporterade frånvaroanmälningar visas här.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            reports.forEach(report => {
+                const statusClass = `status-${report.status}`;
+                const itemClass = report.status;
+                
+                html += `
+                    <div class="absence-item ${itemClass}">
+                        <div class="absence-meta">
+                            <span><strong>${report.subject}</strong> - ${formatDate(report.date)}</span>
+                            <span class="status-badge ${statusClass}">${getStatusText(report.status)}</span>
+                        </div>
+                        <div><strong>Typ:</strong> ${getAbsenceTypeText(report.type)}</div>
+                        <div><strong>Orsak:</strong> ${report.reason}</div>
+                        <div style="font-size: 0.8rem; color: #718096; margin-top: 0.5rem;">
+                            Anmäld: ${formatDateTime(report.created_at)}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Hjälpfunktioner
+        function showLoading(containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `
+                <div class="no-schedule">
+                    <div style="font-size: 2rem;">⏳</div>
+                    <h4>Laddar...</h4>
+                </div>
+            `;
+        }
+
+        function showError(containerId, message) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `
+                <div class="no-schedule">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #f56565;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <h4>Ett fel uppstod</h4>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        function showFlashMessage(message, type) {
+            const flashContainer = document.querySelector('.flash-messages');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            flashContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('sv-SE');
+        }
+
+        function formatDateTime(dateTimeString) {
+            const date = new Date(dateTimeString);
+            return date.toLocaleString('sv-SE');
+        }
+
+        function getStatusText(status) {
+            const statusTexts = {
+                'pending': 'Väntar',
+                'approved': 'Godkänd',
+                'denied': 'Nekad'
+            };
+            return statusTexts[status] || status;
+        }
+
+        function getAbsenceTypeText(type) {
+            const typeTexts = {
+                'sjukdom': 'Sjukdom',
+                'läkarbesök': 'Läkarbesök',
+                'tandläkarbesök': 'Tandläkarbesök',
+                'familjeangelegenhet': 'Familjeangelegenhet',
+                'övrig': 'Övrig orsak'
+            };
+            return typeTexts[type] || type;
+        }
+
+        // Stäng modal vid klick utanför
+        document.getElementById('absence-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAbsenceModal();
+            }
+        });
+
+        // Stäng modal med Escape-tangent
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAbsenceModal();
+            }
+        });
+    </script>
+</body>
+</html>
