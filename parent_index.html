@@ -1,5427 +1,990 @@
-
-<!-- index.html: -->
-
-
-
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="sv">
 <head>
-  <meta charset="UTF-8" />
-  <title>Study Smart</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/index_styles.css') }}" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js" defer></script>
-
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-  <style>
-    /* SweetAlert2 custom styling */
-    .my-swal-popup {
-      border-radius: 12px;
-      font-family: "Helvetica Neue", Arial, sans-serif;
-    }
-    .my-confirm-btn {
-      background-color: #4f46e5;
-      color: white;
-      border-radius: 8px;
-      padding: 10px 20px;
-      font-weight: 600;
-    }
-    .my-cancel-btn {
-      color: #6b7280;
-      background-color: #f3f4f6;
-      border-radius: 8px;
-      padding: 10px 20px;
-      font-weight: 600;
-    }
-    .my-delete-btn {
-      background-color: #dc2626;
-      color: white;
-      border-radius: 8px;
-      padding: 10px 20px;
-      font-weight: 600;
-    }
-
-
-    #sigma {
-      display:none;
-    }
-  </style>
-
-</head>
-
-<body>
-  <div id="top">
-    <p id="first-words">study smarter, </p>
-    <p id="second-words">STUDY SMART</p>
-  </div>
-
-  <!-- Ersätt den befintliga header-container sektionen (runt rad 45-65) med denna kod -->
-  <div class="header-container">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="question" role="img" aria-label="Help Icon">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
-      </svg>
-
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="lunch-menu-icon" role="img" aria-label="Lunch Menu Icon" id="lunch-menu-btn">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75-3.97-3.97a.75.75 0 0 0-.058-.042m0 0-.184-.144M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
-      </svg>
-
-      <!-- NY: Skolnyhets-knapp -->
-      <a href="{{ url_for('school_news') }}" class="school-news-link" title="Skolnyheter">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="school-news-icon" role="img" aria-label="School News Icon">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.05.218-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" />
-        </svg>
-      </a>
-
-      <form method="POST" action="{{ url_for('logout') }}" style="display: inline;">
-        <button type="submit" class="logout-btn">LOGGA UT</button>
-      </form>
-
-      <button id="btn-2" class="head-btn">KALENDER</button>
-
-      {% if current_user.is_teacher() and current_user.class_id %}
-        <a href="{{ url_for('attendance_history', class_id=current_user.class_id) }}"
-          class="head-btn"> Närvaro
-        </a>
-        
-      {% endif %}
-
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="user_icon" role="img" aria-label="User Icon">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-      </svg>
-  </div>
-
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="flash-messages-container" id="sigma">
-        {% for category, message in messages %}
-          <div class="flash-message flash-{{ category }}">
-            
-            <button class="flash-close" onclick="this.parentElement.remove()">&times;</button>
-          </div>
-        {% endfor %}
-      </div>
-
-      {% if news and news|length > 0 %}
-      <div class="school-news-banner">  
-        <div class="news-banner-header">
-          <div class="news-banner-icon">📰</div>
-          <div class="news-banner-text">
-            <h3>Senaste nyheterna från {{ school_name or "din skola" }}</h3>
-            <a href="{{ url_for('school_news') }}" class="view-all-news">Visa alla nyheter →</a>
-          </div>
-          <button class="close-news-banner" onclick="this.parentElement.parentElement.style.display='none'">×</button>
-        </div>
-        
-        <div class="news-banner-content">
-          {% for news_item in news %}  <!-- ÄNDRAD: Tog bort [:3] för att visa alla nyheter -->
-          <div class="news-banner-item">
-            <div class="news-item-header">
-              <h4 class="news-item-title">{{ news_item.title }}</h4>
-              <span class="news-item-date">{{ news_item.created_at.strftime('%d %b') }}</span>
-            </div>
-            <p class="news-item-preview">{{ news_item.content[:120] }}{% if news_item.content|length > 120 %}...{% endif %}</p>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
-    {% endif %}
-
-
-
-
-  {% endwith %}
-
-
-
-
-  
-
-  <div class="center-container">
-    <div class="left-container">
-      <div class="left-btn-container">
-        <button id="left-subject-btn">SKAPA ÄMNE</button>
-        <div id="subject-modal" class="modal">
-          <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Skapa Ämne</h2>
-            
-            <div class="create-subject-section">
-              <div class="create-subject-tabs">
-                <button class="tab-button active" onclick="showTab('create')">Skapa Ämne</button>
-                <button class="tab-button" onclick="showTab('join')">Anslut till Ämne</button>
-              </div>
-    
-              <!-- Create Subject Tab -->
-              <div id="create-tab" class="tab-content active">
-                <form id="create-subject-form">
-                  <div class="form-group">
-                    <label for="subject-name">Namn:</label>
-                    <input type="text" id="subject-name" name="subject-name" required>
-                  </div>
-                  <div class="form-group">
-                    <label>
-                      <input type="checkbox" id="is-shared" name="is-shared"> 
-                      Aktivera Delning 
-                    </label>
-                  </div>
-                  <button type="submit">Skapa Ämne</button>
-                </form>
-              </div>
-    
-              <!-- Join Subject Tab -->
-              <div id="join-tab" class="tab-content">
-                <form id="join-subject-form">
-                  <div class="form-group">
-                    <label for="share-code">Delningskod:</label>
-                    <input type="text" id="share-code" name="share-code" placeholder="Skriv in 8-tecken" maxlength="8" required>
-                  </div>
-                  <button type="submit">Anslut</button>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <p id="subject-header">Ämnen:</p>
-
-      <!-- Ersätt den befintliga subject list-sektionen (runt rad 120-180) med denna kod -->
-      <div class="subject-list">
-        <!-- Owned subjects -->
-        {% for subject in owned_subjects %}
-          <div class="subject owned-subject">
-            <!-- Subject link with proper event handling -->
-            <a href="{{ url_for('subject', subject_name=subject.name) }}" class="subject-link">
-              <div class="subject-button owned">
-                <span class="subject-title">{{ subject.name }}</span>
-                <div class="subject-badges">
-                  <span class="subject-role-badge">Skapare</span>
-                  {% if subject.due_flashcards > 0 %}
-                    <span class="due-badge">{{ subject.due_flashcards }}</span>
-                  {% endif %}
-                </div>
-              </div>
-            </a>
-            
-            <!-- Delete button with proper event handling -->
-            <form method="POST" action="{{ url_for('delete_subject') }}" class="delete-form" onsubmit="return false;">
-              <input type="hidden" name="subject" value="{{ subject.name }}" />
-              <button type="button" class="delete-subject-btn" title="Remove subject" onclick="event.stopPropagation(); confirmDelete('{{ subject.name }}', this.closest('form'));">×</button>
-            </form>
-          </div>
-        {% endfor %}
-
-        <!-- Shared subjects -->
-        {% for subject in shared_subjects %}
-          <div class="subject shared-subject">
-            <!-- Subject link with proper event handling -->
-            <a href="{{ url_for('subject', subject_name=subject.name) }}" class="subject-link">
-              <div class="subject-button shared">
-                <span class="subject-title">{{ subject.name }}</span>
-                <div class="subject-badges">
-                  <span class="subject-role-badge">Member</span>
-                  {% if subject.due_flashcards > 0 %}
-                    <span class="due-badge">{{ subject.due_flashcards }}</span>
-                  {% endif %}
-                  {% if subject.pending_assignments > 0 %}
-                    <span class="assignment-badge">{{ subject.pending_assignments }}</span>
-                  {% endif %}
-                </div>
-              </div>
-            </a>
-            
-            <!-- Leave button with proper event handling -->
-            <form method="POST" action="{{ url_for('leave_subject', subject_id=subject.id) }}" class="delete-form" onsubmit="return false;">
-              <button type="button" class="leave-subject-btn" title="Leave subject" onclick="event.stopPropagation(); confirmLeave('{{ subject.name }}', this.closest('form'));">⤷</button>
-            </form>
-          </div>
-        {% endfor %}
-
-        <!-- Show message if no subjects -->
-        {% if not owned_subjects and not shared_subjects %}
-          <div class="no-subjects-message">
-            <p>Inga ämnen här. Skapa ditt första ämne eller anslut till ett!</p>
-          </div>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="right-container">
-      <div class="right-quiz-btn-container">
-        <a href="{{ url_for('create_quiz') }}">
-          <button id="right-quiz-btn">Skapa Quiz</button>
-        </a>
-      </div>
-      <div class="products-header" id="date-header">
-        <button id="prev-day-btn" aria-label="Previous day">&lt;</button>
-        <span id="current-date"></span>
-        <button id="next-day-btn" aria-label="Next day">&gt;</button>
-      </div>
-      
-      <!-- Right content wrapper för desktop layout -->
-      <div class="right-content-wrapper">
-        <!-- Schema sektion -->
-        <div class="schedule-container" id="schedule-container">
-          <h3 class="schedule-header">Schema</h3>
-          <div class="schedule-content">
-            <!-- Schema innehåll kommer här -->
-            <p class="no-schedule">Inget schema för idag</p>
-          </div>
-        </div>
-        
-        <!-- Quiz sektion -->
-        <div class="products-container" id="quizzes-container">
-          <!-- Quizzes will be loaded here via JavaScript -->
-        </div>
-      </div>
-    </div>
-
-    
-  </div>
-
-  <!-- Lunch Menu Modal -->
-  <div id="lunch-menu-modal" class="modal">
-    <div class="modal-content lunch-menu-content">
-      <span class="close lunch-menu-close">&times;</span>
-      <h2 style="text-align: center; margin-bottom: 0;">🍽️ Matsedel</h2>
-      
-      <div class="lunch-menu-header">
-        <button id="prev-week-btn" type="button">⬅ Föregående vecka</button>
-        <span id="menu-week-display">Denna vecka</span>
-        <button id="next-week-btn" type="button">Nästa vecka ➡</button>
-      </div>
-      
-      <div id="lunch-menu-content" class="lunch-menu-grid">
-        <!-- Matsedelsinnehåll kommer laddas här via JavaScript -->
-      </div>
-    </div>
-  </div>
-
-
-  
-
-  <!-- Rest of your modals remain the same -->
-  <div id="subjects-detail-modal" class="modal">
-    <div class="modal-content">
-      <span class="close">&times;</span>
-      <h2>Ämnes Management</h2>
-      
-      <!-- Owned Subjects -->
-      {% if owned_subjects %}
-      <div class="subjects-section">
-        <h3>Mina Ämnen</h3>
-        <div class="subjects-grid">
-          {% for subject in owned_subjects %}
-          <div class="subject-card owned-subject">
-            <div class="subject-header">
-              <h4>{{ subject.name }}</h4>
-              <span class="subject-role owner">Skapare</span>
-            </div>
-            <div class="subject-stats">
-              <span class="stat">{{ subject.quiz_count }} quizzes</span>
-              <span class="stat">{{ subject.flashcard_count }} flashcards</span>
-              {% if subject.due_flashcards > 0 %}
-                <span class="stat due">{{ subject.due_flashcards }} due</span>
-              {% endif %}
-            </div>
-            <div class="subject-actions">
-              <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Open</a>
-              <button class="btn btn-secondary" onclick="toggleSharing({{ subject.id }}, {{ subject.is_shared|lower }})">
-                {% if subject.is_shared %}Disable Sharing{% else %}Enable Sharing{% endif %}
-              </button>
-              {% if subject.is_shared %}
-              <button class="btn btn-info" onclick="showShareCode('{{ subject.share_code }}')">Visa Kod</button>
-              {% endif %}
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
-
-      <!-- Shared Subjects -->
-      {% if shared_subjects %}
-      <div class="subjects-section">
-        <h3>Delad Ämnen</h3>
-        <div class="subjects-grid">
-          {% for subject in shared_subjects %}
-          <div class="subject-card shared-subject">
-            <div class="subject-header">
-              <h4>{{ subject.name }}</h4>
-              <span class="subject-role member">Medlem</span>
-            </div>
-            <div class="subject-stats">
-              <span class="stat">{{ subject.quiz_count }} quizzes</span>
-              <span class="stat">{{ subject.flashcard_count }} flashcards</span>
-              {% if subject.due_flashcards > 0 %}
-              <span class="stat due">{{ subject.due_flashcards }} due</span>
-              {% endif %}
-            </div>
-            <div class="subject-actions">
-              <a href="{{ url_for('subject', subject_name=subject.name) }}" class="btn btn-primary">Öppna</a>
-              <button class="btn btn-danger" onclick="leaveSubject({{ subject.id }})">Lämna</button>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
-
-      {% if not owned_subjects and not shared_subjects %}
-      <div class="no-subjects">
-        <p>Inga ämnen än. Skapa ditt första eller anslut till ett!</p>
-      </div>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Share Code Modal -->
-  <div id="share-code-modal" class="modal">
-    <div class="modal-content">
-      <span class="close">&times;</span>
-      <h3>Delningskod</h3>
-      <p>Dela denna kod med andra så att de kan ansluta sig:</p>
-      <div class="share-code-display">
-        <input type="text" id="share-code-text" readonly>
-        <button onclick="copyShareCode()">Copy</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Rest of your modals and JavaScript remain the same -->
-  <div id="new-data-modal" class="modal">
-    <div class="modal-content">
-      <button id="close-new-data" class="close">&times;</button>
-      <h2>New Data</h2>
-
-      <label for="pdf-upload">Upload a PDF:</label>
-      <input type="file" id="pdf-upload" accept="application/pdf" />
-
-      <div id="pdf-viewer-container" class="pdf-viewer-container">
-        <iframe id="pdf-viewer" class="pdf-viewer" frameborder="0"></iframe>
-      </div>
-
-      <div id="description-examples" class="description-examples">
-        <strong>Examples of descriptions (click to use):</strong>
-        <ul class="description-list">
-          <li class="desc-example">Make a short recap.</li>
-          <li class="desc-example">Make a long recap.</li>
-          <li class="desc-example">Pick out key terms.</li>
-          <li class="desc-example">Key concepts.</li>
-          <li class="desc-example">Revision notes.</li>
-          <li class="desc-example">Overview.</li>
-        </ul>
-
-        <form method="POST" enctype="multipart/form-data">
-          <label for="subject">Select a subject:</label>
-          <select name="subject" id="subject" required>
-            <option value="" disabled selected hidden>Select a subject</option>
-            {% for subject in owned_subjects %}
-              <option value="{{ subject.name }}">{{ subject.name }}</option>
-            {% endfor %}
-            {% for subject in shared_subjects %}
-              <option value="{{ subject.name }}">{{ subject.name }} (Shared)</option>
-            {% endfor %}
-          </select>
-        </form>
-      </div>
-
-      <label for="pdf-notes" class="notes-label">Add notes about the PDF:</label>
-      <textarea id="pdf-notes" class="notes-textarea" rows="5"></textarea>
-
-      <div id="generated-pdf-container" class="pdf-viewer-container">
-        <h3>Generated PDF:</h3>
-        <iframe id="generated-pdf" class="pdf-viewer" frameborder="0"></iframe>
-      </div>
-    </div>
-  </div>
-
-  <div id="calendar-modal" class="modal">
-    <div class="calendar-content">
-      <span class="calendar-close">&times;</span>
-      <h2>Kalender</h2>
-
-      <div class="calendar-header">
-        <button id="prev-month-btn">&lt;</button>
-        <span id="month-year"></span>
-        <button id="next-month-btn">&gt;</button>
-      </div>
-
-      <div class="calendar-main-container">
-        <table id="calendar-table">
-          <thead>
-            <tr>
-              <th>Må</th><th>Ti</th><th>On</th><th>To</th><th>Fr</th><th>Lö</th><th>Sö</th>
-            </tr>
-          </thead>
-          <tbody id="calendar-body">
-          </tbody>
-        </table>
-
-        <div id="events-display" class="events-display" style="display: none;">
-          <div class="events-header">
-            <h3 id="selected-date-title">Händelser under [Date]</h3>
-            <button id="close-events-display" class="close-events-btn">&times;</button>
-          </div>
-          <div id="events-list" class="events-list">
-            <!-- Events will be populated here -->
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="add-event-modal" class="modal-a">
-  <button id="add-event-modal-close">&times;</button>
-  <h2 id="add-event-title">Lägg till händelse</h2>
-
-  <!-- Subject Dropdown -->
-  <div class="form-group">
-    <label for="subject-select">Välj ett Ämne:</label>
-    <select id="subject-select" required class="subject-select">
-      <option value="" disabled selected hidden>Välj ett Ämne</option>
-      {% for subject in owned_subjects %}
-        <option value="{{ subject.name }}" data-user-role="owner">{{ subject.name }}</option>
-      {% endfor %}
-      {% for subject in shared_subjects %}
-        <option value="{{ subject.name }}" data-user-role="member">{{ subject.name }} (Member)</option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <!-- Test Type Dropdown -->
-  <div class="form-group">
-    <label for="test-type-select">Välj typ av test</label>
-    <select id="test-type-select" required class="test-type-select">
-      <option value="" disabled selected hidden>Välj typ av test</option>
-      <option value="assessment">Inlämning</option>
-      <option value="exam">Prov</option>
-    </select>
-  </div>
-  
-  <!-- Event Title Input -->
-  <div class="form-group">
-    <label for="event-title">Titel</label>
-    <input type="text" id="event-title" required>
-  </div>
-  
-  <!-- Event Description Textarea -->
-  <div class="form-group">
-    <label for="event-description">Beskrivning:</label>
-    <textarea id="event-description" rows="3"></textarea>
-  </div>
-
-  <!-- Share with Members Checkbox (endast för ägare) -->
-  <div class="form-group" id="share-option-group" style="display: none;">
-    <label class="checkbox-label">
-      <input type="checkbox" id="share-with-members">
-      Dela denna händelse med alla medlemmar av ämnet
-      <span class="checkbox-info">Medlemmar kommer se händelsen i sina kalendrar</span>
-    </label>
-  </div>
-  
-  <!-- Action Buttons -->
-  <div class="form-actions">
-    <button type="button" id="save-event-btn" class="save-btn">Spara Händelse</button>
-    <button type="button" id="cancel-event-btn" class="cancel-btn">Avbryt</button>
-  </div>
-</div>
-
-
-
-
-<script>
-// ----------- Combined JavaScript from index_script.js and index.html -----------
-
-
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('🍽️ Matsedel JavaScript laddad');
-  
-  let currentMenuWeek = new Date();
-
-  // Hitta element
-  const lunchMenuBtn = document.getElementById('lunch-menu-btn');
-  const lunchMenuModal = document.getElementById('lunch-menu-modal');
-  const lunchMenuClose = document.querySelector('.lunch-menu-close');
-  const prevWeekBtn = document.getElementById('prev-week-btn');
-  const nextWeekBtn = document.getElementById('next-week-btn');
-
-  // VIKTIG FIX: Event listener för matsedelsknappen
-  if (lunchMenuBtn) {
-    lunchMenuBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🍽️ Matsedelsknapp klickad');
-      
-      if (lunchMenuModal) {
-        // TVINGA modalen att visas
-        lunchMenuModal.style.display = 'block';
-        lunchMenuModal.style.visibility = 'visible';
-        lunchMenuModal.style.opacity = '1';
-        lunchMenuModal.style.zIndex = '10000';
-        lunchMenuModal.classList.add('show');
-        
-        // Rendera matsedel
-        setTimeout(() => {
-          renderMatsedel();
-        }, 100);
-        
-        console.log('✅ Modal öppnad');
-      }
-    });
-  }
-
-  // Stäng modal
-  if (lunchMenuClose) {
-    lunchMenuClose.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('❌ Stänger matsedelsmodal');
-      closeLunchModal();
-    });
-  }
-
-  // Stäng modal när man klickar utanför innehållet
-  if (lunchMenuModal) {
-    lunchMenuModal.addEventListener('click', function(e) {
-      if (e.target === lunchMenuModal) {
-        closeLunchModal();
-      }
-    });
-  }
-
-  // Funktion för att stänga modal
-  function closeLunchModal() {
-    if (lunchMenuModal) {
-      lunchMenuModal.style.display = 'none';
-      lunchMenuModal.classList.remove('show');
-    }
-  }
-
-  // Veckonavigering
-  if (prevWeekBtn) {
-    prevWeekBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      console.log('⬅️ Föregående vecka');
-      currentMenuWeek.setDate(currentMenuWeek.getDate() - 7);
-      renderMatsedel();
-    });
-  }
-
-  if (nextWeekBtn) {
-    nextWeekBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      console.log('➡️ Nästa vecka');
-      currentMenuWeek.setDate(currentMenuWeek.getDate() + 7);
-      renderMatsedel();
-    });
-  }
-
-  async function renderMatsedel() {
-    console.log('🔄 Renderar matsedel...');
-    
-    let contentEl = document.getElementById('lunch-menu-content');
-    const modalContent = document.querySelector('#lunch-menu-modal .modal-content') || 
-                        document.querySelector('#lunch-menu-modal .lunch-menu-content') ||
-                        document.querySelector('#lunch-menu-modal');
-    
-    if (!contentEl && modalContent) {
-      console.log('⚠️ Skapar nytt lunch-menu-content element');
-      
-      const headerHTML = `
-        <div class="lunch-menu-header">
-          <button id="prev-week-btn" type="button">⬅ Föregående vecka</button>
-          <span id="menu-week-display">Denna vecka</span>
-          <button id="next-week-btn" type="button">Nästa vecka ➡</button>
-        </div>
-      `;
-      
-      modalContent.innerHTML = `
-        <span class="lunch-menu-close">&times;</span>
-        <h2 style="text-align: center; margin-bottom: 0;">🍽️ Matsedel</h2>
-        ${headerHTML}
-        <div id="lunch-menu-content" class="lunch-menu-grid"></div>
-      `;
-      
-      contentEl = document.getElementById('lunch-menu-content');
-      
-      // Återanslut event listeners för navigation
-      const newPrevBtn = document.getElementById('prev-week-btn');
-      const newNextBtn = document.getElementById('next-week-btn');
-      const newCloseBtn = document.querySelector('.lunch-menu-close');
-      
-      if (newPrevBtn) {
-        newPrevBtn.addEventListener('click', function(e) {
-          e.preventDefault();
-          currentMenuWeek.setDate(currentMenuWeek.getDate() - 7);
-          renderMatsedel();
-        });
-      }
-      
-      if (newNextBtn) {
-        newNextBtn.addEventListener('click', function(e) {
-          e.preventDefault();
-          currentMenuWeek.setDate(currentMenuWeek.getDate() + 7);
-          renderMatsedel();
-        });
-      }
-      
-      if (newCloseBtn) {
-        newCloseBtn.addEventListener('click', function(e) {
-          e.preventDefault();
-          closeLunchModal();
-        });
-      }
-    }
-
-    if (!contentEl) {
-      console.error('❌ Kunde inte hitta eller skapa lunch-menu-content');
-      return;
-    }
-
-    // Visa loading meddelande
-    contentEl.innerHTML = '<div class="loading">Laddar matsedel...</div>';
-
-    try {
-      // Hämta riktig matsedelsdata från server
-      const monday = getMonday(currentMenuWeek);
-      const dateString = monday.toISOString().split('T')[0];
-      
-      const response = await fetch(`/api/lunch_menu?date=${dateString}`);
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        displayMatsedel(contentEl, data);
-        updateWeekDisplay(data.week_start, data.week_end);
-      } 
-      
-    } catch (error) {
-      console.error('❌ Fel vid hämtning av matsedel:', error);
-      contentEl.innerHTML = '<div class="error">Kunde inte ladda matsedel. Försök igen senare.</div>';
-    }
-    
-    console.log('✅ Matsedel renderad');
-  }
-
-  // SKAPA MATSEDELSDATA
-  function createMatsedelData() {
-    const monday = getMonday(currentMenuWeek);
-    const friday = new Date(monday.getTime() + (4 * 24 * 60 * 60 * 1000));
-    
-    return {
-      week_start: monday.toISOString().split('T')[0],
-      week_end: friday.toISOString().split('T')[0],
-      menu_data: [
-        {
-          date: getDateString(monday, 0),
-          day_name_sv: 'Måndag',
-          has_menu: true,
-          main_dish: 'Köttbullar med gräddsås och potatismos',
-          vegetarian_dish: 'Vegetariska köttbullar med gräddsås',
-          side_dishes: 'Potatis, lingonsylt, gurka',
-          dessert: 'Vaniljglass',
-          allergens: 'Gluten, mjölk, ägg'
-        },
-        {
-          date: getDateString(monday, 1),
-          day_name_sv: 'Tisdag',
-          has_menu: true,
-          main_dish: 'Stekt fisk med citronsås',
-          vegetarian_dish: 'Vegetarisk lasagne',
-          side_dishes: 'Kokt ris, ärtor och morötter',
-          dessert: 'Frukt och bär',
-          allergens: 'Fisk, gluten, mjölk'
-        },
-        {
-          date: getDateString(monday, 2),
-          day_name_sv: 'Onsdag',
-          has_menu: true,
-          main_dish: 'Kycklinggryta med curry',
-          vegetarian_dish: 'Kikärts- och grönsakscurry',
-          side_dishes: 'Jasminris, naanbröd, mango chutney',
-          dessert: 'Yoghurt med honung',
-          allergens: 'Gluten, mjölk'
-        },
-        {
-          date: getDateString(monday, 3),
-          day_name_sv: 'Torsdag',
-          has_menu: true,
-          main_dish: 'Korv stroganoff',
-          vegetarian_dish: 'Vegetarisk korv stroganoff',
-          side_dishes: 'Pasta, inlagd gurka, sallad',
-          dessert: 'Chokladkaka',
-          allergens: 'Gluten, mjölk, ägg'
-        },
-        {
-          date: getDateString(monday, 4),
-          day_name_sv: 'Fredag',
-          has_menu: true,
-          main_dish: 'Pizza Margherita',
-          vegetarian_dish: 'Vegansk pizza med grönsaker',
-          side_dishes: 'Blandsallad med vinägrett',
-          dessert: 'Fruktsallad',
-          allergens: 'Gluten, mjölk'
-        }
-      ]
-    };
-  }
-
-  // Uppdatera displayMatsedel för att hantera riktig data
-  function displayMatsedel(contentEl, data) {
-    const today = new Date().toISOString().split('T')[0];
-    
-    let html = '<div class="matsedel-container">';
-    
-    if (!data.menu_data || data.menu_data.length === 0) {
-      html += '<div class="no-menu">Ingen matsedel tillgänglig för denna vecka</div>';
-    } else {
-      data.menu_data.forEach(day => {
-        const isToday = day.date === today;
-        const dayDate = new Date(day.date);
-        const formattedDate = dayDate.toLocaleDateString('sv-SE', { 
-          month: 'short', 
-          day: 'numeric' 
-        });
-
-        html += `
-          <div class="lunch-day-card ${isToday ? 'today' : ''}">
-            <div class="lunch-day-header">
-              <div class="lunch-day-name">${day.day_name_sv}</div>
-              <div class="lunch-day-date">${formattedDate}</div>
-            </div>
-            
-            ${day.has_menu ? `
-              <div class="lunch-dishes">
-                <div class="lunch-dish">
-                  <div class="lunch-dish-label">🥩 HUVUDRÄTT</div>
-                  <div class="lunch-dish-content">${day.main_dish}</div>
-                </div>
-                
-                ${day.vegetarian_dish ? `
-                  <div class="lunch-dish">
-                    <div class="lunch-dish-label">🥗 VEGETARISKT</div>
-                    <div class="lunch-dish-content">${day.vegetarian_dish}</div>
-                  </div>
-                ` : ''}
-                
-                ${day.side_dishes ? `
-                  <div class="lunch-dish">
-                    <div class="lunch-dish-label">🍚 TILLBEHÖR</div>
-                    <div class="lunch-dish-content">${day.side_dishes}</div>
-                  </div>
-                ` : ''}
-                
-                ${day.dessert ? `
-                  <div class="lunch-dish">
-                    <div class="lunch-dish-label">🍰 EFTERRÄTT</div>
-                    <div class="lunch-dish-content">${day.dessert}</div>
-                  </div>
-                ` : ''}
-                
-                ${day.allergens ? `
-                  <div class="allergens-info">
-                    <strong>⚠️ Allergener:</strong> ${day.allergens}
-                  </div>
-                ` : ''}
-              </div>
-            ` : `
-              <div class="no-menu">
-                Ingen matsedel tillgänglig för ${day.day_name_sv}
-              </div>
-            `}
-          </div>
-        `;
-      });
-    }
-
-    html += '</div>';
-    contentEl.innerHTML = html;
-    
-    contentEl.style.display = 'block';
-    contentEl.style.visibility = 'visible';
-    contentEl.style.opacity = '1';
-  }
-
-  // HJÄLPFUNKTIONER
-  function getMonday(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
-  }
-
-  function getDateString(monday, daysFromMonday) {
-    const targetDate = new Date(monday.getTime() + (daysFromMonday * 24 * 60 * 60 * 1000));
-    return targetDate.toISOString().split('T')[0];
-  }
-
-  function updateWeekDisplay(weekStart, weekEnd) {
-    const weekDisplayEl = document.getElementById('menu-week-display');
-    if (weekDisplayEl) {
-      const startDate = new Date(weekStart);
-      const endDate = new Date(weekEnd);
-      
-      const startFormatted = startDate.toLocaleDateString('sv-SE', { 
-        day: 'numeric', 
-        month: 'short' 
-      });
-      const endFormatted = endDate.toLocaleDateString('sv-SE', { 
-        day: 'numeric', 
-        month: 'short' 
-      });
-
-      weekDisplayEl.textContent = `${startFormatted} - ${endFormatted}`;
-    }
-  }
-
-  console.log('✅ Matsedel setup komplett');
-});
-
-
-
-
-document.addEventListener('DOMContentLoaded', () => {
-  // ----------- Part 0: Fetch the entire repetition schedule -----------
-  let schedule = {};
-  let userSubjects = {};
-
-  async function fetchSchedule() {
-    try {
-      const res = await fetch('/flashcards_by_date');
-      if (!res.ok) throw new Error(res.statusText);
-      schedule = await res.json();
-      console.log('[DEBUG] Fetched schedule:', schedule);
-    } catch (e) {
-      console.error('Could not load repetition schedule:', e);
-    }
-  }
-
-  async function loadUserSubjects() {
-    try {
-      const response = await fetch('/api/user_subjects');
-      if (response.ok) {
-        const data = await response.json();
-        userSubjects = data.reduce((acc, subject) => {
-          acc[subject.id] = subject.user_role; // 'owner' eller 'member'
-          return acc;
-        }, {});
-        console.log('[DEBUG] User subjects loaded:', userSubjects);
-      }
-    } catch (error) {
-      console.error('Error loading user subjects:', error);
-    }
-  }
-
-  // ----------- Part 1: Date selector + quiz loading per date -----------
-  let currentDate = new Date();
-
-  function formatKey(d) {
-    return d.toISOString().split('T')[0];
-  }
-
-  function updateDateHeader() {
-    const opts = { year: 'numeric', month: 'long', day: 'numeric' };
-    document.getElementById('current-date').textContent =
-      currentDate.toLocaleDateString(undefined, opts);
-  }
-
-  function markCurrentLesson() {
-      const now = new Date();
-      const currentTime = now.toTimeString().slice(0, 5); // Format: HH:MM
-      
-      document.querySelectorAll('.schedule-item').forEach(item => {
-          const startTime = item.querySelector('.time-start')?.textContent;
-          const endTime = item.querySelector('.time-end')?.textContent;
-          
-          if (startTime && endTime && currentTime >= startTime && currentTime <= endTime) {
-              item.classList.add('current-lesson');
-          } else {
-              item.classList.remove('current-lesson');
-          }
-      });
-  }
-
-  
-  async function loadQuizzesForDate() {
-      // Hämta alltid senaste schemat
-      await fetchSchedule();
-
-      const key = formatKey(currentDate);
-      const entries = schedule[key] || [];
-      const container = document.getElementById('quizzes-container');
-      container.innerHTML = ''; 
-
-      console.log(`[DEBUG] Loading quizzes for date: ${key}, found ${entries.length} entries`);
-
-      // Din befintliga quiz-loading logik här...
-      if (entries.length === 0) {
-          container.innerHTML = '<p>No repetitions scheduled for this date.</p>';
-      } else {
-          // Förbättrad grupp-logik som räknar faktiska frågor
-          const grouped = {};
-          entries.forEach(e => {
-              const id = `${e.subject}|||${e.topic}`;
-              if (!grouped[id]) {
-                  grouped[id] = { 
-                      subject: e.subject, 
-                      topic: e.topic, 
-                      count: 0,
-                      questions: [],
-                      user_role: e.user_role || 'unknown',
-                      is_shared_subject: e.is_shared_subject || false,
-                      quiz_id: e.quiz_id || null,
-                      is_personal_quiz: e.is_personal_quiz || false
-                  };
-              }
-              
-              if (e.questions && Array.isArray(e.questions)) {
-                  grouped[id].count += e.questions.length;
-                  grouped[id].questions.push(...e.questions);
-              } else {
-                  grouped[id].count++;
-              }
-          });
-
-          console.log('[DEBUG] Grouped quizzes:', grouped);
-
-          Object.values(grouped).forEach(qz => {
-              const link = `/daily_quiz/${key}/` +
-                          encodeURIComponent(qz.subject) + '/' +
-                          encodeURIComponent(qz.topic);
-              const card = document.createElement('div');
-              card.className = 'quiz-card';
-              
-              const canLeave = qz.user_role === 'member' && 
-                              qz.is_shared_subject && 
-                              !qz.is_personal_quiz && 
-                              qz.quiz_id;
-              
-              console.log(`[DEBUG] Quiz: ${qz.topic}, canLeave: ${canLeave}`);
-              
-              card.innerHTML = `
-                  <h3>${qz.subject} – ${qz.topic}</h3>
-                  <p>${qz.count} question${qz.count > 1 ? 's' : ''}</p>
-                  <div class="quiz-actions">
-                      <a href="${link}"><button class="start-quiz-btn">Start Quiz</button></a>
-                      ${canLeave ? `<button class="leave-quiz-btn" onclick="leaveQuiz('${qz.subject}', '${qz.topic}', ${qz.quiz_id || 'null'})" title="Leave this shared quiz">✖</button>` : ''}
-                  </div>
-              `;
-              container.appendChild(card);
-          });
-      }
-
-      // LÄGG TILL: Ladda schema för samma datum
-      await loadScheduleForDate(currentDate);
-  }
-
-  // Datum‐knapparna
-  document.getElementById('prev-day-btn').addEventListener('click', async () => {
-      currentDate.setDate(currentDate.getDate() - 1);
-      updateDateHeader();
-      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
-  });
-
-  document.getElementById('next-day-btn').addEventListener('click', async () => {
-      currentDate.setDate(currentDate.getDate() + 1);
-      updateDateHeader();
-      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
-  });
-
-  // ----------- Part 2: Calendar modal and event handling -----------
-
-  let calendarCurrentDate = new Date(); // Add this variable to track calendar's current month/year
-
-  const calendarBtn = document.getElementById('btn-2');
-  const calendarModal = document.getElementById('calendar-modal');
-  const calendarCloseBtn = calendarModal?.querySelector('.calendar-close');
-  const monthYearSpan = document.getElementById('month-year');
-  const prevMonthBtn = document.getElementById('prev-month-btn');
-  const nextMonthBtn = document.getElementById('next-month-btn');
-  const calendarBody = document.getElementById('calendar-body');
-
-  const addEventModal = document.getElementById('add-event-modal');
-  const addEventModalClose = document.getElementById('add-event-modal-close');
-  const saveEventBtn = document.getElementById('save-event-btn');
-  const cancelEventBtn = document.getElementById('cancel-event-btn');
-
-  const eventsDisplay = document.getElementById('events-display');
-  const selectedDateTitle = document.getElementById('selected-date-title');
-  const eventsList = document.getElementById('events-list');
-  const closeEventsDisplay = document.getElementById('close-events-display');
-
-  let selectedDate = null;
-  let calendarEvents = [];
-
-  async function loadEvents() {
-    try {
-      const resp = await fetch('/api/events');
-      if (resp.ok) {
-        calendarEvents = await resp.json();
-        if (calendarModal.style.display === 'block') {
-          renderCalendar(currentDate);
-        }
-      }
-    } catch (err) {
-      console.error('Error loading events:', err);
-    }
-  }
-
-
-  // Add function to check teacher setup
-  window.checkTeacherSetup = async function() {
-      try {
-          const response = await fetch('/api/teacher/setup_schedule');
-          const data = await response.json();
-          
-          if (data.status === 'success') {
-              const info = data.teacher_info;
-              let message = `
-                  <h4>Lärarinformation</h4>
-                  <p><strong>Namn:</strong> ${info.name}</p>
-                  <p><strong>Skola:</strong> ${info.school_name}</p>
-                  <p><strong>Undervisningsämnen:</strong> ${info.teacher_subjects?.join(', ') || 'Inga ämnen angivna'}</p>
-                  <p><strong>Egna ämnen:</strong> ${info.owned_subjects?.map(s => s.name).join(', ') || 'Inga'}</p>
-                  <p><strong>Klassföreståndare:</strong> ${info.is_homeroom_teacher ? info.homeroom_classes?.map(c => c.name).join(', ') : 'Nej'}</p>
-              `;
-              
-              if (info.teacher_subjects?.length === 0 && info.owned_subjects?.length === 0) {
-                  message += `
-                      <hr>
-                      <p style="color: orange;">⚠️ Du har inga undervisningsämnen angivna. Kontakta administratören för att uppdatera din profil.</p>
-                  `;
-              }
-              
-              await Swal.fire({
-                  title: 'Lärarinställningar',
-                  html: message,
-                  icon: 'info',
-                  confirmButtonText: 'OK',
-                  customClass: {
-                      popup: 'my-swal-popup',
-                      confirmButton: 'my-confirm-btn'
-                  }
-              });
-          } else {
-              await Swal.fire({
-                  title: 'Fel',
-                  text: data.message || 'Kunde inte hämta lärarinformation',
-                  icon: 'error',
-                  customClass: {
-                      popup: 'my-swal-popup',
-                      confirmButton: 'my-confirm-btn'
-                  }
-              });
-          }
-      } catch (error) {
-          console.error('Error checking teacher setup:', error);
-          await Swal.fire({
-              title: 'Fel',
-              text: 'Nätverksfel vid kontroll av lärarinställningar',
-              icon: 'error',
-              customClass: {
-                  popup: 'my-swal-popup',
-                  confirmButton: 'my-confirm-btn'
-              }
-          });
-      }
-  };
-
-  async function loadScheduleForDate(date) {
-      try {
-          const dateString = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-          console.log(`[DEBUG] Loading schedule for date: ${dateString}`);
-          
-          const response = await fetch(`/api/schedule/${dateString}`);
-          
-          if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          const data = await response.json();
-          console.log('[DEBUG] Schedule data received:', data);
-          
-          // Visa debug info för lärare
-          if (data.debug_info) {
-              console.log('[DEBUG] Teacher debug info:', data.debug_info);
-          }
-          
-          displaySchedule(data);
-          
-      } catch (error) {
-          console.error('Error loading schedule:', error);
-          displayScheduleError('Kunde inte ladda schema');
-      }
-  }
-
-
-  function displaySchedule(scheduleData) {
-      const scheduleContainer = document.querySelector('.schedule-content');
-      
-      if (!scheduleContainer) {
-          console.error('Schedule container not found');
-          return;
-      }
-      
-      if (scheduleData.status === 'success' && scheduleData.schedule.length > 0) {
-          const today = new Date();
-          const isToday = currentDate.toDateString() === today.toDateString();
-          const isTeacher = scheduleData.user_type === 'teacher';
-          const currentDateString = currentDate.toISOString().split('T')[0];
-          
-          let scheduleHTML = '<div class="schedule-list">';
-          
-          scheduleData.schedule.forEach(lesson => {
-              // Olika styling baserat på användartyp och lektionstyp
-              let lessonClass = 'schedule-item';
-              if (isTeacher) {
-                  lessonClass += ' teacher-lesson';
-                  if (lesson.type === 'homeroom') {
-                      lessonClass += ' homeroom-lesson';
-                  }
-              } else {
-                  lessonClass += ' student-lesson';
-              }
-              
-              // Skapa närvaroknapp för lärare
-              let attendanceButton = '';
-              if (isTeacher && lesson.id) {
-                  attendanceButton = `
-                      <div class="lesson-actions">
-                          <button class="attendance-btn" 
-                                  onclick="openAttendance(${lesson.id}, '${currentDateString}')"
-                                  title="Rapportera närvaro för denna lektion">
-                              📊 Närvaro
-                          </button>
-                      </div>
-                  `;
-              }
-              
-              scheduleHTML += `
-                  <div class="${lessonClass}">
-                      <div class="schedule-main">
-                          <div class="schedule-time">
-                              <span class="time-start">${lesson.start_time}</span>
-                              <span class="time-separator">-</span>
-                              <span class="time-end">${lesson.end_time}</span>
-                          </div>
-                          <div class="schedule-details">
-                              <div class="schedule-subject">${lesson.subject}</div>
-                              <div class="schedule-room">${lesson.room}</div>
-                              ${lesson.class_name ? `<div class="schedule-class">Klass: ${lesson.class_name}</div>` : ''}
-                          </div>
-                      </div>
-                      ${attendanceButton}
-                  </div>
-              `;
-          });
-          
-          scheduleHTML += '</div>';
-          
-          scheduleContainer.innerHTML = scheduleHTML;
-          
-          // Markera aktuell lektion om det är idag
-          if (isToday) {
-              setTimeout(markCurrentLesson, 100);
-          }
-          
-          // Ladda närvarostatus för lektioner
-          if (isTeacher) {
-              loadAttendanceStatus(currentDateString);
-          }
-          
-      } else {
-          let message = 'Inget schema för idag';
-          
-          if (scheduleData.message) {
-              message = scheduleData.message;
-          } else if (scheduleData.user_type === 'teacher') {
-              message = 'Ingen undervisning schemalagd idag';
-          }
-          
-          scheduleContainer.innerHTML = `
-              <div class="no-schedule">
-                  <p>${message}</p>
-                  ${scheduleData.user_type === 'teacher' ? `
-                      <div class="teacher-schedule-help">
-                          <small>
-                              Tips: Kontrollera att dina ämnen är korrekt inställda i profilen.<br>
-                              <a href="#" onclick="checkTeacherSetup()">Kontrollera lärarinställningar</a>
-                          </small>
-                      </div>
-                  ` : ''}
-              </div>
-          `;
-      }
-  }
-
-
-
-
-
-  function displayScheduleError(errorMessage) {
-      const scheduleContainer = document.querySelector('.schedule-content');
-      
-      if (scheduleContainer) {
-          scheduleContainer.innerHTML = `
-              <div class="schedule-error">
-                  <p>${errorMessage}</p>
-              </div>
-          `;
-      }
-  }
-  
-
-
-
-
-
-  // Calendar modal close button
-  calendarCloseBtn?.addEventListener('click', () => {
-    calendarModal.style.display = 'none';
-    // Also hide events display when closing calendar
-    eventsDisplay.style.display = 'none';
-  });
-
-  // Add event modal close button  
-  addEventModalClose?.addEventListener('click', () => {
-    addEventModal.style.display = 'none';
-    clearEventForm();
-  });
-  // Events display close button
-  closeEventsDisplay?.addEventListener('click', () => {
-    eventsDisplay.style.display = 'none';
-  });
-
-  // Funktion för att öppna närvarorapportering
-  window.openAttendance = function(scheduleId, date) {
-      console.log(`Opening attendance for lesson ${scheduleId} on ${date}`);
-      
-      // Navigera till närvarorapporteringssidan
-      const url = `/attendance/lesson/${scheduleId}/${date}`;
-      window.location.href = url;
-  };
-
-  // Funktion för att ladda närvarostatus för lektioner
-  async function loadAttendanceStatus(date) {
-      try {
-          const attendanceBtns = document.querySelectorAll('.attendance-btn');
-          
-          for (const btn of attendanceBtns) {
-              const scheduleId = btn.onclick.toString().match(/openAttendance\((\d+)/)?.[1];
-              
-              if (scheduleId) {
-                  try {
-                      const response = await fetch(`/api/attendance/lesson/${scheduleId}/${date}`);
-                      const data = await response.json();
-                      
-                      if (data.status === 'success' && data.has_attendance) {
-                          // Uppdatera knappens utseende för att visa att närvaro är rapporterad
-                          btn.classList.add('attendance-completed');
-                          btn.innerHTML = '✅ Närvaro klar';
-                          btn.title = `Närvaro rapporterad. ${data.summary.present}/${data.summary.total} närvarande`;
-                          
-                          // Lägg till sammanfattningsinformation
-                          const lessonItem = btn.closest('.schedule-item');
-                          if (lessonItem && data.summary) {
-                              const summaryEl = document.createElement('div');
-                              summaryEl.className = 'attendance-summary-mini';
-                              summaryEl.innerHTML = `
-                                  <span class="mini-summary-text">
-                                      ${data.summary.present}/${data.summary.total} närvarande 
-                                      (${data.summary.attendance_rate}%)
-                                  </span>
-                              `;
-                              
-                              const existingSummary = lessonItem.querySelector('.attendance-summary-mini');
-                              if (existingSummary) {
-                                  existingSummary.replaceWith(summaryEl);
-                              } else {
-                                  lessonItem.querySelector('.schedule-details').appendChild(summaryEl);
-                              }
-                          }
-                      }
-                  } catch (error) {
-                      console.error(`Error loading attendance status for lesson ${scheduleId}:`, error);
-                  }
-              }
-          }
-      } catch (error) {
-          console.error('Error loading attendance statuses:', error);
-      }
-  }
-
-  // Lägg till denna CSS i din befintliga CSS-fil eller som style-block
-  const attendanceStyles = `
-      .schedule-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 1rem;
-      }
-
-      .schedule-main {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          flex: 1;
-      }
-
-      .lesson-actions {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-      }
-
-      .attendance-btn {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 0.85rem;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          white-space: nowrap;
-      }
-
-      .attendance-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-      }
-
-      .attendance-btn.attendance-completed {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      }
-
-      .attendance-btn.attendance-completed:hover {
-          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-      }
-
-      .attendance-summary-mini {
-          font-size: 0.8rem;
-          color: #10b981;
-          font-weight: 500;
-          margin-top: 0.25rem;
-      }
-
-      .mini-summary-text {
-          background: rgba(16, 185, 129, 0.1);
-          padding: 2px 6px;
-          border-radius: 4px;
-      }
-
-      @media (max-width: 768px) {
-          .schedule-item {
-              flex-direction: column;
-              align-items: stretch;
-          }
-          
-          .schedule-main {
-              flex-direction: column;
-              align-items: stretch;
-          }
-          
-          .lesson-actions {
-              justify-content: center;
-              margin-top: 0.5rem;
-          }
-          
-          .attendance-btn {
-              flex: 1;
-              justify-content: center;
-          }
-      }
-  `;
-
-  // Lägg till stilarna till dokumentet
-  if (!document.querySelector('#attendance-styles')) {
-      const styleSheet = document.createElement('style');
-      styleSheet.id = 'attendance-styles';
-      styleSheet.textContent = attendanceStyles;
-      document.head.appendChild(styleSheet);
-  }
-
-  // Update the window click handler to properly handle modal closing
-  window.addEventListener('click', e => {
-    // Calendar modal
-    if (e.target === calendarModal) {
-      calendarModal.style.display = 'none';
-      eventsDisplay.style.display = 'none';
-    }
-    
-    // Add event modal
-    if (e.target === addEventModal) {
-      addEventModal.style.display = 'none';
-      clearEventForm();
-    }
-    
-    // Subject modal
-    if (e.target === subjectModal) {
-      subjectModal.style.display = 'none';
-    }
-  });
-
-
-  async function saveEvent(eventData) {
-    try {
-      const resp = await fetch('/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(eventData)
-      });
-      if (!resp.ok) throw new Error('Failed to save event');
-      calendarEvents.push(eventData);
-      renderCalendar(currentDate);
-    } catch (error) {
-      console.error('Error saving event:', error);
-      alert('Error saving event.');
-    }
-  }
-
-  // Update the calendar button click handler:
-  calendarBtn?.addEventListener('click', () => {
-    calendarModal.style.display = 'block';
-    calendarCurrentDate = new Date(); // Reset to current month when opening
-    renderCalendar(calendarCurrentDate);
-  });
-
-  // Update the month navigation buttons:
-  prevMonthBtn?.addEventListener('click', () => {
-    calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() - 1);
-    renderCalendar(calendarCurrentDate);
-  });
-
-  nextMonthBtn?.addEventListener('click', () => {
-    calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + 1);
-    renderCalendar(calendarCurrentDate);
-  });
-
-  saveEventBtn?.addEventListener('click', async () => {
-    const subject = document.getElementById('subject-select').value;
-    const testType = document.getElementById('test-type-select').value;
-    const title = document.getElementById('event-title').value;
-    const desc = document.getElementById('event-description').value;
-    const shareWithMembers = document.getElementById('share-with-members')?.checked || false;
-
-    if (subject && testType && title && selectedDate) {
-      const eventData = {
-        date: formatKey(selectedDate),
-        subject: subject,
-        testType: testType,
-        title: title,
-        description: desc,
-        share_with_members: shareWithMembers
-      };
-      try {
-        const response = await fetch('/api/events', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(eventData)
-        });
-        const data = await response.json();
-        if (response.ok && data.status === 'success') {
-          alert(data.message);
-          await loadEvents();
-          renderCalendar(currentDate);
-          addEventModal.style.display = 'none';
-          clearEventForm();
-        } else {
-          alert(data.error || 'Failed to create event');
-        }
-      } catch (error) {
-        console.error('Error creating event:', error);
-        alert('Network error occurred while creating event');
-      }
-    } else {
-      alert('Please fill all required fields');
-    }
-  });
-
-  cancelEventBtn?.addEventListener('click', () => { 
-    addEventModal.style.display = 'none'; 
-    clearEventForm(); 
-  });
-
-  function clearEventForm() {
-    ['subject-select','test-type-select','event-title','event-description'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    const shareCheckbox = document.getElementById('share-with-members');
-    if (shareCheckbox) shareCheckbox.checked = false;
-    selectedDate = null;
-  }
-
-  function getEventsForDate(d) {
-    const ds = formatKey(d);
-    return calendarEvents.filter(e => e.date === ds);
-  }
-
-  function displayEventsForDate(d) {
-    const evs = getEventsForDate(d);
-    selectedDateTitle.textContent =
-      `Events for ${d.toLocaleDateString('en-US',{ weekday:'long', year:'numeric', month:'long', day:'numeric'})}`;
-    
-    if (evs.length === 0) {
-      eventsList.innerHTML = '<p class="no-events">No events scheduled for this date.</p>';
-    } else {
-      eventsList.innerHTML = evs.map(e => `
-        <div class="event-item ${e.is_shared ? 'shared-event' : 'private-event'}">
-          <div class="event-header">
-            <h4>${e.title}</h4>
-            <div class="event-badges">
-              <span class="test-type-badge">${e.testType}</span>
-              ${e.is_shared ? '<span class="shared-badge">Shared</span>' : ''}
-            </div>
-          </div>
-          <div class="event-details">
-            <p><strong>Subject:</strong> ${e.subject}</p>
-            ${e.description ? `<p><strong>Description:</strong> ${e.description}</p>` : ''}
-          </div>
-          <div class="event-actions">
-            ${canDeleteEvent(e) ? `<button onclick="deleteEvent(${e.id})" class="delete-btn">Delete</button>` : ''}
-            ${canToggleSharing(e) ? `<button onclick="toggleEventSharing(${e.id}, ${e.is_shared})" class="share-btn">${e.is_shared ? 'Make Private' : 'Share with Members'}</button>` : ''}
-          </div>
-        </div>
-      `).join('');
-    }
-    eventsDisplay.style.display = 'block';
-  }
-
-
-
-  // Function to handle leaving a quiz (for members only)
-  window.leaveQuiz = async function(subject, topic, quizId) {
-      const result = await Swal.fire({
-        title: 'Är du säker?',
-        html: `
-          Vill du lämna quizet "<strong>${topic}</strong>" i ämnet "<strong>${subject}</strong>"?<br><br>
-          <ul style="text-align:left">
-            <li>Alla dina flashcards försvinner</li>
-            <li>Det tas bort från din repetitionsplan</li>
-            <li>Åtgärden går inte att ångra</li>
-          </ul>
-        `,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Ja, lämna',
-        cancelButtonText: 'Nej, stanna kvar',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn',
-          cancelButton: 'my-cancel-btn'
-        }
-      });
-
-      if (!result.isConfirmed) return;
-      
-      try {
-          const response = await fetch('/api/leave_quiz', {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                  subject: subject,
-                  topic: topic,
-                  quiz_id: quizId
-              })
-          });
-          
-          const data = await response.json();
-          
-          if (response.ok && data.status === 'success') {
-              await Swal.fire({
-                title: 'Klart!',
-                text: data.message,
-                icon: 'success',
-                customClass: {
-                  popup: 'my-swal-popup',
-                  confirmButton: 'my-confirm-btn'
-                }
-              });
-              // Refresh the page to update the quiz list
-              await fetchSchedule();
-              await loadQuizzesForDate();
-          } else {
-              await Swal.fire({
-                title: 'Fel!',
-                text: data.error || 'Failed to leave quiz',
-                icon: 'error',
-                customClass: {
-                  popup: 'my-swal-popup',
-                  confirmButton: 'my-confirm-btn'
-                }
-              });
-          }
-      } catch (error) {
-          console.error('Error leaving quiz:', error);
-          await Swal.fire({
-            title: 'Fel!',
-            text: 'Network error occurred while leaving quiz',
-            icon: 'error',
-            customClass: {
-              popup: 'my-swal-popup',
-              confirmButton: 'my-confirm-btn'
-            }
-          });
-      }
-  };
-
-  window.toggleEventSharing = async function(eventId, isCurrentlyShared) {
-    try {
-      const response = await fetch(`/api/events/${eventId}/share`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await response.json();
-      if (response.ok && data.status === 'success') {
-        await Swal.fire({
-          title: 'Klart!',
-          text: data.message,
-          icon: 'success',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-        await loadEvents();
-        renderCalendar(currentDate);
-        if (eventsDisplay.style.display === 'block' && selectedDate) {
-          displayEventsForDate(selectedDate);
-        }
-      } else {
-        await Swal.fire({
-          title: 'Fel!',
-          text: data.error || 'Failed to update sharing settings',
-          icon: 'error',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error toggling event sharing:', error);
-      await Swal.fire({
-        title: 'Fel!',
-        text: 'Network error occurred while updating sharing settings',
-        icon: 'error',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-    }
-  };
-
-  function canDeleteEvent(event) {
-    if (!event.subject_id) {
-      return true;
-    }
-    const userRole = userSubjects[event.subject_id];
-    return userRole === 'owner';
-  }
-
-  function canToggleSharing(event) {
-    if (!event.subject_id) {
-      return true;
-    }
-    const userRole = userSubjects[event.subject_id];
-    return userRole === 'owner';
-  }
-
-  window.deleteEvent = async function(id) {
-    const result = await Swal.fire({
-      title: 'Ta bort event?',
-      text: 'Är du säker på att du vill ta bort detta event?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Ja, ta bort',
-      cancelButtonText: 'Avbryt',
-      customClass: {
-        popup: 'my-swal-popup',
-        confirmButton: 'my-delete-btn',
-        cancelButton: 'my-cancel-btn'
-      }
-    });
-
-    if (!result.isConfirmed) return;
-
-    try {
-      const response = await fetch(`/api/events/${id}`, { 
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await response.json();
-      if (response.ok && data.status === 'success') {
-        await Swal.fire({
-          title: 'Borttaget!',
-          text: data.message,
-          icon: 'success',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-        await loadEvents();
-        renderCalendar(currentDate);
-        if (eventsDisplay.style.display === 'block' && selectedDate) {
-          displayEventsForDate(selectedDate);
-        }
-      } else {
-        await Swal.fire({
-          title: 'Fel!',
-          text: data.error || 'Failed to delete event',
-          icon: 'error',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting event:', error);
-      await Swal.fire({
-        title: 'Fel!',
-        text: 'Network error occurred while deleting event',
-        icon: 'error',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-    }
-  };
-
-  window.addEventListener('click', e => {
-    if (e.target === calendarModal) {
-      calendarModal.style.display = 'none';
-    }
-    if (addEventModal && addEventModal.style.display === 'block' && !e.target.closest('#add-event-modal')) {
-      addEventModal.style.display = 'none';
-      clearEventForm();
-    }
-    if (e.target === subjectModal) {
-      subjectModal.style.display = 'none';
-    }
-  });
-
-  
-
-  window.renderCalendar = date => {
-    calendarCurrentDate = new Date(date);
-    monthYearSpan.textContent = `${date.toLocaleString('default',{month:'long'})} ${date.getFullYear()}`;
-    calendarBody.innerHTML = '';
-
-    let start = new Date(date.getFullYear(), date.getMonth(), 1);
-    start.setDate(start.getDate() - start.getDay());
-
-    const today = new Date(); // Dagens datum
-    today.setHours(0, 0, 0, 0); // Nollställ tid för jämförelse
-
-    for (let r = 0; r < 6; r++) {
-      const tr = document.createElement('tr');
-      for (let c = 0; c < 7; c++) {
-        const td = document.createElement('td');
-        td.className = 'calendar-cell';
-
-        const d = new Date(start);
-        d.setDate(start.getDate() + (r * 7 + c));
-        d.setHours(0, 0, 0, 0); // Nollställ tid för jämförelse
-
-        // Kontrollera om det är dagens datum
-        if (d.getTime() === today.getTime()) {
-          td.classList.add('today');
-        }
-        
-        if (d.getMonth() !== date.getMonth()) {
-          td.classList.add('other-month');
-        }
-
-        const dayDiv = document.createElement('div');
-        dayDiv.className = 'day-container';
-
-        const hdr = document.createElement('div');
-        hdr.className = 'day-header';
-        hdr.textContent = d.getDate();
-        hdr.onclick = () => {
-          selectedDate = new Date(d);
-          displayEventsForDate(d);
-        };
-        dayDiv.appendChild(hdr);
-
-        const dayEvents = getEventsForDate(d);
-
-        if (dayEvents.length > 0) {
-          const indicator = document.createElement('div');
-          indicator.className = 'event-indicator';
-
-          const ownEvents = dayEvents.filter(e => !e.is_shared);
-          const sharedEvents = dayEvents.filter(e => e.is_shared);
-
-          if (ownEvents.length > 0) {
-            indicator.classList.add('has-events');
-          }
-          if (sharedEvents.length > 0) {
-            indicator.classList.add('has-shared-events');
-          }
-
-          let tooltipText = '';
-          if (ownEvents.length > 0) {
-            tooltipText += `${ownEvents.length} event(s)`;
-          }
-          if (sharedEvents.length > 0) {
-            tooltipText += (tooltipText ? ', ' : '') + `${sharedEvents.length} shared event(s)`;
-          }
-
-          indicator.title = tooltipText;
-          dayDiv.appendChild(indicator);
-        }
-
-        const addBtn = document.createElement('div');
-        addBtn.className = 'add-event-btn';
-        addBtn.textContent = '+';
-        addBtn.onclick = e => {
-          e.stopPropagation();
-          selectedDate = new Date(d);
-          addEventModal.style.display = 'block';
-        };
-        dayDiv.appendChild(addBtn);
-
-        td.appendChild(dayDiv);
-        tr.appendChild(td);
-      }
-      calendarBody.appendChild(tr);
-    }
-  };
-
-  // ----------- Subject Modal Logic -----------
-  const subjectModal = document.getElementById('subject-modal');
-  const subjectBtn = document.getElementById('left-subject-btn');
-  const subjectClose = subjectModal?.querySelector('.close');
-  const subjectForm = document.getElementById('create-subject-form');
-
-  subjectBtn?.addEventListener('click', () => {
-    subjectModal.style.display = 'block';
-  });
-
-  subjectClose?.addEventListener('click', () => {
-    subjectModal.style.display = 'none';
-  });
-
-  subjectForm?.addEventListener('submit', e => {
-    e.preventDefault();
-    subjectModal.style.display = 'none';
-  });
-
-  // ----------- Quiz Completion Handling -----------
-  window.handleQuizCompletion = function(subject, quizTitle, responses) {
-    console.log('[DEBUG] Quiz completion data received:', { subject, quizTitle, responses });
-
-    const submitData = {
-      subject: subject,
-      quiz_title: quizTitle,
-      responses: responses
-    };
-
-    console.log('[DEBUG] Submitting data:', submitData);
-
-    return fetch('/submit_ratings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(submitData)
-    })
-    .then(response => response.json())
-    .then(data => {
-      console.log('[DEBUG] Response:', data);
-      if (data.status === 'success') {
-        Swal.fire({
-          title: 'Quiz slutfört!',
-          text: `Uppdaterade ${data.updated_count} frågor.`,
-          icon: 'success',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-        if (data.resolved_subject && data.resolved_topic) {
-          console.log(`[DEBUG] Used subject: ${data.resolved_subject}, topic: ${data.resolved_topic}`);
-        }
-        fetchSchedule().then(() => {
-          loadQuizzesForDate();
-        });
-        return data;
-      } else {
-        Swal.fire({
-          title: 'Fel!',
-          text: data.error || 'Unknown error',
-          icon: 'error',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-        throw new Error(data.error || 'Unknown error');
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      Swal.fire({
-        title: 'Fel!',
-        text: 'Network error occurred',
-        icon: 'error',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-      throw error;
-    });
-  };
-
-  // ----------- Init everything asynchronously -----------
-  (async () => {
-      console.log('[DEBUG] Initializing application...');
-      await fetchSchedule();
-      await loadUserSubjects();
-      updateDateHeader();
-      await loadQuizzesForDate(); // Detta kommer nu också ladda schemat
-      await loadEvents();
-      
-      // Uppdatera aktuell lektion varje minut om vi visar dagens schema
-      setInterval(() => {
-          const today = new Date();
-          if (currentDate.toDateString() === today.toDateString()) {
-              markCurrentLesson();
-          }
-      }, 60000); // Uppdatera varje minut
-      
-      console.log('[DEBUG] Application initialized successfully');
-  })();
-
-  // ----------- Subject Form Handlers -----------
-  document.getElementById('create-subject-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const data = {
-      name: formData.get('subject-name'),
-      is_shared: formData.get('is-shared') === 'on'
-    };
-    
-    fetch('/add_subject', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        Swal.fire({
-          title: 'Klart!',
-          text: data.message,
-          icon: 'success',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        }).then(() => {
-          location.reload(); // Reload page to show new subject
-        });
-      } else {
-        Swal.fire({
-          title: 'Fel!',
-          text: data.message,
-          icon: 'error',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      Swal.fire({
-        title: 'Fel!',
-        text: 'An error occurred while creating the subject',
-        icon: 'error',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-    });
-  });
-
-  document.getElementById('join-subject-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const data = {
-      share_code: formData.get('share-code')
-    };
-    
-    fetch('/join_subject', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        Swal.fire({
-          title: 'Klart!',
-          text: data.message,
-          icon: 'success',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        }).then(() => {
-          location.reload(); // Reload page to show new subject
-        });
-      } else {
-        Swal.fire({
-          title: 'Fel!',
-          text: data.message,
-          icon: 'error',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      Swal.fire({
-        title: 'Fel!',
-        text: 'An error occurred while joining the subject',
-        icon: 'error',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-    });
-  });
-
-  // Prevent event bubbling on delete/leave buttons
-  document.querySelectorAll('.delete-subject-btn, .leave-subject-btn').forEach(button => {
-    button.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    });
-  });
-
-  // Ensure subject links work properly
-  document.querySelectorAll('.subject-link').forEach(link => {
-    link.addEventListener('click', function(e) {
-      // Only prevent default if a delete/leave button was clicked
-      if (e.target.classList.contains('delete-subject-btn') || 
-          e.target.classList.contains('leave-subject-btn')) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-      // Otherwise, let the link work normally
-    });
-  });
-
-  const subjectSelect = document.getElementById('subject-select');
-  const shareOptionGroup = document.getElementById('share-option-group');
-  const shareCheckbox = document.getElementById('share-with-members');
-
-  // Visa/dölj sharing option baserat på användarens roll
-  subjectSelect?.addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
-    const userRole = selectedOption.getAttribute('data-user-role');
-    
-    if (userRole === 'owner') {
-      shareOptionGroup.style.display = 'block';
-    } else {
-      shareOptionGroup.style.display = 'none';
-      shareCheckbox.checked = false;
-    }
-  });
-
-}); // End of DOMContentLoaded
-
-// ----------- Additional Functions from index.html -----------
-
-// Function to confirm leaving a subject
-async function confirmLeave(subjectName, form) {
-  const result = await Swal.fire({
-    title: 'Lämna ämne?',
-    html: `
-      Är du säker på att du vill lämna ämnet "<strong>${subjectName}</strong>"?<br><br>
-      <ul style="text-align:left">
-        <li>Du kommer inte längre ha tillgång till quiz och flashcards</li>
-        <li>Din progress i detta ämne försvinner</li>
-        <li>Du kan alltid gå med igen om du har koden</li>
-      </ul>
-    `,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Ja, lämna',
-    cancelButtonText: 'Nej, stanna kvar',
-    customClass: {
-      popup: 'my-swal-popup',
-      confirmButton: 'my-confirm-btn',
-      cancelButton: 'my-cancel-btn'
-    }
-  });
-
-  if (!result.isConfirmed) return;
-
-  // For leave buttons, use AJAX instead of form submission
-  const formAction = form.action;
-  
-  try {
-    const response = await fetch(formAction, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.status === 'success') {
-      await Swal.fire({
-        title: 'Klart!',
-        text: data.message,
-        icon: 'success',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-      // Reload the page to show updated subject list
-      window.location.reload();
-    } else {
-      await Swal.fire({
-        title: 'Fel!',
-        text: data.message,
-        icon: 'error',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Error:', error);
-    await Swal.fire({
-      title: 'Fel!',
-      text: 'An error occurred while leaving the subject',
-      icon: 'error',
-      customClass: {
-        popup: 'my-swal-popup',
-        confirmButton: 'my-confirm-btn'
-      }
-    });
-  }
-}
-
-// Function to confirm deleting a subject
-async function confirmDelete(subjectName, form) {
-  const result = await Swal.fire({
-    title: 'Ta bort ämne?',
-    html: `
-      Är du säker på att du vill ta bort ämnet "<strong>${subjectName}</strong>"?<br><br>
-      <ul style="text-align:left">
-        <li>Alla quiz och flashcards kommer att försvinna</li>
-        <li>Alla medlemmar kommer att förlora tillgång</li>
-        <li>Denna åtgärd kan inte ångras</li>
-      </ul>
-    `,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Ja, ta bort',
-    cancelButtonText: 'Avbryt',
-    customClass: {
-      popup: 'my-swal-popup',
-      confirmButton: 'my-delete-btn',
-      cancelButton: 'my-cancel-btn'
-    }
-  });
-
-  if (result.isConfirmed) {
-    form.submit();
-  }
-}
-
-// Tab functionality for create/join modal
-function showTab(tabName) {
-  // Hide all tabs
-  document.querySelectorAll('.tab-content').forEach(tab => {
-    tab.classList.remove('active');
-  });
-  document.querySelectorAll('.tab-button').forEach(button => {
-    button.classList.remove('active');
-  });
-  
-  // Show selected tab
-  document.getElementById(tabName + '-tab').classList.add('active');
-  event.target.classList.add('active');
-}
-
-// Handle sharing functionality
-async function toggleSharing(subjectId, isCurrentlyShared) {
-  try {
-    const response = await fetch(`/api/subject/${subjectId}/share`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.status === 'success') {
-      await Swal.fire({
-        title: 'Klart!',
-        text: data.message,
-        icon: 'success',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-      location.reload();
-    } else {
-      await Swal.fire({
-        title: 'Fel!',
-        text: data.message,
-        icon: 'error',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Error:', error);
-    await Swal.fire({
-      title: 'Fel!',
-      text: 'An error occurred while updating sharing settings',
-      icon: 'error',
-      customClass: {
-        popup: 'my-swal-popup',
-        confirmButton: 'my-confirm-btn'
-      }
-    });
-  }
-}
-
-// Funktion för att ta bort quiz och uppdatera kalender
-async function deleteQuizAndRefresh(quizId, subjectName) {
-    const result = await Swal.fire({
-      title: 'Ta bort quiz?',
-      html: `
-        Är du säker på att du vill ta bort detta quiz från "<strong>${subjectName}</strong>"?<br><br>
-        <ul style="text-align:left">
-          <li>Alla frågor och svar kommer att försvinna</li>
-          <li>Flashcards för detta quiz tas bort</li>
-          <li>Denna åtgärd kan inte ångras</li>
-        </ul>
-      `,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Ja, ta bort',
-      cancelButtonText: 'Avbryt',
-      customClass: {
-        popup: 'my-swal-popup',
-        confirmButton: 'my-delete-btn',
-        cancelButton: 'my-cancel-btn'
-      }
-    });
-
-    if (!result.isConfirmed) return;
-    
-    try {
-        const response = await fetch(`/api/quiz/${quizId}`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-            // Visa framgång
-            await Swal.fire({
-              title: 'Borttaget!',
-              text: data.message,
-              icon: 'success',
-              customClass: {
-                popup: 'my-swal-popup',
-                confirmButton: 'my-confirm-btn'
-              }
-            });
-            
-            // Uppdatera kalendern
-            refreshCalendarData();
-            
-            // Uppdatera aktuell sida om vi är på subject-sidan
-            if (window.location.pathname.includes('/subject/')) {
-                location.reload();
-            }
-        } else {
-            await Swal.fire({
-              title: 'Fel!',
-              text: 'Fel vid borttagning: ' + data.message,
-              icon: 'error',
-              customClass: {
-                popup: 'my-swal-popup',
-                confirmButton: 'my-confirm-btn'
-              }
-            });
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        await Swal.fire({
-          title: 'Fel!',
-          text: 'Ett fel uppstod vid borttagning av quiz',
-          icon: 'error',
-          customClass: {
-            popup: 'my-swal-popup',
-            confirmButton: 'my-confirm-btn'
-          }
-        });
-    }
-}
-
-// Lägg till denna funktion för att uppdatera kalendern
-function refreshCalendarData() {
-    // Hämta aktuellt datum från kalendern
-    const currentDateElement = document.getElementById('current-date');
-    if (!currentDateElement) return;
-    
-    // Uppdatera quiz-data för kalender
-    loadQuizzesForDate(getCurrentSelectedDate());
-}
-
-function updateQuizzesList(quizzes) {
-    const container = document.getElementById('quizzes-container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (quizzes.length === 0) {
-        container.innerHTML = '<p class="no-quizzes">Inga quiz för detta datum</p>';
-        return;
-    }
-    
-    quizzes.forEach(quiz => {
-        const quizElement = document.createElement('div');
-        quizElement.className = 'quiz-item';
-        quizElement.innerHTML = `
-            <div class="quiz-header">
-                <h4>${quiz.title}</h4>
-                <span class="quiz-subject">${quiz.subject_name}</span>
-            </div>
-            <div class="quiz-actions">
-                <a href="/quiz/${quiz.id}" class="btn-primary">Ta Quiz</a>
-                ${quiz.can_delete ? `<button onclick="deleteQuizAndRefresh(${quiz.id}, '${quiz.subject_name}')" class="btn-delete">Ta bort</button>` : ''}
-            </div>
-        `;
-        container.appendChild(quizElement);
-    });
-}
-
-function showShareCode(code) {
-  document.getElementById('share-code-text').value = code;
-  document.getElementById('share-code-modal').style.display = 'block';
-}
-
-async function copyShareCode() {
-  const shareCodeText = document.getElementById('share-code-text');
-  shareCodeText.select();
-  try {
-    await navigator.clipboard.writeText(shareCodeText.value);
-    await Swal.fire({
-      title: 'Kopierat!',
-      text: 'Share code copied to clipboard!',
-      icon: 'success',
-      timer: 1500,
-      showConfirmButton: false,
-      customClass: {
-        popup: 'my-swal-popup'
-      }
-    });
-  } catch (err) {
-    // Fallback for older browsers
-    document.execCommand('copy');
-    await Swal.fire({
-      title: 'Kopierat!',
-      text: 'Share code copied to clipboard!',
-      icon: 'success',
-      timer: 1500,
-      showConfirmButton: false,
-      customClass: {
-        popup: 'my-swal-popup'
-      }
-    });
-  }
-}
-
-async function leaveSubject(subjectId) {
-  const result = await Swal.fire({
-    title: 'Lämna ämne?',
-    html: `
-      Är du säker på att du vill lämna detta ämne?<br><br>
-      <ul style="text-align:left">
-        <li>Du kommer inte längre ha tillgång till quiz och flashcards</li>
-        <li>Din progress i detta ämne försvinner</li>
-        <li>Du kan alltid gå med igen om du har koden</li>
-      </ul>
-    `,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Ja, lämna',
-    cancelButtonText: 'Nej, stanna kvar',
-    customClass: {
-      popup: 'my-swal-popup',
-      confirmButton: 'my-confirm-btn',
-      cancelButton: 'my-cancel-btn'
-    }
-  });
-
-  if (!result.isConfirmed) return;
-
-  try {
-    const response = await fetch(`/leave_subject/${subjectId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.status === 'success') {
-      await Swal.fire({
-        title: 'Klart!',
-        text: data.message,
-        icon: 'success',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-      // Redirect to index page
-      if (data.redirect) {
-        window.location.href = data.redirect;
-      } else {
-        window.location.href = '/';
-      }
-    } else {
-      await Swal.fire({
-        title: 'Fel!',
-        text: data.message,
-        icon: 'error',
-        customClass: {
-          popup: 'my-swal-popup',
-          confirmButton: 'my-confirm-btn'
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Error:', error);
-    await Swal.fire({
-      title: 'Fel!',
-      text: 'An error occurred while leaving the subject',
-      icon: 'error',
-      customClass: {
-        popup: 'my-swal-popup',
-        confirmButton: 'my-confirm-btn'
-      }
-    });
-  }
-}
-</script>
-
-
-
-
-  <style>
-      /* === GLOBAL RESET & VARIABLES === */
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      :root {
-        --primary-color: #2563eb;
-        --primary-hover: #1d4ed8;
-        --secondary-color: #f1f5f9;
-        --accent-color: #059669;
-        --danger-color: #dc2626;
-        --warning-color: #d97706;
-        --text-primary: #0f172a;
-        --text-secondary: #475569;
-        --text-muted: #64748b;
-        --border-color: #e2e8f0;
-        --bg-white: #ffffff;
-        --bg-gray-50: #f8fafc;
-        --bg-gray-100: #f1f5f9;
-        --bg-gray-200: #e2e8f0;
-        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-        --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-        --radius-sm: 0.375rem;
-        --radius-md: 0.5rem;
-        --radius-lg: 0.75rem;
-        --radius-xl: 1rem;
-        --radius-2xl: 1.5rem;
-      }
-
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        background-color: var(--bg-white);
-        color: var(--text-primary);
-        line-height: 1.6;
-      }
-
-      /* === HEADER SECTION === */
-      #top {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 70px;
-        background: var(--bg-white);
-        border-bottom: 1px solid var(--border-color);
-        box-shadow: var(--shadow-sm);
-      }
-
-      #first-words {
-        margin-right: 8px;
-        font-size: 1.75rem;
-        color: var(--text-secondary);
-        font-weight: 300;
-      }
-
-      #second-words {
-        font-size: 1.75rem;
-        font-weight: 700;
-        color: var(--primary-color);
-        letter-spacing: -0.025em;
-      }
-
-      .header-container {
-        height: 70px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0 2rem;
-        background-color: var(--bg-white);
-        border-bottom: 1px solid var(--border-color);
-        box-shadow: var(--shadow-sm);
-      }
-
-      .user_icon,
-      .question {
-        width: 2rem;
-        height: 2rem;
-        stroke: var(--text-secondary);
-        transition: all 0.2s ease;
-        cursor: pointer;
-        border-radius: var(--radius-lg);
-        padding: 0.25rem;
-      }
-
-      .user_icon:hover,
-      .question:hover {
-        stroke: var(--primary-color);
-        background-color: var(--bg-gray-50);
-        transform: translateY(-1px);
-      }
-
-      .head-btn, .logout-btn {
-        padding: 0.75rem 1.5rem;
-        border: none;
-        border-radius: var(--radius-lg);
-        font-weight: 600;
-        font-size: 0.875rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-transform: uppercase;
-        letter-spacing: 0.025em;
-        text-decoration: none;
-      }
-
-      .head-btn {
-        background-color: var(--primary-color);
-        color: white;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .head-btn:hover {
-        background-color: var(--primary-hover);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-      }
-
-      .logout-btn {
-        background-color: var(--bg-white);
-        color: var(--text-secondary);
-        border: 1px solid var(--border-color);
-      }
-
-      .logout-btn:hover {
-        background-color: var(--danger-color);
-        color: white;
-        border-color: var(--danger-color);
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-sm);
-      }
-
-      /* === FLASH MESSAGES === */
-      .flash-messages-container {
-        position: fixed;
-        top: 1rem;
-        right: 1rem;
-        z-index: 9999;
-        max-width: 400px;
-      }
-
-      .flash-message {
-        padding: 1rem 2.5rem 1rem 1rem;
-        margin-bottom: 0.5rem;
-        border-radius: var(--radius-lg);
-        font-weight: 500;
-        position: relative;
-        box-shadow: var(--shadow-lg);
-        animation: slideIn 0.3s ease-out;
-        backdrop-filter: blur(8px);
-      }
-
-      .flash-success {
-        background-color: rgba(240, 253, 244, 0.9);
-        color: #166534;
-        border: 1px solid #bbf7d0;
-      }
-
-      .flash-error {
-        background-color: rgba(254, 242, 242, 0.9);
-        color: #991b1b;
-        border: 1px solid #fecaca;
-      }
-
-      .flash-close {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.75rem;
-        background: none;
-        border: none;
-        font-size: 1.125rem;
-        cursor: pointer;
-        color: inherit;
-        opacity: 0.7;
-        transition: opacity 0.2s ease;
-      }
-
-
-
-      /* Lägg till dessa CSS-regler i din index_styles.css */
-
-      .school-news-link {
-        display: inline-block;
-        text-decoration: none;
-        transition: transform 0.2s;
-      }
-
-      .school-news-link:hover {
-        transform: scale(1.1);
-      }
-
-      .school-news-icon {
-        width: 28px;
-        height: 28px;
-        color: #374151;
-        cursor: pointer;
-        transition: color 0.3s, transform 0.2s;
-      }
-
-      .school-news-icon:hover {
-        color: #3730a3;
-        transform: scale(1.1);
-      }
-
-      /* Justera header-container för att passa nya knappen */
-      .header-container {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        padding: 10px 20px;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      }
-
-      .lunch-menu-icon {
-        width: 30px;
-        height: 30px;
-        color: #374151;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        margin: 0 10px;
-      }
-
-      .lunch-menu-icon:hover {
-        color: #4f46e5;
-        transform: scale(1.1);
-      }
-
-      /* Matsedelsmodal styling */
-      #lunch-menu-modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.5);
-        z-index: 10000 !important;
-        backdrop-filter: blur(4px);
-      }
-
-      .lunch-menu-content {
-        background-color: white;
-        margin: 5% auto;
-        padding: 20px;
-        border-radius: 12px;
-        width: 90%;
-        max-width: 800px;
-        max-height: 85vh;
-        overflow-y: auto;
-        position: relative;
-        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-      }
-
-
-
-      /* Lägg till denna CSS i din befintliga CSS-fil (index_styles.css) */
-
-      /* Särskild styling för lärarschema */
-      .teacher-lesson {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-left: 4px solid #4f46e5;
-          color: white;
-      }
-
-      .teacher-lesson .schedule-subject {
-          font-weight: 600;
-          font-size: 1.1em;
-      }
-
-      .teacher-lesson .schedule-class {
-          font-size: 0.85em;
-          opacity: 0.9;
-          margin-top: 2px;
-          color:black;
-      }
-
-      .teacher-lesson .schedule-role {
-          font-size: 0.8em;
-          background: rgba(255, 255, 255, 0.2);
-          padding: 2px 6px;
-          border-radius: 10px;
-          display: inline-block;
-          margin-top: 4px;
-      }
-
-      /* Förbättra student-lektioner också */
-      .student-lesson {
-          background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
-          border-left: 4px solid #0984e3;
-          color: white;
-      }
-
-      /* Aktuell lektion markering */
-      .teacher-lesson.current-lesson {
-          border-left-color: #00b894;
-          box-shadow: 0 0 15px rgba(0, 184, 148, 0.4);
-          animation: pulse-teacher 2s infinite;
-      }
-
-      .student-lesson.current-lesson {
-          border-left-color: #00b894;
-          box-shadow: 0 0 15px rgba(0, 184, 148, 0.4);
-          animation: pulse-student 2s infinite;
-      }
-
-      @keyframes pulse-teacher {
-          0% {
-              box-shadow: 0 0 15px rgba(0, 184, 148, 0.4);
-          }
-          50% {
-              box-shadow: 0 0 25px rgba(0, 184, 148, 0.7);
-          }
-          100% {
-              box-shadow: 0 0 15px rgba(0, 184, 148, 0.4);
-          }
-      }
-
-      @keyframes pulse-student {
-          0% {
-              box-shadow: 0 0 15px rgba(9, 132, 227, 0.4);
-          }
-          50% {
-              box-shadow: 0 0 25px rgba(9, 132, 227, 0.7);
-          }
-          100% {
-              box-shadow: 0 0 15px rgba(9, 132, 227, 0.4);
-          }
-      }
-
-      /* Förbättra schema-headern */
-      .schedule-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 15px;
-      }
-
-      .schedule-header h3 {
-          margin: 0;
-          color: #2d3748;
-      }
-
-      .user-role-badge {
-          background: #e2e8f0;
-          color: #4a5568;
-          padding: 4px 12px;
-          border-radius: 15px;
-          font-size: 0.75em;
-          font-weight: 600;
-          text-transform: uppercase;
-      }
-
-      .user-role-badge.teacher {
-          background: #667eea;
-          color: white;
-      }
-
-      .user-role-badge.student {
-          background: #74b9ff;
-          color: white;
-      }
-
-      .lunch-menu-close {
-        position: absolute;
-        right: 15px;
-        top: 15px;
-        font-size: 24px;
-        cursor: pointer;
-        color: #999;
-        background: none;
-        border: none;
-        width: 35px;
-        height: 35px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        transition: all 0.2s ease;
-      }
-
-      .lunch-menu-close:hover {
-        color: #000;
-        background-color: #f1f5f9;
-      }
-
-      .lunch-menu-header {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 20px 0;
-        gap: 20px;
-        padding: 10px 0;
-        border-bottom: 1px solid #e2e8f0;
-      }
-
-      .lunch-menu-header button {
-        background: #4f46e5;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 16px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-      }
-
-      .lunch-menu-header button:hover {
-        background: #3730a3;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-      }
-
-      #menu-week-display {
-        font-size: 18px;
-        font-weight: 700;
-        color: #374151;
-        min-width: 200px;
-        text-align: center;
-      }
-
-      .lunch-menu-grid {
-        display: grid !important;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 20px;
-        margin-top: 25px;
-        visibility: visible !important;
-        opacity: 1 !important;
-      }
-
-      .lunch-day-card {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 20px;
-        transition: all 0.3s ease;
-        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-      }
-
-      .lunch-day-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-      }
-
-      .lunch-day-card.today {
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        color: white;
-        border-color: #4f46e5;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-      }
-
-      .lunch-day-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-      }
-
-      .lunch-day-card.today .lunch-day-header {
-        border-bottom-color: rgba(255, 255, 255, 0.3);
-      }
-
-      .lunch-day-name {
-        font-size: 18px;
-        font-weight: 700;
-      }
-
-      .lunch-day-date {
-        font-size: 14px;
-        opacity: 0.7;
-      }
-
-      .lunch-dish {
-        margin-bottom: 12px;
-      }
-
-      .lunch-dish-label {
-        font-weight: 600;
-        font-size: 12px;
-        opacity: 0.8;
-        margin-bottom: 4px;
-        text-transform: uppercase;
-        letter-spacing: 0.025em;
-      }
-
-      .lunch-dish-content {
-        font-size: 15px;
-        line-height: 1.4;
-        font-weight: 500;
-      }
-
-      .no-menu {
-        text-align: center;
-        color: #6b7280;
-        font-style: italic;
-        padding: 30px 20px;
-        background: #f9fafb;
-        border-radius: 8px;
-        border: 2px dashed #d1d5db;
-      }
-
-      .lunch-day-card.today .no-menu {
-        color: rgba(255, 255, 255, 0.8);
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.3);
-      }
-
-      .allergens-info {
-        background: #fef3c7;
-        color: #92400e;
-        padding: 10px 12px;
-        border-radius: 8px;
-        font-size: 13px;
-        margin-top: 12px;
-        border: 1px solid #fde68a;
-      }
-
-
-      .school-news-container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f8f9fa;
-            min-height: 100vh;
-        }
-        
-        .news-header {
-            text-align: center;
-            margin-bottom: 30px;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .news-header h1 {
-            color: #4f46e5;
-            margin: 0 0 10px 0;
-            font-size: 2.5em;
-        }
-        
-        .school-name {
-            color: #6b7280;
-            font-size: 1.2em;
-        }
-        
-        .back-button {
-            display: inline-block;
-            margin-bottom: 20px;
-            padding: 10px 20px;
-            background: #4f46e5;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: background-color 0.3s;
-        }
-        
-        .back-button:hover {
-            background: #3730a3;
-        }
-        
-        .news-item {
-            background: white;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-            transition: transform 0.2s;
-        }
-        
-        .news-item:hover {
-            transform: translateY(-2px);
-        }
-        
-        .news-item-header {
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: white;
-            padding: 20px;
-        }
-        
-        .news-title {
-            font-size: 1.5em;
-            font-weight: bold;
-            margin: 0 0 10px 0;
-        }
-        
-        .news-meta {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
-        
-        .news-content {
-            padding: 20px;
-            line-height: 1.6;
-            color: #374151;
-        }
-        
-        .no-news {
-            text-align: center;
-            padding: 40px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .no-news h3 {
-            color: #6b7280;
-            margin-bottom: 10px;
-        }
-        
-        .no-news p {
-            color: #9ca3af;
-        }
-        
-        .school-icon {
-            font-size: 3em;
-            margin-bottom: 20px;
-        }
-
-      .lunch-day-card.today .allergens-info {
-        background: rgba(255, 255, 255, 0.2);
-        color: rgba(255, 255, 255, 0.9);
-        border-color: rgba(255, 255, 255, 0.3);
-      }
-
-      #lunch-menu-loading, #lunch-menu-error {
-        text-align: center;
-        padding: 40px 20px;
-        margin: 20px 0;
-        border-radius: 8px;
-      }
-
-      #lunch-menu-loading {
-        color: #6b7280;
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-      }
-
-      #lunch-menu-error {
-        color: #dc2626;
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-      }
-
-      .error-display {
-        text-align: center;
-        color: #dc2626;
-        background: #fef2f2;
-        padding: 30px;
-        border-radius: 8px;
-        margin: 20px 0;
-        border: 1px solid #fecaca;
-        font-size: 16px;
-      }
-
-      .lunch-day-card.today .allergens-info {
-        background: rgba(255, 255, 255, 0.2);
-        color: rgba(255, 255, 255, 0.9);
-        border-color: rgba(255, 255, 255, 0.3);
-      }
-
-      #lunch-menu-loading, #lunch-menu-error {
-        text-align: center;
-        padding: 40px 20px;
-        margin: 20px 0;
-        border-radius: 8px;
-      }
-
-      #lunch-menu-loading {
-        color: #6b7280;
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-      }
-
-      #lunch-menu-loading p {
-        margin: 0;
-        font-size: 16px;
-      }
-
-      #lunch-menu-error {
-        color: #dc2626;
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-      }
-
-      .error-display {
-        text-align: center;
-        color: #dc2626;
-        background: #fef2f2;
-        padding: 30px;
-        border-radius: 8px;
-        margin: 20px 0;
-        border: 1px solid #fecaca;
-        font-size: 16px;
-      }
-
-      /* Responsiv design för matsedel */
-      @media (max-width: 768px) {
-        .lunch-menu-content {
-          width: 95%;
-          margin: 5% auto;
-          padding: 15px;
-        }
-        
-        .lunch-menu-grid {
-          grid-template-columns: 1fr;
-          gap: 15px;
-        }
-        
-        .lunch-menu-header {
-          gap: 15px;
-          flex-direction: column;
-        }
-        
-        #menu-week-display {
-          font-size: 16px;
-          min-width: 150px;
-        }
-        
-        .lunch-menu-header button {
-          padding: 8px 12px;
-          font-size: 13px;
-        }
-      }
-
-      @media (max-width: 768px) {
-        .lunch-menu-content {
-          width: 95%;
-          margin: 5% auto;
-        }
-        
-        .lunch-menu-grid {
-          grid-template-columns: 1fr;
-          gap: 15px;
-        }
-        
-        .lunch-menu-header {
-          gap: 15px;
-        }
-        
-        #menu-week-display {
-          font-size: 16px;
-          min-width: 150px;
-        }
-      }
-
-      @media (max-width: 480px) {
-        .lunch-menu-content {
-          width: 98%;
-          margin: 2% auto;
-          padding: 10px;
-        }
-        
-        .lunch-day-card {
-          padding: 15px;
-        }
-      }
-
-      .flash-close:hover {
-        opacity: 1;
-      }
-
-      @keyframes slideIn {
-        from {
-          transform: translateX(100%);
-          opacity: 0;
-        }
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
-
-      /* === MAIN LAYOUT === */
-      .center-container {
-        display: grid;
-        grid-template-columns: 380px 1fr;
-        grid-template-rows: 1fr auto;
-        height: calc(100vh - 140px);
-        gap: 0;
-      }
-
-      /* === LEFT CONTAINER (SUBJECTS) === */
-      .left-container {
-        background-color: var(--bg-white);
-        border-right: 1px solid var(--border-color);
-        display: flex;
-        flex-direction: column;
-      }
-
-      .left-btn-container {
-        height: 70px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-bottom: 1px solid var(--border-color);
-        background-color: var(--bg-gray-50);
-      }
-
-      #left-subject-btn {
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: var(--radius-lg);
-        font-weight: 600;
-        font-size: 0.875rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-transform: uppercase;
-        letter-spacing: 0.025em;
-        box-shadow: var(--shadow-sm);
-      }
-
-      #left-subject-btn:hover {
-        background-color: var(--primary-hover);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-      }
-
-      #subject-header {
-        font-weight: 700;
-        font-size: 1.125rem;
-        color: var(--text-primary);
-        padding: 1.25rem 1.5rem 1rem;
-        background-color: var(--bg-white);
-      }
-
-      .subject-list {
-        flex: 1;
-        padding: 1rem 1.5rem;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        background-color: var(--bg-white);
-      }
-
-      .subject-list::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .subject-list::-webkit-scrollbar-track {
-        background: var(--bg-gray-100);
-        border-radius: var(--radius-sm);
-      }
-
-      .subject-list::-webkit-scrollbar-thumb {
-        background: var(--text-muted);
-        border-radius: var(--radius-sm);
-      }
-
-      .subject {
-        position: relative;
-      }
-
-      .subject-link {
-        text-decoration: none;
-        color: inherit;
-        display: block;
-      }
-
-      .subject-button {
-        width: 100%;
-        padding: 1.25rem 3rem 1.25rem 1.25rem;
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-xl);
-        cursor: pointer;
-        font-size: 0.875rem;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        transition: all 0.2s ease;
-        text-align: left;
-        background: var(--bg-white);
-        box-shadow: var(--shadow-sm);
-      }
-
-      .subject-button:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-        border-color: var(--primary-color);
-      }
-
-      .subject-button.owned {
-        background: linear-gradient(135deg, var(--bg-white) 0%, #f0fdf4 100%);
-        border-left: 4px solid var(--accent-color);
-      }
-
-      .subject-button.shared {
-        background: linear-gradient(135deg, var(--bg-white) 0%, #eff6ff 100%);
-        border-left: 4px solid var(--primary-color);
-      }
-
-      .subject-title {
-        font-weight: 600;
-        color: var(--text-primary);
-        flex-grow: 1;
-      }
-
-      .subject-badges {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .subject-role-badge {
-        font-size: 0.75rem;
-        background-color: var(--bg-gray-100);
-        color: var(--text-secondary);
-        padding: 0.25rem 0.75rem;
-        border-radius: var(--radius-md);
-        font-weight: 500;
-      }
-
-      .owned .subject-role-badge {
-        background-color: #dcfce7;
-        color: #166534;
-      }
-
-      .shared .subject-role-badge {
-        background-color: #dbeafe;
-        color: #2563eb;
-      }
-
-      .due-badge {
-        background-color: var(--primary-color);
-        color: white;
-        font-size: 0.75rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: var(--radius-md);
-        font-weight: 600;
-        min-width: 1.5rem;
-        text-align: center;
-      }
-
-      .delete-subject-btn,
-      .leave-subject-btn {
-        position: absolute;
-        top: 50%;
-        right: 0.75rem;
-        transform: translateY(-50%);
-        background-color: var(--bg-white);
-        color: var(--danger-color);
-        border: 1px solid var(--border-color);
-        border-radius: 50%;
-        width: 2rem;
-        height: 2rem;
-        font-size: 0.875rem;
-        cursor: pointer;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10;
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .delete-subject-btn:hover,
-      .leave-subject-btn:hover {
-        background-color: var(--danger-color);
-        color: white;
-        transform: translateY(-50%) scale(1.1);
-        box-shadow: var(--shadow-md);
-      }
-
-      .leave-subject-btn {
-        color: var(--warning-color);
-      }
-
-      .leave-subject-btn:hover {
-        background-color: var(--warning-color);
-      }
-
-      .no-subjects-message {
-        text-align: center;
-        padding: 2rem 1.5rem;
-        color: var(--text-muted);
-        font-style: italic;
-        background-color: var(--bg-gray-50);
-        border-radius: var(--radius-xl);
-        border: 2px dashed var(--border-color);
-      }
-
-      /* === RIGHT CONTAINER (QUIZ CALENDAR) === */
-      .right-container {
-        background-color: var(--bg-gray-50);
-        display: flex;
-        flex-direction: column;
-      }
-
-
-
-      .right-content-wrapper {
-        flex: 1;
-        display: grid;
-        grid-template-columns: 380px 1fr;
-        height: 100%;
-        min-height: 0;
-      }
-
-      /* === SCHEDULE CONTAINER === */
-      .schedule-container {
-        background-color: var(--bg-white);
-        border-right: 1px solid var(--border-color);
-        display: flex;
-        flex-direction: column;
-        
-      }
-
-      .schedule-header {
-        font-weight: 700;
-        font-size: 1.125rem;
-        color: var(--text-primary);
-        padding: 1.25rem 1.5rem 1rem;
-        background-color: var(--bg-white);
-        border-bottom: 1px solid var(--border-color);
-        margin: 0;
-      }
-
-      .schedule-content {
-        flex: 1;
-        padding: 1.5rem;
-        overflow-y: auto;
-        background-color: var(--bg-white);
-      }
-
-      .schedule-content::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .schedule-content::-webkit-scrollbar-track {
-        background: var(--bg-gray-100);
-        border-radius: var(--radius-sm);
-      }
-
-      .schedule-content::-webkit-scrollbar-thumb {
-        background: var(--text-muted);
-        border-radius: var(--radius-sm);
-      }
-
-      .no-schedule {
-        text-align: center;
-        color: var(--text-muted);
-        font-style: italic;
-        padding: 2rem 1rem;
-      }
-
-      .right-quiz-btn-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 70px;
-        background-color: var(--bg-white);
-        border-bottom: 1px solid var(--border-color);
-      }
-
-      #right-quiz-btn {
-        height: 3rem;
-        border-radius: var(--radius-lg);
-        padding: 0 2rem;
-        font-weight: 700;
-        font-size: 1rem;
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-transform: uppercase;
-        letter-spacing: 0.025em;
-        box-shadow: var(--shadow-sm);
-      }
-
-      #right-quiz-btn:hover {
-        background-color: var(--primary-hover);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-      }
-
-
-      /* Lägg till denna CSS i din index_styles.css fil */
-      .assignment-badge {
-        background-color: var(--danger-color);
-        color: white;
-        font-size: 0.75rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: var(--radius-md);
-        font-weight: 600;
-        min-width: 1.5rem;
-        text-align: center;
-      }
-
-      .products-header {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 1.25rem;
-        font-weight: 700;
-        font-size: 1.125rem;
-        color: var(--text-primary);
-        background-color: var(--bg-white);
-        border-bottom: 1px solid var(--border-color);
-        gap: 1rem;
-      }
-
-      #prev-day-btn,
-      #next-day-btn {
-        background-color: var(--bg-white);
-        border: 1px solid var(--border-color);
-        color: var(--text-secondary);
-        padding: 0.5rem 0.75rem;
-        border-radius: var(--radius-lg);
-        cursor: pointer;
-        font-size: 0.875rem;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow-sm);
-      }
-
-      #prev-day-btn:hover,
-      #next-day-btn:hover {
-        background-color: var(--primary-color);
-        color: white;
-        border-color: var(--primary-color);
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-md);
-      }
-
-      #current-date {
-        color: var(--text-primary);
-        font-weight: 600;
-        min-width: 200px;
-        text-align: center;
-      }
-
-      .products-container {
-        flex: 1;
-        display: grid;
-        grid-template-columns: repeat(2, 1fr); /* Exakt 2 kolumner i fullscreen */
-        grid-auto-rows: min-content;
-        gap: 1.5rem;
-        padding: 2rem;
-        overflow-y: auto;
-        background: var(--bg-gray-50);
-        max-height: calc(100vh - 350px); /* Sätt max-höjd för att tvinga scroll */
-      }
-
-      .products-container::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      .products-container::-webkit-scrollbar-track {
-        background: var(--bg-gray-100);
-        border-radius: var(--radius-sm);
-      }
-
-      .products-container::-webkit-scrollbar-thumb {
-        background: var(--text-muted);
-        border-radius: var(--radius-sm);
-      }
-
-      /* === QUIZ CARDS === */
-      .quiz-card {
-        background: var(--bg-white);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-2xl);
-        box-shadow: var(--shadow-sm);
-        padding: 1.5rem;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .quiz-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
-      }
-
-      .quiz-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-xl);
-        border-color: var(--primary-color);
-      }
-
-      .quiz-card h3 {
-        margin: 0 0 0.75rem 0;
-        color: var(--text-primary);
-        font-size: 1.25rem;
-        font-weight: 700;
-        line-height: 1.4;
-      }
-
-      .quiz-card p {
-        margin: 0 0 1.5rem 0;
-        color: var(--text-secondary);
-        font-size: 0.875rem;
-        line-height: 1.5;
-      }
-
-      .quiz-actions {
-        display: flex;
-        gap: 0.75rem;
-        align-items: center;
-        flex-wrap: wrap;
-        flex-direction: row; 
-      }
-
-      
-
-      .leave-quiz-btn {
-        font-size: 1.2rem;
-        padding: 0.5rem 0.75rem;
-        line-height: 1;
-      }
-
-      .start-quiz-btn {
-        background: var(--accent-color);
-        color: white;
-        border: none;
-        padding: 0.75rem 1.25rem;
-        border-radius: var(--radius-lg);
-        cursor: pointer;
-        font-size: 0.875rem;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .start-quiz-btn:hover {
-        background-color: #047857;
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-      }
-
-      #leave-quiz-btn {
-        width: 40px;
-        height: 40px;
-        justify-content: center;
-      }
-
-      .leave-quiz-btn {
-        background: var(--danger-color);
-        color: white;
-        border: none;
-        padding: 0.75rem 1.25rem;
-        border-radius: var(--radius-lg);
-        cursor: pointer;
-        font-size: 0.875rem;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .leave-quiz-btn:hover {
-        background-color: #b91c1c;
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-      }
-
-      /* === BOTTOM SECTION === */
-      .bottom {
-        grid-column: 1/3;
-        background-color: var(--bg-gray-50);
-        border-top: 1px solid var(--border-color);
-        padding: 1rem;
-        color: var(--text-muted);
-        text-align: center;
-        font-size: 0.875rem;
-      }
-
-      /* === MODAL STYLES === */
-      .modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.4);
-        display: none;
-        z-index: 1000;
-        overflow: auto;
-        backdrop-filter: blur(4px);
-      }
-
-      .modal-content {
-        background-color: var(--bg-white);
-        margin: 5% auto;
-        padding: 2.5rem;
-        border-radius: var(--radius-2xl);
-        box-shadow: var(--shadow-xl);
-        width: 90%;
-        max-width: 500px;
-        max-height: 80vh;
-        overflow-y: auto;
-        position: relative;
-        border: 1px solid var(--border-color);
-      }
-
-      .close {
-        color: var(--text-muted);
-        font-size: 1.5rem;
-        font-weight: bold;
-        position: absolute;
-        right: 1.25rem;
-        top: 1.25rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: none;
-        border: none;
-        width: 2rem;
-        height: 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-      }
-
-      .close:hover {
-        color: var(--text-primary);
-        background-color: var(--bg-gray-100);
-      }
-
-      /* === CALENDAR MODAL === */
-      .calendar-content {
-        max-width: 90%;
-        max-height: 85vh;
-        margin: 2% auto;
-        position: relative;
-        background-color: var(--bg-white);
-        border-radius: var(--radius-2xl);
-        box-shadow: var(--shadow-xl);
-        padding: 2.5rem;
-        border: 1px solid var(--border-color);
-        overflow: hidden; /* Lägg till denna för att förhindra överflöde */
-        display: flex; /* Ändra till flex */
-        flex-direction: column; /* Ställ in column-riktning */
-      }
-
-      .calendar-main-container {
-        flex: 1; /* Ta upp återstående utrymme */
-        min-height: 0; /* Viktigt för flex-shrinking */
-        overflow: hidden; /* Förhindra överflöde */
-        display: flex;
-        flex-direction: column;
-      }
-
-
-      .calendar-close {
-        position: absolute;
-        top: 1.25rem;
-        right: 1.25rem;
-        color: var(--text-muted);
-        font-size: 1.75rem;
-        font-weight: bold;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: none;
-        border: none;
-        width: 2.5rem;
-        height: 2.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-      }
-
-      .calendar-close:hover {
-        color: var(--text-primary);
-        background-color: var(--bg-gray-100);
-      }
-
-      .calendar-header {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-      }
-
-
-
-
-
-
-      /* Lägg till dessa CSS-stilar i din befintliga CSS-fil */
-
-      /* Schema container */
-      .schedule-container {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          margin-bottom: 20px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          border: 1px solid #e1e5e9;
-      }
-
-      .schedule-header {
-          color: #2c3e50;
-          font-size: 1.4rem;
-          font-weight: 600;
-          margin: 0 0 15px 0;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-      }
-
-      .schedule-header::before {
-          
-          font-size: 1.2rem;
-      }
-
-      /* Schema datum info */
-      .schedule-date-info {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 12px 16px;
-          border-radius: 8px;
-          margin-bottom: 15px;
-          font-weight: 500;
-      }
-
-      .class-info {
-          font-size: 0.9rem;
-          opacity: 0.9;
-          font-weight: normal;
-      }
-
-      /* Schema lektioner */
-      .schedule-lessons {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-      }
-
-      .schedule-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        flex-wrap: wrap;        /* <-- Tillåter radbrytning */
-        padding: 14px 18px;
-        background: #f8f9fa;
-        border-radius: 8px;
-        border-left: 4px solid #3498db;
-        transition: all 0.3s ease;
-        min-width: 320px;
-        margin-bottom: 5px;
-      }
-
-      .schedule-item:hover {
-          background: #e3f2fd;
-          border-left-color: #2196F3;
-          transform: translateX(2px);
-      }
-
-      .schedule-time {
-          display: flex;
-          align-items: center;
-          min-width: 100px;
-          font-weight: 600;
-          color: #2c3e50;
-          font-size: 0.95rem;
-      }
-
-      .time-separator {
-          margin: 0 5px;
-          color: #7f8c8d;
-      }
-
-      .schedule-details {
-        flex: 1;
-        margin-left: 18px; /* Ökat från 16px */
-        min-width: 0; /* Viktigt för text-overflow att fungera */
-      }
-
-      .schedule-subject {
-        font-weight: 600;
-        color: #2c3e50;
-        font-size: 1rem;
-        margin-bottom: 2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis; /* Lägg till ellipsis för mycket långa namn */
-        max-width: 220px; /* Begränsa bredden så det inte blir för brett */
-      }
-
-      .schedule-room {
-          color: #7f8c8d;
-          font-size: 0.9rem;
-          font-weight: 400;
-      }
-
-      .schedule-room::before {
-          
-          margin-right: 2px;
-      }
-
-      /* Inget schema meddelande */
-      .no-schedule {
-          text-align: center;
-          padding: 30px 20px;
-          color: #7f8c8d;
-          font-style: italic;
-      }
-
-      .no-schedule p {
-          margin: 0;
-          font-size: 1rem;
-      }
-
-      /* Schema fel meddelande */
-      .schedule-error {
-          text-align: center;
-          padding: 20px;
-          background: #fff5f5;
-          border: 1px solid #fed7d7;
-          border-radius: 8px;
-          color: #c53030;
-      }
-
-      .schedule-error p {
-          margin: 0;
-          font-size: 0.95rem;
-      }
-
-
-      @media (max-width: 768px) {
-        .products-container {
-          grid-template-columns: 1fr;
-          padding: 1.25rem;
-          gap: 1rem;
-          max-height: calc(100vh - 400px);
-        }
-      }
-
-      @media (max-width: 480px) {
-        .products-container {
-          padding: 1rem;
-          gap: 1rem;
-          max-height: calc(100vh - 420px);
-        }
-      }
-
-      /* Säkerställ att huvuddelen (tid + detaljer) krymper korrekt */
-      .schedule-main {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        flex: 1 1 auto;         /* <-- Flex-grow och flex-shrink */
-        min-width: 0;           /* <-- Viktigt för text-overflow */
-      }
-
-      /* Responsiv design för schema */
-      @media (max-width: 768px) {
-          .schedule-container {
-              padding: 15px;
-              margin-bottom: 15px;
-          }
-          
-          .schedule-item {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          
-          .schedule-time {
-              min-width: auto;
-              margin-bottom: 8px;
-          }
-
-          .schedule-main {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .lesson-actions {
-            justify-content: flex-end;
-            margin-top: 0.75rem;
-          }
-          
-          
-          
-          .schedule-header {
-              font-size: 1.2rem;
-          }
-      }
-
-      /* Schema indikator för dagens lektion */
-      .schedule-item.current-lesson {
-          border-left-color: #e74c3c;
-          background: linear-gradient(90deg, #fff5f5 0%, #f8f9fa 100%);
-      }
-
-      .schedule-item.current-lesson .schedule-time {
-          color: #e74c3c;
-      }
-
-      .schedule-item.current-lesson .schedule-subject {
-          color: #e74c3c;
-      }/* Lägg till dessa CSS-stilar i din befintliga CSS-fil */
-
-      /* Schema container */
-      .schedule-container {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          margin-bottom: 20px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          border: 1px solid #e1e5e9;
-      }
-
-      .schedule-header {
-          color: #2c3e50;
-          font-size: 1.4rem;
-          font-weight: 600;
-          margin: 0 0 15px 0;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-      }
-
-      .schedule-header::before {
-          
-          font-size: 1.2rem;
-      }
-
-      /* Schema datum info */
-      .schedule-date-info {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 12px 16px;
-          border-radius: 8px;
-          margin-bottom: 15px;
-          font-weight: 500;
-      }
-
-      .class-info {
-          font-size: 0.9rem;
-          opacity: 0.9;
-          font-weight: normal;
-      }
-
-      /* Schema lektioner */
-      .schedule-lessons {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-      }
-
-      
-
-      .schedule-item:hover {
-          background: #e3f2fd;
-          border-left-color: #2196F3;
-          transform: translateX(2px);
-      }
-
-      .schedule-time {
-          display: flex;
-          align-items: center;
-          min-width: 100px;
-          font-weight: 600;
-          color: #2c3e50;
-          font-size: 0.95rem;
-      }
-
-      .time-separator {
-          margin: 0 5px;
-          color: #7f8c8d;
-      }
-
-      
-
-      .schedule-subject {
-          font-weight: 600;
-          color: #2c3e50;
-          font-size: 1rem;
-          margin-bottom: 2px;
-      }
-
-      .schedule-room {
-          color: #7f8c8d;
-          font-size: 0.9rem;
-          font-weight: 400;
-      }
-
-      .schedule-room::before {
-         
-          margin-right: 2px;
-      }
-
-      /* Inget schema meddelande */
-      .no-schedule {
-          text-align: center;
-          padding: 30px 20px;
-          color: #7f8c8d;
-          font-style: italic;
-      }
-
-      .no-schedule p {
-          margin: 0;
-          font-size: 1rem;
-      }
-
-      /* Schema fel meddelande */
-      .schedule-error {
-          text-align: center;
-          padding: 20px;
-          background: #fff5f5;
-          border: 1px solid #fed7d7;
-          border-radius: 8px;
-          color: #c53030;
-      }
-
-      .schedule-error p {
-          margin: 0;
-          font-size: 0.95rem;
-      }
-
-      /* Responsiv design för schema */
-      @media (max-width: 768px) {
-          .schedule-container {
-              padding: 15px;
-              margin-bottom: 15px;
-          }
-          
-          .schedule-item {
-              flex-direction: column;
-              align-items: flex-start;
-              padding: 12px;
-          }
-          
-          .schedule-time {
-              min-width: auto;
-              margin-bottom: 8px;
-          }
-          
-          .schedule-details {
-              margin-left: 0;
-              width: 100%;
-          }
-          
-          .schedule-header {
-              font-size: 1.2rem;
-          }
-      }
-
-      /* Schema indikator för dagens lektion */
-      .schedule-item.current-lesson {
-          border-left-color: #e74c3c;
-          background: linear-gradient(90deg, #fff5f5 0%, #f8f9fa 100%);
-      }
-
-      .schedule-item.current-lesson .schedule-time {
-          color: #e74c3c;
-      }
-
-      .schedule-item.current-lesson .schedule-subject {
-          color: #e74c3c;
-      }
-
-      #prev-month-btn,
-      #next-month-btn {
-        cursor: pointer;
-        font-size: 1.125rem;
-        padding: 0.75rem 1rem;
-        border-radius: var(--radius-lg);
-        border: 1px solid var(--border-color);
-        background-color: var(--bg-white);
-        color: var(--text-secondary);
-        transition: all 0.2s ease;
-        font-weight: 600;
-        box-shadow: var(--shadow-sm);
-      }
-
-      #prev-month-btn:hover,
-      #next-month-btn:hover {
-        background-color: var(--primary-color);
-        color: white;
-        border-color: var(--primary-color);
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-md);
-      }
-
-      #month-year {
-        font-weight: 700;
-        font-size: 1.5rem;
-        color: var(--text-primary);
-      }
-
-      #calendar-table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-        font-size: 0.875rem;
-        border-radius: var(--radius-xl);
-        overflow: hidden;
-        box-shadow: var(--shadow-sm);
-        flex-shrink: 0; /* Förhindra att tabellen krymper för mycket */
-      }
-
-      /* Begränsa cellhöjden för fullscreen */
-      #calendar-table td {
-        border: 1px solid var(--border-color);
-        padding: 0.5rem; /* Minska padding från 0.75rem */
-        height: 80px; /* Fast höjd istället för 90px */
-        max-height: 80px; /* Begränsa maxhöjd */
-        vertical-align: top;
-        background-color: var(--bg-white);
-        transition: all 0.2s ease;
-        overflow: hidden; /* Dölj överflöde i celler */
-      }
-
-      #calendar-table td {
-        border: 1px solid var(--border-color);
-        padding: 0.75rem;
-        height: 90px;
-        vertical-align: top;
-        background-color: var(--bg-white);
-        transition: all 0.2s ease;
-      }
-
-      .calendar-cell:hover {
-        background-color: var(--bg-gray-50);
-        cursor: pointer;
-      }
-
-      .calendar-cell.today .day-header {
-        background-color: gold;
-        color: white;
-        border-radius: var(--radius-md);
-        font-weight: 700;
-      }
-
-      .calendar-cell.today {
-        background-color: #dbeafe;
-        border: 2px solid var(--primary-color);
-        position: relative;
-      }
-
-      
-
-      .calendar-cell.other-month {
-        color: var(--text-muted);
-        background-color: var(--bg-gray-50);
-      }
-
-      .day-container {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        position: relative;
-      }
-
-      .day-header {
-        font-weight: 600;
-        font-size: 0.875rem;
-        padding: 0.25rem 0.5rem;
-        text-align: left;
-        cursor: pointer;
-        border-radius: var(--radius-sm);
-        transition: background-color 0.2s;
-      }
-
-      .day-header:hover {
-        background-color: var(--bg-gray-100);
-      }
-
-      .event-indicator {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0.25rem 0;
-        padding: 0.25rem 0.5rem;
-        background-color: var(--primary-color);
-        color: white;
-        border-radius: var(--radius-md);
-        font-size: 0.625rem;
-        font-weight: 500;
-        gap: 0.25rem;
-      }
-
-      .event-indicator.has-shared-events {
-        background-color: var(--accent-color);
-      }
-
-      .event-indicator.has-repetitions {
-        background-color: var(--warning-color);
-      }
-
-      .add-event-btn {
-        position: absolute;
-        bottom: 0.25rem;
-        right: 0.25rem;
-        width: 1.5rem;
-        height: 1.5rem;
-        border: none;
-        background-color: var(--accent-color);
-        color: white;
-        border-radius: 50%;
-        font-size: 0.875rem;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 0;
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .calendar-cell:hover .add-event-btn {
-        opacity: 1;
-      }
-
-      .add-event-btn:hover {
-        background-color: #047857;
-        transform: scale(1.1);
-        box-shadow: var(--shadow-md);
-      }
-
-      /* === EVENTS DISPLAY === */
-      .events-display {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 90%;
-        max-width: 600px;
-        max-height: 80vh;
-        background: var(--bg-white);
-        border-radius: var(--radius-2xl);
-        box-shadow: var(--shadow-xl);
-        z-index: 1002;
-        display: none;
-        flex-direction: column;
-        overflow: hidden;
-        border: 1px solid var(--border-color);
-      }
-
-      .events-header {
-        padding: 1.5rem;
-        background: var(--bg-gray-50);
-        border-bottom: 1px solid var(--border-color);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .events-header h3 {
-        margin: 0;
-        font-size: 1.25rem;
-        color: var(--text-primary);
-        font-weight: 700;
-      }
-
-      .close-events-btn {
-        background: none;
-        border: none;
-        font-size: 1.5rem;
-        cursor: pointer;
-        color: var(--text-muted);
-        padding: 0.25rem;
-        border-radius: 50%;
-        transition: all 0.2s ease;
-        width: 2rem;
-        height: 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .close-events-btn:hover {
-        background-color: var(--bg-gray-100);
-        color: var(--text-primary);
-      }
-
-      .events-list {
-        padding: 1.5rem;
-        overflow-y: auto;
-        flex-grow: 1;
-      }
-
-      .event-item {
-        background: var(--bg-white);
-        border-radius: var(--radius-xl);
-        padding: 1.25rem;
-        margin-bottom: 1rem;
-        border: 1px solid var(--border-color);
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .event-item:hover {
-        border-color: var(--primary-color);
-        box-shadow: var(--shadow-md);
-        transform: translateY(-1px);
-      }
-
-      .event-item.shared-event {
-        border-left: 4px solid var(--accent-color);
-      }
-
-      .event-item.private-event {
-        border-left: 4px solid var(--primary-color);
-      }
-
-      .event-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.75rem;
-      }
-
-      .event-header h4 {
-        margin: 0;
-        font-size: 1.125rem;
-        color: var(--text-primary);
-        font-weight: 600;
-      }
-
-      .event-badges {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-      }
-
-      .test-type-badge {
-        font-size: 0.625rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: var(--radius-md);
-        font-weight: 600;
-        text-transform: uppercase;
-        background-color: var(--primary-color);
-        color: white;
-      }
-
-      .shared-badge {
-        font-size: 0.625rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: var(--radius-md);
-        font-weight: 600;
-        text-transform: uppercase;
-        background-color: var(--accent-color);
-        color: white;
-      }
-
-      .event-details {
-        margin-top: 0.75rem;
-      }
-
-      .event-details p {
-        margin: 0.25rem 0;
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-        line-height: 1.5;
-      }
-
-      .event-actions {
-        margin-top: 1rem;
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.75rem;
-      }
-
-      .delete-btn, .share-btn {
-        background: var(--danger-color);
-        color: white;
-        border: none;
-        padding: 0.5rem 1rem;
-        border-radius: var(--radius-lg);
-        font-size: 0.75rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-weight: 600;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .share-btn {
-        background: var(--primary-color);
-      }
-
-      .delete-btn:hover {
-        background: #b91c1c;
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-md);
-      }
-
-      .share-btn:hover {
-        background: var(--primary-hover);
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-md);
-      }
-
-      .no-events {
-        text-align: center;
-        padding: 3rem;
-        color: var(--text-muted);
-      }
-
-      .no-events p {
-        margin-bottom: 1rem;
-        font-style: italic;
-        font-size: 1rem;
-      }
-
-      /* === ADD EVENT MODAL === */
-      .modal-a {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 90%;
-        max-width: 500px;
-        background: var(--bg-white);
-        border-radius: var(--radius-2xl);
-        box-shadow: var(--shadow-xl);
-        z-index: 1001;
-        padding: 2.5rem;
-        display: none;
-        max-height: 80vh;
-        overflow-y: auto;
-        border: 1px solid var(--border-color);
-      }
-
-      #add-event-modal-close {
-        position: absolute;
-        top: 1.25rem;
-        right: 1.25rem;
-        background: none;
-        border: none;
-        font-size: 1.5rem;
-        cursor: pointer;
-        color: var(--text-muted);
-        width: 2rem;
-        height: 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        transition: all 0.2s ease;
-      }
-
-      #add-event-modal-close:hover {
-        background-color: var(--bg-gray-100);
-        color: var(--text-primary);
-      }
-
-      #add-event-title {
-        margin-bottom: 2rem;
-        color: var(--text-primary);
-        font-weight: 700;
-        font-size: 1.5rem;
-      }
-
-      .form-group {
-        margin-bottom: 1.5rem;
-      }
-
-      .form-group label {
-        display: block;
-        margin-bottom: 0.75rem;
-        font-weight: 600;
-        color: var(--text-primary);
-        font-size: 0.875rem;
-      }
-
-      .subject-select,
-      .test-type-select,
-      #event-title,
-      #event-description {
-        width: 100%;
-        padding: 0.875rem;
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-lg);
-        font-size: 0.875rem;
-        background-color: var(--bg-white);
-        transition: all 0.2s ease;
-        font-family: inherit;
-      }
-
-      .subject-select:focus,
-      .test-type-select:focus,
-      #event-title:focus,
-      #event-description:focus {
-        outline: none;
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-      }
-
-      #event-description {
-        resize: vertical;
-        min-height: 100px;
-      }
-
-      .checkbox-label {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.75rem;
-        font-size: 0.875rem;
-        color: var(--text-primary);
-        cursor: pointer;
-        line-height: 1.5;
-      }
-
-      .checkbox-label input[type="checkbox"] {
-        margin-top: 0.125rem;
-        width: 1rem;
-        height: 1rem;
-      }
-
-      .checkbox-info {
-        display: block;
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        margin-top: 0.5rem;
-      }
-
-      .form-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 1rem;
-        margin-top: 2.5rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border-color);
-      }
-
-      .save-btn, .cancel-btn {
-        padding: 0.875rem 1.75rem;
-        border-radius: var(--radius-lg);
-        font-size: 0.875rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        border: none;
-      }
-
-      .save-btn {
-        background: var(--primary-color);
-        color: white;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .save-btn:hover {
-        background-color: var(--primary-hover);
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-md);
-      }
-
-      .cancel-btn {
-        background: var(--bg-gray-100);
-        color: var(--text-secondary);
-        border: 1px solid var(--border-color);
-      }
-
-      .cancel-btn:hover {
-        background: var(--bg-gray-200);
-        color: var(--text-primary);
-        transform: translateY(-1px);
-      }
-
-      /* === SUBJECT MODAL === */
-      .create-subject-section {
-        margin-top: 1.5rem;
-      }
-
-      .create-subject-tabs {
-        display: flex;
-        margin-bottom: 1.5rem;
-        border-radius: var(--radius-xl);
-        overflow: hidden;
-        background-color: var(--bg-gray-100);
-      }
-
-      .tab-button {
-        flex: 1;
-        padding: 1rem 1.5rem;
-        background-color: transparent;
-        border: none;
-        cursor: pointer;
-        font-weight: 600;
-        color: var(--text-secondary);
-        transition: all 0.2s ease;
-      }
-
-      .tab-button.active {
-        background-color: var(--primary-color);
-        color: white;
-      }
-
-      .tab-content {
-        display: none;
-      }
-
-      .tab-content.active {
-        display: block;
-      }
-
-      .tab-content form {
-        display: flex;
-        flex-direction: column;
-        gap: 1.25rem;
-      }
-
-      .tab-content button[type="submit"] {
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        padding: 0.875rem 2rem;
-        border-radius: var(--radius-lg);
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        margin-top: 1rem;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .tab-content button[type="submit"]:hover {
-        background-color: var(--primary-hover);
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-md);
-      }
-
-      /* === SHARE CODE MODAL === */
-      .share-code-display {
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-        margin-top: 1.5rem;
-      }
-
-      .share-code-display input {
-        flex: 1;
-        padding: 1rem;
-        font-size: 1.125rem;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        background-color: var(--bg-gray-50);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-lg);
-        text-align: center;
-        font-weight: 600;
-        letter-spacing: 0.1em;
-        color: var(--text-primary);
-      }
-
-      .share-code-display input:focus {
-        outline: none;
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-      }
-
-      .share-code-display button {
-        padding: 1rem 1.5rem;
-        background-color: var(--accent-color);
-        color: white;
-        border: none;
-        border-radius: var(--radius-lg);
-        cursor: pointer;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .share-code-display button:hover {
-        background-color: #047857;
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-md);
-      }
-
-      /* === SWEETALERT2 CUSTOM STYLING === */
-      .my-swal-popup {
-        border-radius: var(--radius-2xl);
-        font-family: inherit;
-        border: 1px solid var(--border-color);
-      }
-
-      /* Extra styling för när det bara finns få nyheter */
-      .news-banner-content:has(.news-banner-item:nth-child(-n+2)) {
-        max-height: none; /* Ta bort max-height om det finns 2 eller färre nyheter */
-        overflow-y: visible;
-      }
-
-      /* Alternativ styling om du vill visa en indikation att det finns mer innehåll */
-      .news-banner-content::after {
-        content: "";
-        display: block;
-        height: 1px;
-        background: transparent;
-      }
-
-      .news-banner-content {
-        max-height: 300px; /* Begränsa höjden */
-        overflow-y: auto; /* Lägg till vertikal scroll */
-        padding: 0; /* Ta bort padding här */
-        scrollbar-width: thin; /* För Firefox */
-        scrollbar-color: #cbd5e1 #f1f5f9; /* För Firefox */
-      }
-
-      /* Anpassade scrollbar för WebKit-baserade webbläsare (Chrome, Safari, etc.) */
-      .news-banner-content::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      /* Skolnyheter banner */
-      .school-news-banner {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        margin: 20px auto;
-        max-width: 1200px;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        position: relative;
-        overflow: hidden; 
-      }
-
-      .news-banner-header {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 15px;
-      }
-
-      .news-banner-icon {
-        font-size: 2rem;
-        background: rgba(255, 255, 255, 0.2);
-        padding: 10px;
-        border-radius: 8px;
-      }
-
-      .news-banner-text h3 {
-        margin: 0;
-        font-size: 1.4rem;
-        font-weight: 600;
-      }
-
-      .view-all-news {
-        color: rgba(255, 255, 255, 0.9);
-        text-decoration: none;
-        font-size: 0.9rem;
-        margin-top: 5px;
-        display: inline-block;
-        transition: color 0.2s;
-      }
-
-      .view-all-news:hover {
-        color: white;
-        text-decoration: underline;
-      }
-
-      .close-news-banner {
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        color: white;
-        font-size: 1.5rem;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background-color 0.2s;
-      }
-
-      .close-news-banner:hover {
-        background: rgba(255, 255, 255, 0.3);
-      }
-
-      .news-banner-content {
-        display: grid;
-        gap: 15px;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      }
-
-      .news-banner-item {
-        background: rgba(255, 255, 255, 0.1);
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid rgba(255, 255, 255, 0.3);
-      }
-
-      .news-item-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 10px;
-        margin-bottom: 8px;
-      }
-
-      .news-item-title {
-        margin: 0;
-        font-size: 1.1rem;
-        font-weight: 600;
-        flex: 1;
-      }
-
-      .news-item-date {
-        font-size: 0.85rem;
-        opacity: 0.8;
-        white-space: nowrap;
-      }
-
-      .news-item-preview {
-        margin: 0;
-        font-size: 0.9rem;
-        line-height: 1.4;
-        opacity: 0.9;
-      }
-
-      /* Responsiv design */
-      @media (max-width: 768px) {
-        .school-news-banner {
-          margin: 15px;
-          padding: 15px;
-        }
-        
-        .news-banner-header {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 10px;
-        }
-        
-        .news-banner-content {
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
-        
-        .news-banner-icon {
-          font-size: 1.5rem;
-          padding: 8px;
-        }
-        
-        .news-banner-text h3 {
-          font-size: 1.2rem;
-        }
-      }
-
-      .my-confirm-btn {
-        background-color: var(--primary-color);
-        color: white;
-        border-radius: var(--radius-lg);
-        padding: 0.875rem 1.75rem;
-        font-weight: 600;
-        border: none;
-      }
-
-
-
-      /* Gör så att head-btn-element (både knappar och länkar) blir lika höga och centrerade */
-      .head-btn {
-        display: inline-flex;           /* inline-flex för att kunna använda align-items */
-        align-items: center;            /* vertikal centrering av texten */
-        justify-content: center;        /* horisontell centrering av texten */
-        height: 3rem;                   /* samma höjd som du vill ha */
-        padding: 0 1.5rem;              /* enbart horisontell padding */
-        line-height: normal;            /* säkerställ att texten inte ändrar höjd */
-        text-decoration: none;          /* om du vill ta bort understrykningen helt */
-      }
-
-
-      .my-cancel-btn {
-        color: var(--text-secondary);
-        background-color: var(--bg-gray-100);
-        border-radius: var(--radius-lg);
-        padding: 0.875rem 1.75rem;
-        font-weight: 600;
-        border: 1px solid var(--border-color);
-      }
-
-      .my-delete-btn {
-        background-color: var(--danger-color);
-        color: white;
-        border-radius: var(--radius-lg);
-        padding: 0.875rem 1.75rem;
-        font-weight: 600;
-        border: none;
-      }
-
-      @media (min-height: 900px) {
-        #calendar-table td {
-          height: 100px;
-          max-height: 100px;
-        }
-      }
-
-      @media (max-height: 700px) {
-        .calendar-content {
-          max-height: 95vh;
-          padding: 1.5rem;
-        }
-        
-        #calendar-table td {
-          height: 60px;
-          max-height: 60px;
-          padding: 0.25rem;
-        }
-      }
-
-      /* Responsiva breakpoints för mindre skärmar */
-      @media (max-width: 1400px) {
-        .products-container {
-          grid-template-columns: repeat(2, 1fr);
-          max-height: calc(100vh - 360px);
-        }
-      }
-
-      /* === RESPONSIVE DESIGN === */
-      @media (max-width: 1200px) {
-        .center-container {
-          grid-template-columns: 350px 1fr;
-        }
-      }
-
-      @media (max-width: 1200px) {
-        .right-content-wrapper {
-          grid-template-columns: 350px 1fr; /* Minska något på mindre skärmar */
-        }
-        
-        .schedule-subject {
-          max-width: 180px;
-        }
-      }
-
-      @media (max-width: 1024px) {
-        .products-container {
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-          gap: 1.25rem;
-          padding: 1.5rem;
-          max-height: calc(100vh - 370px);
-        }
-      }
-
-      @media (max-width: 1024px) {
-        .right-content-wrapper {
-          grid-template-columns: 320px 1fr;
-        }
-        
-        .schedule-subject {
-          max-width: 160px;
-        }
-      }
-
-      @media (max-width: 1024px) {
-        .center-container {
-          grid-template-columns: 300px 1fr;
-        }
-
-        .products-container {
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-          gap: 1.25rem;
-          padding: 1.5rem;
-        }
-      }
-
-      @media (max-width: 768px) {
-        .right-content-wrapper {
-          grid-template-columns: 1fr;
-          grid-template-rows: auto 1fr;
-        }
-        
-        .schedule-container {
-          border-right: none;
-          border-bottom: 1px solid var(--border-color);
-          max-height: 800px; /* Ökat från 300px till 450px */
-        }
-        
-        .schedule-content {
-          padding: 1rem;
-        }
-        
-        .products-container {
-          padding: 1.25rem;
-        }
-      }
-
-      @media (max-width: 480px) {
-        .schedule-content {
-          padding: 0.75rem;
-        }
-        
-        .schedule-header {
-          padding: 1rem 1.25rem 0.75rem;
-          font-size: 1rem;
-        }
-      }
-
-      .lesson-actions {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        flex: 0 0 auto;         /* <-- Förhindra att knappen krymper */
-        margin-top: 0.5rem;     /* <-- Ger lite luft om den bryts ner */
-      }
-
-
-      @media (max-width: 768px) {
-        .center-container {
-          grid-template-columns: 1fr;
-          grid-template-rows: auto 1fr auto;
-        }
-
-        .left-container {
-          border-right: none;
-          border-bottom: 1px solid var(--border-color);
-        }
-
-        .header-container {
-          padding: 0 1rem;
-        }
-
-        .head-btn, .logout-btn {
-          padding: 0.625rem 1.25rem;
-          font-size: 0.8125rem;
-        }
-
-        .products-container {
-          grid-template-columns: 1fr;
-          padding: 1.25rem;
-          gap: 1rem;
-        }
-
-        .quiz-actions {
-          flex-direction: column;
-        }
-
-        .start-quiz-btn {
-          width: 100%;
-          justify-content: center;
-        }
-
-        .modal-content,
-        .modal-a,
-        .calendar-content {
-          width: 95%;
-          margin: 5% auto;
-          padding: 2rem;
-        }
-
-        .events-display {
-          width: 95%;
-          max-height: 90vh;
-        }
-
-        #calendar-table td {
-          height: 70px;
-          padding: 0.5rem;
-        }
-
-        .day-header {
-          font-size: 0.8125rem;
-        }
-
-        .event-indicator {
-          font-size: 0.625rem;
-          padding: 0.25rem;
-        }
-      }
-
-      @media (max-width: 480px) {
-        .header-container {
-          height: 60px;
-          padding: 0 0.75rem;
-        }
-
-        .user_icon,
-        .question {
-          width: 1.75rem;
-          height: 1.75rem;
-        }
-
-        #first-words {
-          font-size: 1.25rem;
-        }
-
-        #second-words {
-          font-size: 1.5rem;
-        }
-
-        .subject-list {
-          padding: 1rem;
-        }
-
-        .subject-button {
-          padding: 1rem 2.5rem 1rem 1rem;
-          font-size: 0.8125rem;
-        }
-
-        .products-container {
-          padding: 1rem;
-          gap: 1rem;
-        }
-
-        .quiz-card {
-          padding: 1.25rem;
-        }
-
-        .quiz-card h3 {
-          font-size: 1.125rem;
-        }
-
-        .modal-content,
-        .modal-a,
-        .calendar-content {
-          padding: 1.5rem;
-        }
-
-        #calendar-table td {
-          height: 60px;
-          padding: 0.25rem;
-        }
-
-        .event-indicator {
-          font-size: 0.5rem;
-        }
-      }
-
-      /* === PRINT STYLES === */
-      @media print {
-        .header-container,
-        .left-btn-container,
-        .right-quiz-btn-container,
-        .flash-messages-container,
-        .modal,
-        .modal-a {
-          display: none !important;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Föräldrasida - {{ child.first_name }} {{ child.last_name }}</title>
+    <style>
+        :root {
+            --primary-color: #4299e1;
+            --secondary-color: #667eea;
+            --success-color: #48bb78;
+            --warning-color: #ed8936;
+            --danger-color: #f56565;
+            --light-gray: #f7fafc;
+            --medium-gray: #e2e8f0;
+            --dark-gray: #4a5568;
+            --text-color: #2d3748;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-          background: white;
-          color: black;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--light-gray);
+            color: var(--text-color);
+            line-height: 1.6;
         }
 
-        .quiz-card {
-          break-inside: avoid;
-          box-shadow: none;
-          border: 1px solid #ccc;
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
         }
-      }
-  </style>
+
+        .header {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .child-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .child-avatar {
+            width: 80px;
+            height: 80px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .child-details h2 {
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .child-details p {
+            color: var(--dark-gray);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .section {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .section h3 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .date-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .date-selector label {
+            font-weight: 500;
+            color: var(--dark-gray);
+        }
+
+        .date-selector input,
+        .date-selector select {
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--medium-gray);
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .schedule-day {
+            border: 1px solid var(--medium-gray);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .day-header {
+            background: var(--light-gray);
+            padding: 1rem;
+            font-weight: bold;
+            color: var(--text-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .lesson {
+            padding: 1rem;
+            border-bottom: 1px solid var(--medium-gray);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .lesson:last-child {
+            border-bottom: none;
+        }
+
+        .lesson:hover {
+            background: var(--light-gray);
+        }
+
+        .lesson-info {
+            flex: 1;
+        }
+
+        .lesson-time {
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .lesson-subject {
+            font-size: 1.1rem;
+            margin: 0.25rem 0;
+        }
+
+        .lesson-room {
+            color: var(--dark-gray);
+            font-size: 0.9rem;
+        }
+
+        .absence-btn {
+            background: var(--warning-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+
+        .absence-btn:hover {
+            background: #dd7200;
+        }
+
+        .absence-btn.reported {
+            background: var(--danger-color);
+        }
+
+        .absence-btn.reported:hover {
+            background: #e53e3e;
+        }
+
+        .absence-form {
+            background: var(--light-gray);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .absence-form h4 {
+            margin-bottom: 1rem;
+            color: var(--text-color);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--dark-gray);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--medium-gray);
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            height: 80px;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #3182ce;
+        }
+
+        .btn-secondary {
+            background: var(--medium-gray);
+            color: var(--dark-gray);
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .absence-reports {
+            margin-top: 1rem;
+        }
+
+        .absence-item {
+            background: #fef5e7;
+            border-left: 4px solid var(--warning-color);
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .absence-item.approved {
+            background: #f0fff4;
+            border-left-color: var(--success-color);
+        }
+
+        .absence-item.denied {
+            background: #fed7d7;
+            border-left-color: var(--danger-color);
+        }
+
+        .absence-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--dark-gray);
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background: #fef5e7;
+            color: #dd7200;
+        }
+
+        .status-approved {
+            background: #f0fff4;
+            color: #22543d;
+        }
+
+        .status-denied {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .no-schedule {
+            text-align: center;
+            padding: 2rem;
+            color: var(--dark-gray);
+        }
+
+        .no-schedule svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            color: var(--medium-gray);
+        }
+
+        .logout-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logout-btn:hover {
+            background: #e53e3e;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            overflow-y: auto;
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 600px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .child-info {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .date-selector {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .lesson {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .form-buttons {
+                flex-direction: column;
+            }
+        }
+
+        .flash-messages {
+            margin-bottom: 2rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .alert-danger {
+            background: #fed7d7;
+            color: #c53030;
+            border: 1px solid #feb2b2;
+        }
+
+        .alert-info {
+            background: #ebf8ff;
+            color: #2a69ac;
+            border: 1px solid #90cdf4;
+        }
+    </style>
+</head>
+<body>
+    <form method="POST" action="{{ url_for('logout') }}" style="display: inline;">
+        <button type="submit" class="logout-btn">LOGGA UT</button>
+      </form>
+
+
+    <div class="container">
+        <div class="header">
+            <h1>👨‍👩‍👧‍👦 Föräldrasida</h1>
+            <div class="child-info">
+                <div class="child-avatar">
+                    {{ child.first_name[0] }}{{ child.last_name[0] }}
+                </div>
+                <div class="child-details">
+                    <h2>{{ child.first_name }} {{ child.last_name }}</h2>
+                    <p>{{ child.get_class_name() }} • {{ child.get_school_name() }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <div class="main-content">
+            <!-- Schema sektion -->
+            <div class="section">
+                <h3>📅 Schema</h3>
+                
+                <div class="date-selector">
+                    <label for="week-selector">Välj vecka:</label>
+                    <input type="week" id="week-selector">
+                    <button class="btn btn-primary" onclick="loadSchedule()">Ladda schema</button>
+                </div>
+
+                <div id="schedule-container">
+                    <div class="no-schedule">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <h4>Välj en vecka för att visa schema</h4>
+                        <p>Schema och lektioner visas här när du väljer en vecka.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frånvaroanmälningar sektion -->
+            <div class="section">
+                <h3>📝 Frånvaroanmälningar</h3>
+                
+                <div id="absence-reports">
+                    <div class="no-schedule">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <h4>Inga frånvaroanmälningar ännu</h4>
+                        <p>Rapporterade frånvaroanmälningar visas här.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Frånvaroanmälan modal -->
+        <div id="absence-modal" class="modal">
+            <div class="modal-content">
+                <h3>📝 Anmäl frånvaro</h3>
+                
+                <div class="absence-form">
+                    <h4 id="modal-lesson-info">Lektion detaljer</h4>
+                    
+                    <form id="absence-form">
+                        <div class="form-group">
+                            <label for="absence-type">Typ av frånvaro:</label>
+                            <select id="absence-type" name="absence-type" required>
+                                <option value="">Välj typ</option>
+                                <option value="sjukdom">Sjukdom</option>
+                                <option value="läkarbesök">Läkarbesök</option>
+                                <option value="tandläkarbesök">Tandläkarbesök</option>
+                                <option value="familjeangelegenhet">Familjeangelegenhet</option>
+                                <option value="övrig">Övrig orsak</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="absence-reason">Beskrivning/Orsak:</label>
+                            <textarea id="absence-reason" name="absence-reason" placeholder="Beskriv orsaken till frånvaron..." required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="absence-date">Datum för frånvaro:</label>
+                            <input type="date" id="absence-date" name="absence-date" required readonly>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="parent-phone">Ditt telefonnummer:</label>
+                            <input type="tel" id="parent-phone" name="parent-phone" placeholder="070-123 45 67" required>
+                        </div>
+
+                        <div class="form-buttons">
+                            <button type="button" class="btn btn-secondary" onclick="closeAbsenceModal()">Avbryt</button>
+                            <button type="submit" class="btn btn-primary">Skicka anmälan</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Globala variabler
+        let currentChild = {{ child.id if child else 'null' }};
+        let selectedLesson = null;
+        let currentSchedule = [];
+        let absenceReports = [];
+
+        // Sätt aktuell vecka som standard
+        document.addEventListener('DOMContentLoaded', function() {
+            const weekSelector = document.getElementById('week-selector');
+            const today = new Date();
+            const year = today.getFullYear();
+            const week = getWeekNumber(today);
+            weekSelector.value = `${year}-W${week.toString().padStart(2, '0')}`;
+            
+            // Ladda initial data
+            loadAbsenceReports();
+        });
+
+        // Hämta veckonummer
+        function getWeekNumber(date) {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        }
+
+
+        async function reportQuickAbsence(lesson) {
+
+            
+
+            // 1) Fråga efter orsak
+            const reason = window.prompt(
+                `Ange orsak till frånvaro för ${lesson.subject} den ${lesson.date}:`,
+                ''
+            );
+            if (!reason) {
+                alert('Du måste ange en orsak för att kunna rapportera frånvaro.');
+                return;
+            }
+
+            // 2) Fråga efter telefonnummer
+            const phone = window.prompt(
+                'Ange ditt telefonnummer (t.ex. 070-123 45 67):',
+                ''
+            );
+            if (!phone) {
+                alert('Du måste ange ett telefonnummer för att kunna rapportera frånvaro.');
+                return;
+            }
+
+            // 3) Bygg payload enligt API
+            const absenceData = {
+                student_id: currentChild,
+                date: lesson.date,
+                time: `${lesson.start_time} - ${lesson.end_time}`,
+                subject: lesson.subject,
+                type: 'sjukdom',   // eller hårdkoda/utöka prompt om du vill
+                schedule_id: lesson.id,
+                reason: reason,
+                parent_phone: phone
+            };
+
+            try {
+                const response = await fetch('/api/parent/report-absence', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(absenceData)
+                });
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                alert('Frånvaro anmäld!');
+                loadAbsenceReports();
+                loadSchedule();
+                } else {
+                alert(result.message || 'Fel vid frånvarorapportering');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Ett fel uppstod vid frånvarorapporteringen');
+            }
+            }
+
+
+
+        // Ladda schema för vald vecka
+        async function loadSchedule() {
+            const weekSelector = document.getElementById('week-selector');
+            const selectedWeek = weekSelector.value;
+            
+            if (!selectedWeek) {
+                alert('Vänligen välj en vecka');
+                return;
+            }
+
+            try {
+                showLoading('schedule-container');
+                
+                const response = await fetch(`/api/parent/schedule/${selectedWeek}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    currentSchedule = data.schedule;
+                    displaySchedule(data.schedule);
+                } else {
+                    showError('schedule-container', data.message || 'Kunde inte ladda schema');
+                }
+            } catch (error) {
+                console.error('Error loading schedule:', error);
+                showError('schedule-container', 'Ett fel uppstod vid laddning av schema');
+            }
+        }
+
+        // Visa schema
+        function displaySchedule(schedule) {
+            const container = document.getElementById('schedule-container');
+            
+            if (!schedule || schedule.length === 0) {
+                container.innerHTML = `
+                    <div class="no-schedule">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <h4>Inget schema för denna vecka</h4>
+                        <p>Det finns inga schemalagda lektioner för den valda veckan.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Gruppera lektioner per dag
+            const scheduleByDay = groupScheduleByDay(schedule);
+            
+            let html = '';
+            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+            
+            weekdays.forEach(day => {
+                const dayLessons = scheduleByDay[day] || [];
+                
+                html += `
+                    <div class="schedule-day">
+                        <div class="day-header">
+                            <span>${day.charAt(0).toUpperCase() + day.slice(1)}</span>
+                            <span>${dayLessons.length} lektioner</span>
+                        </div>
+                `;
+                
+                if (dayLessons.length === 0) {
+                    html += `
+                        <div class="lesson" style="justify-content: center; color: #718096;">
+                            Inga lektioner denna dag
+                        </div>
+                    `;
+                } else {
+                    dayLessons.forEach(lesson => {
+                        const hasAbsenceReport = absenceReports.some(report => 
+                            report.lesson_date === lesson.date && report.subject_name === lesson.subject
+                        );
+                        
+                        html += `
+                            <div class="lesson">
+                                <div class="lesson-info">
+                                <div class="lesson-time">${lesson.start_time} - ${lesson.end_time}</div>
+                                <div class="lesson-subject">${lesson.subject}</div>
+                                <div class="lesson-room">📍 ${lesson.room}</div>
+                                </div>
+                                <button
+                                class="absence-btn ${hasAbsenceReport ? 'reported' : ''}"
+                                onclick='reportQuickAbsence(${JSON.stringify(lesson)})'>
+                                ${hasAbsenceReport ? 'Frånvaro anmäld' : 'Anmäl frånvaro'}
+                                </button>
+                            </div>
+                        `;
+                    });
+                }
+                
+                html += '</div>';
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Gruppera schema per dag
+        function groupScheduleByDay(schedule) {
+            const grouped = {};
+            
+            schedule.forEach(lesson => {
+                const day = lesson.weekday;
+                if (!grouped[day]) {
+                    grouped[day] = [];
+                }
+                grouped[day].push(lesson);
+            });
+            
+            // Sortera lektioner inom varje dag efter tid
+            Object.keys(grouped).forEach(day => {
+                grouped[day].sort((a, b) => a.start_time.localeCompare(b.start_time));
+            });
+            
+            return grouped;
+        }
+
+        // Öppna frånvaroanmälan modal
+        function openAbsenceModal(lesson) {
+            selectedLesson = lesson;
+            const modal = document.getElementById('absence-modal');
+            const lessonInfo = document.getElementById('modal-lesson-info');
+            const dateInput = document.getElementById('absence-date');
+            
+            lessonInfo.textContent = `${lesson.subject} - ${lesson.start_time} - ${lesson.end_time} (${lesson.weekday})`;
+            dateInput.value = lesson.date;
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Stäng frånvaroanmälan modal
+        function closeAbsenceModal() {
+            const modal = document.getElementById('absence-modal');
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            
+            // Rensa formulär
+            document.getElementById('absence-form').reset();
+            selectedLesson = null;
+        }
+
+        // Hantera frånvaroanmälan
+        document.getElementById('absence-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!selectedLesson) {
+                alert('Ingen lektion vald');
+                return;
+            }
+            
+            const formData = new FormData(e.target);
+            const absenceData = {
+                lesson_date: formData.get('absence-date'),
+                lesson_time: `${selectedLesson.start_time} - ${selectedLesson.end_time}`,
+                subject_name: selectedLesson.subject,
+                type: formData.get('absence-type'),
+                reason: formData.get('absence-reason'),
+                parent_phone: formData.get('parent-phone'),
+                student_id: currentChild
+            };
+            
+            try {
+                const response = await fetch('/api/parent/report-absence', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(absenceData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    showFlashMessage('Frånvaroanmälan skickad!', 'success');
+                    closeAbsenceModal();
+                    loadAbsenceReports();
+                    loadSchedule(); // Uppdatera schema för att visa anmäld status
+                } else {
+                    alert(result.message || 'Fel vid skickning av anmälan');
+                }
+            } catch (error) {
+                console.error('Error reporting absence:', error);
+                alert('Ett fel uppstod vid skickning av anmälan');
+            }
+        });
+
+        // Ladda frånvaroanmälningar
+        async function loadAbsenceReports() {
+            try {
+                const response = await fetch('/api/parent/absence-reports');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    absenceReports = data.reports;
+                    displayAbsenceReports(data.reports);
+                } else {
+                    console.error('Error loading absence reports:', data.message);
+                }
+            } catch (error) {
+                console.error('Error loading absence reports:', error);
+            }
+        }
+
+        // Visa frånvaroanmälningar
+        function displayAbsenceReports(reports) {
+            const container = document.getElementById('absence-reports');
+            
+            if (!reports || reports.length === 0) {
+                container.innerHTML = `
+                    <div class="no-schedule">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <h4>Inga frånvaroanmälningar ännu</h4>
+                        <p>Rapporterade frånvaroanmälningar visas här.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            reports.forEach(report => {
+                const statusClass = `status-${report.status}`;
+                html += `
+                <div class="absence-item ${statusClass}">
+                    <div class="absence-meta">
+                    <span><strong>${report.subject}</strong> - ${formatDate(report.date)}</span>
+                    <span class="status-badge ${statusClass}">${getStatusText(report.status)}</span>
+                    </div>
+                    <div><strong>Typ:</strong> ${getAbsenceTypeText(report.type)}</div>
+                    <div><strong>Orsak:</strong> ${report.reason}</div>
+                    <div style="font-size: 0.8rem; color: #718096; margin-top: 0.5rem;">
+                    Anmäld: ${formatDateTime(report.created_at)}
+                    </div>
+                    <button class="btn btn-secondary" onclick="deleteAbsence(${report.id})">
+                    Ta bort
+                    </button>
+                </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // Hjälpfunktioner
+        function showLoading(containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `
+                <div class="no-schedule">
+                    <div style="font-size: 2rem;">⏳</div>
+                    <h4>Laddar...</h4>
+                </div>
+            `;
+        }
+
+
+
+        async function deleteAbsence(reportId) {
+            if (!confirm('Är du säker på att du vill ta bort denna frånvaroanmälan?')) return;
+
+            try {
+                const response = await fetch(`/api/parent/report-absence/${reportId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                showFlashMessage('Frånvaroanmälan borttagen!', 'success');
+                loadAbsenceReports();
+                loadSchedule();
+                } else {
+                alert(result.message || 'Fel vid borttagning');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Ett fel uppstod vid borttagning av anmälan');
+            }
+        }
+
+
+        function showError(containerId, message) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `
+                <div class="no-schedule">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #f56565;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <h4>Ett fel uppstod</h4>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        function showFlashMessage(message, type) {
+            const flashContainer = document.querySelector('.flash-messages');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            flashContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('sv-SE');
+        }
+
+        function formatDateTime(dateTimeString) {
+            const date = new Date(dateTimeString);
+            return date.toLocaleString('sv-SE');
+        }
+
+        function getStatusText(status) {
+            const statusTexts = {
+                'pending': 'Väntar',
+                'approved': 'Godkänd',
+                'denied': 'Nekad'
+            };
+            return statusTexts[status] || status;
+        }
+
+        function getAbsenceTypeText(type) {
+            const typeTexts = {
+                'sjukdom': 'Sjukdom',
+                'läkarbesök': 'Läkarbesök',
+                'tandläkarbesök': 'Tandläkarbesök',
+                'familjeangelegenhet': 'Familjeangelegenhet',
+                'övrig': 'Övrig orsak'
+            };
+            return typeTexts[type] || type;
+        }
+
+        // Stäng modal vid klick utanför
+        document.getElementById('absence-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAbsenceModal();
+            }
+        });
+
+        // Stäng modal med Escape-tangent
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAbsenceModal();
+            }
+        });
+    </script>
 </body>
 </html>
