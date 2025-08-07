@@ -274,6 +274,8 @@ class Subject(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     lessons = db.relationship('Lesson', backref='subject', lazy=True, cascade='all, delete-orphan')
 
+
+    assignments = db.relationship('Assignment', back_populates='subject', cascade='all, delete-orphan')
     # Kolumner som kommer att läggas till via migration
     share_code = db.Column(db.String(8), unique=True, nullable=True)
     is_shared = db.Column(db.Boolean, default=False)
@@ -500,6 +502,14 @@ class User(db.Model, UserMixin):
 
     parent_student_id = db.Column(db.Integer, db.ForeignKey('user.id'))  # Vilket barn föräldern tillhör
     student_code = db.Column(db.String(20), unique=True)  # Unik kod för elever som föräldrar använder för att koppla sig
+
+
+
+    created_assignments = db.relationship('Assignment', foreign_keys='Assignment.created_by', 
+                                        back_populates='creator', cascade='all, delete-orphan')
+    
+    student_submissions = db.relationship('AssignmentSubmission', foreign_keys='AssignmentSubmission.student_id',
+                                        back_populates='student', cascade='all, delete-orphan')
 
 
     parent_child = db.relationship('User', remote_side=[id], backref='parents')
@@ -1422,6 +1432,10 @@ class KravDocument(db.Model):
 
 # Uppdaterade modeller för kommentarfunktionalitet
 
+# Fixed Assignment and AssignmentSubmission models
+
+# Fixed Assignment and AssignmentSubmission models
+
 class Assignment(db.Model):
     """Uppgifter som skapas av ämnesägare"""
     id = db.Column(db.Integer, primary_key=True)
@@ -1433,32 +1447,35 @@ class Assignment(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relationer
-    subject = db.relationship('Subject', backref='assignments')
-    creator = db.relationship('User', backref='created_assignments')
-    submissions = db.relationship('AssignmentSubmission', backref='assignment', cascade='all, delete-orphan')
+    # Relationer - använd back_populates för tydlighet
+    subject = db.relationship('Subject', back_populates='assignments')
+    creator = db.relationship('User', foreign_keys=[created_by], back_populates='created_assignments')
+    submissions = db.relationship('AssignmentSubmission', back_populates='assignment', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Assignment {self.title}>'
 
 
 class AssignmentSubmission(db.Model):
-    """Elevernas inlämningar av uppgifter"""
     id = db.Column(db.Integer, primary_key=True)
     assignment_id = db.Column(db.Integer, db.ForeignKey('assignment.id'), nullable=False)
     student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     comment = db.Column(db.Text)
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
-    seen = db.Column(db.Boolean, default=False)  # <— NYTT!
+    is_seen = db.Column(db.Boolean, default=False, nullable=False)
+    seen_at = db.Column(db.DateTime, nullable=True)
+    seen = db.Column(db.Boolean, default=False)
+    comments = db.relationship('SubmissionComment', back_populates='submission', cascade='all, delete-orphan')
+    # Nya betygsrelaterade kolumner
+    grade = db.Column(db.Integer, nullable=True)  # 1-10 eller NULL för inget betyg
+    graded_at = db.Column(db.DateTime, nullable=True)
+    graded_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
-    # Relationer
-    student = db.relationship('User', backref='assignment_submissions')
-    files = db.relationship('AssignmentFile', backref='submission', cascade='all, delete-orphan')
-    # NY: Relation till kommentarer från lärare
-    teacher_comments = db.relationship('SubmissionComment', backref='submission', cascade='all, delete-orphan')
-
-    def __repr__(self):
-        return f'<AssignmentSubmission {self.id}>'
+    # Relationer - använd back_populates
+    assignment = db.relationship('Assignment', back_populates='submissions')
+    student = db.relationship('User', foreign_keys=[student_id], back_populates='student_submissions')
+    grader = db.relationship('User', foreign_keys=[graded_by])
+    files = db.relationship('AssignmentFile', back_populates='submission', cascade='all, delete-orphan')
 
 
 class AssignmentFile(db.Model):
@@ -1469,6 +1486,9 @@ class AssignmentFile(db.Model):
     file_path = db.Column(db.String(500), nullable=False)
     file_size = db.Column(db.Integer)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Använd back_populates för konsistens
+    submission = db.relationship('AssignmentSubmission', back_populates='files')
 
     def __repr__(self):
         return f'<AssignmentFile {self.filename}>'
@@ -1486,8 +1506,9 @@ class SubmissionComment(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationer
-    teacher = db.relationship('User', backref='submission_comments')
+    # Relationer - använd back_populates eller enkel relationship utan backref
+    submission = db.relationship('AssignmentSubmission', back_populates='comments')
+    teacher = db.relationship('User')
     
     def __repr__(self):
         return f'<SubmissionComment {self.id}>'
@@ -7579,44 +7600,46 @@ def logout():
 
 # Flask routes att lägga till i din app.py
 
+# Ersätt /api/assignments/<int:subject_id> route
+
 @app.route('/api/assignments/<int:subject_id>')
 def get_assignments(subject_id):
     """Hämta alla uppgifter för ett ämne"""
     try:
-        # Kontrollera att användaren har tillgång till ämnet
         user_role = get_user_role_in_subject(current_user.id, subject_id)
         if not user_role:
             return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
 
-        # Hämta uppgifter
         assignments = Assignment.query.filter_by(subject_id=subject_id).order_by(Assignment.created_at.desc()).all()
-        
         assignments_data = []
+
         for assignment in assignments:
-            # För medlemmar, kontrollera inlämningsstatus
-            submission_status = 'pending'
-            if user_role != 'owner':
-                submission = AssignmentSubmission.query.filter_by(
-                    assignment_id=assignment.id,
-                    student_id=current_user.id
-                ).first()
-                if submission:
-                    submission_status = 'submitted'
-
-            # För ägare, räkna antal inlämningar
-            submission_count = 0
-            if user_role == 'owner':
-                submission_count = AssignmentSubmission.query.filter_by(assignment_id=assignment.id).count()
-
-            assignments_data.append({
+            assignment_data = {
                 'id': assignment.id,
                 'title': assignment.title,
                 'description': assignment.description,
                 'due_date': assignment.due_date.isoformat() if assignment.due_date else None,
                 'created_at': assignment.created_at.isoformat(),
-                'submission_status': submission_status,
-                'submission_count': submission_count
-            })
+                'submission_count': len(assignment.submissions) if user_role == 'owner' else 0
+            }
+
+            # För medlemmar, lägg till submission status och betyg
+            if user_role != 'owner':
+                user_submission = AssignmentSubmission.query.filter_by(
+                    assignment_id=assignment.id,
+                    student_id=current_user.id
+                ).first()
+
+                if user_submission:
+                    assignment_data['submission_status'] = 'submitted'
+                    assignment_data['grade'] = user_submission.grade
+                    assignment_data['graded_at'] = user_submission.graded_at.isoformat() if user_submission.graded_at else None
+                    assignment_data['graded_by_name'] = user_submission.grader.username if user_submission.graded_by else None
+                else:
+                    assignment_data['submission_status'] = 'not_submitted'
+                    assignment_data['grade'] = None
+
+            assignments_data.append(assignment_data)
 
         return jsonify({
             'status': 'success',
@@ -7626,7 +7649,6 @@ def get_assignments(subject_id):
     except Exception as e:
         print(f"Error loading assignments: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
-    
 
 
 @app.route('/api/submission/<int:submission_id>/mark_seen', methods=['POST'])
@@ -8042,14 +8064,15 @@ def run_assignment_migrations():
     print("Assignment migrations completed!")
 
 
-# Route för studenter att se sina egna inlämningar med kommentarer
+# Ersätt get_my_submission funktionen
+
 @app.route('/api/my_submissions/<int:assignment_id>')
 def get_my_submission(assignment_id):
     """Hämta egen inlämning för en uppgift (studenter)"""
     try:
         assignment = Assignment.query.get_or_404(assignment_id)
         user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
-        
+
         if not user_role or user_role == 'owner':
             return jsonify({'status': 'error', 'message': 'Åtkomst nekad'}), 403
 
@@ -8091,13 +8114,17 @@ def get_my_submission(assignment_id):
                 'comment': submission.comment,
                 'submitted_at': submission.submitted_at.isoformat(),
                 'files': files_data,
-                'teacher_comments': comments_data
+                'teacher_comments': comments_data,
+                'grade': submission.grade,
+                'graded_at': submission.graded_at.isoformat() if submission.graded_at else None,
+                'graded_by_name': submission.grader.username if submission.graded_by else None
             }
         })
 
     except Exception as e:
         print(f"Error loading my submission: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @app.route('/api/assignments/delete', methods=['POST'])
 def delete_assignment():
@@ -8125,6 +8152,8 @@ def delete_assignment():
 
 
 
+# Ersätt get_assignment_submissions funktionen
+
 @app.route('/api/assignments/<int:assignment_id>/submissions')
 def get_assignment_submissions(assignment_id):
     """Hämta inlämningar för en uppgift (endast ägare)"""
@@ -8138,7 +8167,6 @@ def get_assignment_submissions(assignment_id):
         for submission in submissions:
             comment_count = SubmissionComment.query.filter_by(submission_id=submission.id).count()
 
-            # NYTT: lista upp inlämnade filer
             files = []
             for f in submission.files:
                 files.append({
@@ -8153,7 +8181,10 @@ def get_assignment_submissions(assignment_id):
                 'comment_count': comment_count,
                 'seen': submission.seen,
                 'comment': submission.comment or '',
-                'files': files                    # <-- Skicka med fil-listan
+                'files': files,
+                'grade': submission.grade,
+                'graded_at': submission.graded_at.isoformat() if submission.graded_at else None,
+                'graded_by_name': submission.grader.username if submission.graded_by else None
             })
 
         return jsonify({'status': 'success', 'submissions': submissions_data})
@@ -8161,8 +8192,51 @@ def get_assignment_submissions(assignment_id):
     except Exception as e:
         print(f"Error loading submissions: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+# Lägg till efter befintliga submission routes
 
+@app.route('/api/submission/<int:submission_id>/set_grade', methods=['POST'])
+def set_submission_grade(submission_id):
+    """Sätt betyg på inlämning (endast ägare)"""
+    try:
+        data = request.get_json()
+        grade = data.get('grade')
+        
+        if grade is not None and (grade < 1 or grade > 10):
+            return jsonify({'status': 'error', 'message': 'Betyg måste vara mellan 1-10'}), 400
 
+        submission = AssignmentSubmission.query.get_or_404(submission_id)
+        assignment = submission.assignment
+        user_role = get_user_role_in_subject(current_user.id, assignment.subject_id)
+
+        if user_role != 'owner':
+            return jsonify({'status': 'error', 'message': 'Endast ägare kan sätta betyg'}), 403
+
+        # Sätt eller ta bort betyg
+        if grade is None:
+            submission.grade = None
+            submission.graded_at = None
+            submission.graded_by = None
+            message = 'Betyg borttaget'
+        else:
+            submission.grade = grade
+            submission.graded_at = datetime.utcnow()
+            submission.graded_by = current_user.id
+            message = f'Betyg {grade} sparat'
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'grade': grade,
+            'graded_at': submission.graded_at.isoformat() if submission.graded_at else None,
+            'graded_by_name': current_user.username if submission.graded_by else None
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error setting grade: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/assignments/submit', methods=['POST'])
