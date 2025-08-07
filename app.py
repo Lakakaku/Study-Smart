@@ -3808,7 +3808,10 @@ def school_news():
         flash(f'Fel vid hämtning av nyheter: {str(e)}', 'error')
         return redirect(url_for('index'))
 
-    
+
+
+
+
 
 @app.route('/api/school_news')
 @login_required
