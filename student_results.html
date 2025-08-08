@@ -1,5 +1,4 @@
-
-<!-- Student Results Page Template (student_results.html) -->
+<!-- Student Results Page Template (student_results.html) - UPPDATERAD -->
 <!DOCTYPE html>
 <html lang="sv">
 <head>
@@ -64,6 +63,12 @@
             border-bottom: 1px solid #ddd;
         }
         
+        .student-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
         .student-name {
             font-size: 18px;
             font-weight: bold;
@@ -77,6 +82,95 @@
             color: #6c757d;
         }
         
+        /* NYA STILAR FÖR ÄMNESBETYG */
+        .subject-grade-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .subject-grade-label {
+            font-weight: bold;
+            color: #495057;
+            font-size: 14px;
+        }
+        
+        .subject-grade-input {
+            width: 60px;
+            padding: 5px 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .subject-grade-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        
+        .grade-save-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            display: none;
+        }
+        
+        .grade-save-btn:hover {
+            background: #218838;
+        }
+        
+        .grade-save-btn.show {
+            display: inline-block;
+        }
+        
+        .current-grade-display {
+            background: #007bff;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            min-width: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .current-grade-display:hover {
+            background: #0056b3;
+        }
+        
+        .current-grade-display.no-grade {
+            background: #6c757d;
+            font-style: italic;
+        }
+        
+        .grade-comment-input {
+            width: 200px;
+            padding: 5px 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .grade-updated-info {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        /* Resten av befintliga stilar */
         .assignments-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -306,11 +400,61 @@
             {% for student_data in student_results %}
             <div class="student-card">
                 <div class="student-header">
-                    <div class="student-name">{{ student_data.student_name }}</div>
-                    <div class="student-stats">
-                        <span>📝 {{ student_data.submitted_count }}/{{ assignments|length }} inlämnade</span>
-                        <span>⭐ Snittbetyg: {{ student_data.avg_grade|round(1) if student_data.avg_grade else 'Inget betyg än' }}</span>
-                        <span>📅 Gick med: {{ student_data.joined_at.strftime('%Y-%m-%d') if student_data.joined_at else 'Okänt' }}</span>
+                    <div class="student-info">
+                        <div class="student-name">{{ student_data.student_name }}</div>
+                        <div class="student-stats">
+                            <span>📝 {{ student_data.submitted_count }}/{{ assignments|length }} inlämnade</span>
+                            <span>⭐ Snittbetyg: {{ student_data.avg_grade|round(1) if student_data.avg_grade else 'Inget betyg än' }}</span>
+                            <span>📅 Gick med: {{ student_data.joined_at.strftime('%Y-%m-%d') if student_data.joined_at else 'Okänt' }}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- NYA ÄMNESBETYG-SEKTION -->
+                    <div class="subject-grade-container">
+                        <span class="subject-grade-label">Ämnesbetyg:</span>
+                        
+                        <!-- Visa aktuellt betyg eller "Inget betyg" -->
+                        <div class="current-grade-display {{ 'no-grade' if not student_data.subject_grade }}" 
+                             onclick="showGradeInput({{ student_data.student_id }})"
+                             id="grade-display-{{ student_data.student_id }}">
+                            {{ student_data.subject_grade if student_data.subject_grade else 'Inget betyg' }}
+                        </div>
+                        
+                        <!-- Dold input för att redigera betyg -->
+                        <div style="display: none;" id="grade-input-container-{{ student_data.student_id }}">
+                            <input type="number" 
+                                   min="1" 
+                                   max="10" 
+                                   class="subject-grade-input"
+                                   id="grade-input-{{ student_data.student_id }}"
+                                   value="{{ student_data.subject_grade or '' }}"
+                                   placeholder="1-10"
+                                   onchange="showSaveButton({{ student_data.student_id }})">
+                            
+                            <input type="text" 
+                                   class="grade-comment-input"
+                                   id="grade-comment-{{ student_data.student_id }}"
+                                   value="{{ student_data.subject_grade_comment or '' }}"
+                                   placeholder="Kommentar (valfritt)"
+                                   onchange="showSaveButton({{ student_data.student_id }})">
+                            
+                            <button class="grade-save-btn" 
+                                    id="save-btn-{{ student_data.student_id }}"
+                                    onclick="saveSubjectGrade({{ student_data.student_id }})">
+                                Spara
+                            </button>
+                            
+                            <button class="btn-cancel" 
+                                    onclick="cancelGradeEdit({{ student_data.student_id }})">
+                                Avbryt
+                            </button>
+                        </div>
+                        
+                        {% if student_data.subject_grade_updated %}
+                        <div class="grade-updated-info">
+                            Uppdaterat: {{ student_data.subject_grade_updated.strftime('%Y-%m-%d %H:%M') }}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 
@@ -399,6 +543,7 @@
     </div>
     
     <script>
+        // BEFINTLIGA FUNKTIONER FÖR EXTERNA UPPGIFTER
         function showExternalForm(studentId) {
             // Hide the add button
             document.querySelector(`[onclick="showExternalForm(${studentId})"]`).style.display = 'none';
@@ -490,6 +635,132 @@
                 alert('Kunde inte ta bort externt prov');
             }
         }
+        
+        // NYA FUNKTIONER FÖR ÄMNESBETYG
+        function showGradeInput(studentId) {
+            // Dölj display och visa input
+            document.getElementById(`grade-display-${studentId}`).style.display = 'none';
+            document.getElementById(`grade-input-container-${studentId}`).style.display = 'flex';
+            document.getElementById(`grade-input-container-${studentId}`).style.alignItems = 'center';
+            document.getElementById(`grade-input-container-${studentId}`).style.gap = '10px';
+            
+            // Fokusera på input
+            document.getElementById(`grade-input-${studentId}`).focus();
+        }
+        
+        function cancelGradeEdit(studentId) {
+            // Visa display och dölj input
+            document.getElementById(`grade-display-${studentId}`).style.display = 'block';
+            document.getElementById(`grade-input-container-${studentId}`).style.display = 'none';
+            
+            // Dölj spara-knappen
+            document.getElementById(`save-btn-${studentId}`).classList.remove('show');
+        }
+        
+        function showSaveButton(studentId) {
+            // Visa spara-knappen när något ändras
+            document.getElementById(`save-btn-${studentId}`).classList.add('show');
+        }
+        
+        async function saveSubjectGrade(studentId) {
+            const gradeInput = document.getElementById(`grade-input-${studentId}`);
+            const commentInput = document.getElementById(`grade-comment-${studentId}`);
+            
+            const grade = parseInt(gradeInput.value);
+            const comment = commentInput.value.trim();
+            
+            // Validering
+            if (!grade || grade < 1 || grade > 10) {
+                alert('Betyget måste vara mellan 1 och 10');
+                gradeInput.focus();
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/subject_grade/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        subject_id: {{ subject.id }},
+                        student_id: studentId,
+                        grade: grade,
+                        teacher_comment: comment
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Uppdatera display
+                    const gradeDisplay = document.getElementById(`grade-display-${studentId}`);
+                    gradeDisplay.textContent = grade;
+                    gradeDisplay.classList.remove('no-grade');
+                    
+                    // Dölj input och visa display
+                    cancelGradeEdit(studentId);
+                    
+                    // Visa success-meddelande
+                    showSuccessMessage(data.message);
+                    
+                    // Reload för att uppdatera "Uppdaterat"-tiden
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    alert('Fel: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error saving subject grade:', error);
+                alert('Kunde inte spara betyget');
+            }
+        }
+        
+        function showSuccessMessage(message) {
+            // Skapa ett temporärt success-meddelande
+            const successDiv = document.createElement('div');
+            successDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #28a745;
+                color: white;
+                padding: 12px 20px;
+                border-radius: 6px;
+                z-index: 1000;
+                font-weight: bold;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            `;
+            successDiv.textContent = message;
+            
+            document.body.appendChild(successDiv);
+            
+            // Ta bort meddelandet efter 3 sekunder
+            setTimeout(() => {
+                successDiv.remove();
+            }, 3000);
+        }
+        
+        // Lägg till keyboard shortcuts för betygsinmatning
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                // Avbryt alla öppna betygsinmatningar
+                const openInputs = document.querySelectorAll('[id^="grade-input-container-"]');
+                openInputs.forEach(container => {
+                    if (container.style.display !== 'none') {
+                        const studentId = container.id.replace('grade-input-container-', '');
+                        cancelGradeEdit(studentId);
+                    }
+                });
+            }
+            
+            // Enter för att spara betyg
+            if (event.key === 'Enter' && event.target.classList.contains('subject-grade-input')) {
+                const studentId = event.target.id.replace('grade-input-', '');
+                saveSubjectGrade(studentId);
+            }
+        });
     </script>
 </body>
 </html>
