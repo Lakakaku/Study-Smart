@@ -1477,6 +1477,27 @@ class AssignmentSubmission(db.Model):
     grader = db.relationship('User', foreign_keys=[graded_by])
     files = db.relationship('AssignmentFile', back_populates='submission', cascade='all, delete-orphan')
 
+# Lägg till i din models.py eller där du har dina databasmodeller
+class ExternalAssignment(db.Model):
+    """Externa uppgifter/prov som läraren registrerar manuellt"""
+    __tablename__ = 'external_assignments'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    grade = db.Column(db.Integer, nullable=False)  # 1-10
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationer
+    subject = db.relationship('Subject')
+    student = db.relationship('User', foreign_keys=[student_id])
+    creator = db.relationship('User', foreign_keys=[created_by])
+    
+    def __repr__(self):
+        return f'<ExternalAssignment {self.name}>'
+
 
 class AssignmentFile(db.Model):
     """Filer som lämnats in för uppgifter"""
@@ -5167,6 +5188,201 @@ def upload_shared_file():
         db.session.rollback()
         print(f"Error uploading file: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Failed to upload file'})
+
+# Add this route to your Flask app (likely in app.py or routes.py)
+
+
+# Lägg till dessa routes
+@app.route('/api/external_assignment/add', methods=['POST'])
+@login_required
+def add_external_assignment():
+    """Add external assignment grade for a student"""
+    try:
+        data = request.get_json()
+        
+        # Validate data
+        subject_name = data.get('subject_name')
+        student_id = data.get('student_id')
+        name = data.get('name', '').strip()
+        grade = data.get('grade')
+        
+        if not all([subject_name, student_id, name, grade]):
+            return jsonify({'status': 'error', 'message': 'Alla fält krävs'})
+        
+        # Validate grade
+        try:
+            grade = int(grade)
+            if grade < 1 or grade > 10:
+                raise ValueError()
+        except (ValueError, TypeError):
+            return jsonify({'status': 'error', 'message': 'Betyg måste vara mellan 1 och 10'})
+        
+        # Verify subject ownership
+        subject = Subject.query.filter_by(name=subject_name, user_id=current_user.id).first()
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Ämne hittades inte eller du har inte behörighet'})
+        
+        # Verify student is member of subject
+        member = SubjectMember.query.filter_by(
+            subject_id=subject.id, 
+            user_id=student_id
+        ).first()
+        if not member:
+            return jsonify({'status': 'error', 'message': 'Eleven är inte medlem i detta ämne'})
+        
+        # Create external assignment
+        external = ExternalAssignment(
+            subject_id=subject.id,
+            student_id=student_id,
+            name=name,
+            grade=grade,
+            created_by=current_user.id
+        )
+        
+        db.session.add(external)
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'message': 'Externt prov tillagt'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': f'Fel vid sparande: {str(e)}'})
+
+
+@app.route('/api/external_assignment/delete', methods=['POST'])
+@login_required
+def delete_external_assignment():
+    """Delete external assignment"""
+    try:
+        data = request.get_json()
+        external_id = data.get('external_id')
+        
+        if not external_id:
+            return jsonify({'status': 'error', 'message': 'Externt prov-ID krävs'})
+        
+        # Get external assignment and verify ownership
+        external = ExternalAssignment.query.filter_by(
+            id=external_id,
+            created_by=current_user.id
+        ).first()
+        
+        if not external:
+            return jsonify({'status': 'error', 'message': 'Externt prov hittades inte eller du har inte behörighet'})
+        
+        db.session.delete(external)
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'message': 'Externt prov borttaget'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': f'Fel vid borttagning: {str(e)}'})
+
+
+
+# Uppdatera din befintliga student_results route
+@app.route('/subject/<subject_name>/student_results')
+@login_required
+def student_results(subject_name):
+    """Display individual student results for all assignments in the subject"""
+    
+    # Get subject and verify ownership
+    subject = Subject.query.filter_by(name=subject_name, user_id=current_user.id).first()
+    if not subject:
+        flash('Ämne hittades inte eller du har inte behörighet.', 'error')
+        return redirect(url_for('index'))
+    
+    # Get all assignments for this subject
+    assignments = Assignment.query.filter_by(subject_id=subject.id).order_by(Assignment.created_at.desc()).all()
+    
+    # Get all students (members) of this subject
+    student_members = db.session.query(SubjectMember, User).join(
+        User, SubjectMember.user_id == User.id
+    ).filter(
+        SubjectMember.subject_id == subject.id,
+        SubjectMember.role == 'member'
+    ).all()
+    
+    # Prepare student results data
+    student_results = []
+    total_submissions = 0
+    all_grades = []
+    
+    for member, user in student_members:
+        # Get all submissions for this student in this subject
+        submissions = db.session.query(AssignmentSubmission).join(
+            Assignment, AssignmentSubmission.assignment_id == Assignment.id
+        ).filter(
+            Assignment.subject_id == subject.id,
+            AssignmentSubmission.student_id == user.id
+        ).all()
+        
+        # Get external assignments for this student
+        external_assignments = ExternalAssignment.query.filter_by(
+            subject_id=subject.id,
+            student_id=user.id
+        ).order_by(ExternalAssignment.created_at.desc()).all()
+        
+        # Create submission lookup by assignment_id
+        submission_dict = {}
+        student_grades = []
+        
+        for submission in submissions:
+            total_submissions += 1
+            
+            # Get file count for this submission
+            files_count = AssignmentFile.query.filter_by(submission_id=submission.id).count()
+            
+            submission_dict[submission.assignment_id] = {
+                'id': submission.id,
+                'submitted_at': submission.submitted_at,
+                'grade': submission.grade,
+                'files_count': files_count,
+                'comment': submission.comment
+            }
+            
+            if submission.grade is not None:
+                student_grades.append(submission.grade)
+                all_grades.append(submission.grade)
+        
+        # Add external assignment grades to student grades
+        for external in external_assignments:
+            student_grades.append(external.grade)
+            all_grades.append(external.grade)
+        
+        # Calculate student's average grade (including external assignments)
+        avg_grade = sum(student_grades) / len(student_grades) if student_grades else None
+        
+        student_data = {
+            'student_id': user.id,
+            'student_name': user.username,
+            'student_email': user.email,
+            'joined_at': member.joined_at,
+            'submissions': submission_dict,
+            'submitted_count': len(submissions),
+            'external_assignments': external_assignments,
+            'avg_grade': avg_grade
+        }
+        
+        student_results.append(student_data)
+    
+    # Calculate overall statistics
+    avg_grade = sum(all_grades) / len(all_grades) if all_grades else None
+    
+    # Sort students by name
+    student_results.sort(key=lambda x: x['student_name'].lower())
+    
+    return render_template(
+        'student_results.html',
+        subject_name=subject_name,
+        subject=subject,
+        assignments=assignments,
+        student_results=student_results,
+        total_submissions=total_submissions,
+        avg_grade=avg_grade,
+        now=datetime.utcnow()
+    )
+
 
 
 @app.route('/api/shared_files/<subject_name>')
