@@ -3930,6 +3930,53 @@ body .main-layout + .shared-files-section {
       padding: 20px;
     }
 
+
+
+    /* Add this CSS to your subject.css file */
+
+    .student-results-btn {
+        background: linear-gradient(135deg, #17a2b8, #138496);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 12px 20px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .student-results-btn:hover {
+        background: linear-gradient(135deg, #138496, #0f6674);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        color: white;
+        text-decoration: none;
+    }
+
+    .student-results-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .assignments-toggle-container-centered {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .student-results-btn {
+            margin-left: 0 !important;
+            width: 100%;
+        }
+    }
+
     .error-loading-comments {
       text-align: center;
       color: #dc3545;
@@ -4134,6 +4181,13 @@ body .main-layout + .shared-files-section {
       <span class="toggle-label">📝 Uppgifter</span>
       <span id="unseen-badge" class="pending-count-badge" style="display:none;"></span>
     </button>
+    
+    <!-- NY: Elevresultat-knapp -->
+    <a href="{{ url_for('student_results', subject_name=subject_name) }}" 
+      class="assignments-toggle-btn-large student-results-btn" 
+      style="margin-left: 10px; text-decoration: none;">
+      <span class="toggle-label">📊 Elevresultat</span>
+    </a>
   </div>
   {% endif %}
 
