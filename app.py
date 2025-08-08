@@ -265,6 +265,31 @@ class SharedFile(db.Model):
         }
 
 
+class SubjectGrade(db.Model):
+    """Ämnesbetyg för elever"""
+    __tablename__ = 'subject_grades'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    grade = db.Column(db.Integer, nullable=False)  # 1-10
+    teacher_comment = db.Column(db.Text)
+    graded_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Unique constraint - en elev kan bara ha ett betyg per ämne
+    __table_args__ = (db.UniqueConstraint('subject_id', 'student_id', name='unique_subject_student_grade'),)
+    
+    # Relationer
+    subject = db.relationship('Subject')
+    student = db.relationship('User', foreign_keys=[student_id])
+    grader = db.relationship('User', foreign_keys=[graded_by])
+    
+    def __repr__(self):
+        return f'<SubjectGrade student_id={self.student_id} subject_id={self.subject_id} grade={self.grade}>'
+
+
 # Uppdatera Subject model
 # Uppdatera Subject model
 class Subject(db.Model):
@@ -474,7 +499,6 @@ def setup_lunch_menu_data():
             print(f"Error creating lunch menu data: {e}")
             db.session.rollback()
 
-# Uppdatera User model för att inkludera subject memberships
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), unique=True, nullable=False)
@@ -652,6 +676,8 @@ class User(db.Model, UserMixin):
         return db.session.query(Subject).join(SubjectMember).filter(
             SubjectMember.user_id == self.id
         ).all()
+    
+
 
 def check_quiz_schema():
     """Kontrollera och uppdatera quiz-tabellens schema"""
@@ -5014,6 +5040,323 @@ def index():
 
 
 
+
+
+
+
+
+
+
+@app.route('/school_admin')
+@login_required
+def school_admin_index():
+    """Huvudsida för skolledning"""
+    if not current_user.is_school_admin():
+        flash('Denna sida är endast för skolledning.', 'error')
+        return redirect(url_for('index'))
+    
+    # Hämta skolinformation
+    school = School.query.get(current_user.school_id) if current_user.school_id else None
+    if not school:
+        flash('Ingen skola kopplad till ditt konto. Kontakta systemadministratören.', 'error')
+        return redirect(url_for('index'))
+    
+    # Hämta statistik
+    total_students = User.query.filter(
+        User.school_id == current_user.school_id,
+        User.user_type == 'student',
+        User.is_active == True
+    ).count()
+    
+    total_teachers = User.query.filter(
+        User.school_id == current_user.school_id,
+        User.user_type == 'teacher',
+        User.is_active == True
+    ).count()
+    
+    # Hämta senaste nyheterna för redigering
+    recent_news = SchoolNews.query.filter_by(
+        school_id=current_user.school_id
+    ).order_by(SchoolNews.created_at.desc()).limit(5).all()
+    
+    return render_template('school_admin_index.html', 
+                         school=school,
+                         total_students=total_students,
+                         total_teachers=total_teachers,
+                         recent_news=recent_news)
+
+@app.route('/school_admin/news', methods=['GET', 'POST'])
+@login_required
+def manage_school_news():
+    """Hantera skolnyheter"""
+    if not current_user.is_school_admin():
+        flash('Endast skolledning kan hantera nyheter.', 'error')
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        content = request.form.get('content', '').strip()
+        
+        if not title or not content:
+            flash('Titel och innehåll krävs.', 'error')
+            return redirect(url_for('manage_school_news'))
+        
+        try:
+            news_item = SchoolNews(
+                school_id=current_user.school_id,
+                title=title,
+                content=content,
+                author_id=current_user.id
+            )
+            db.session.add(news_item)
+            db.session.commit()
+            flash('Nyhet publicerad!', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Fel vid publicering: {str(e)}', 'error')
+        
+        return redirect(url_for('manage_school_news'))
+    
+    # Hämta alla nyheter för skolan
+    all_news = SchoolNews.query.filter_by(
+        school_id=current_user.school_id
+    ).order_by(SchoolNews.created_at.desc()).all()
+    
+    return render_template('manage_school_news.html', news_items=all_news)
+
+@app.route('/school_admin/news/<int:news_id>/toggle')
+@login_required
+def toggle_news_status(news_id):
+    """Aktivera/inaktivera nyhet"""
+    if not current_user.is_school_admin():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    news_item = SchoolNews.query.filter_by(
+        id=news_id,
+        school_id=current_user.school_id
+    ).first_or_404()
+    
+    news_item.is_active = not news_item.is_active
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'is_active': news_item.is_active
+    })
+
+@app.route('/school_admin/news/<int:news_id>/delete', methods=['POST'])
+@login_required
+def delete_news(news_id):
+    """Ta bort nyhet"""
+    if not current_user.is_school_admin():
+        flash('Unauthorized', 'error')
+        return redirect(url_for('index'))
+    
+    news_item = SchoolNews.query.filter_by(
+        id=news_id,
+        school_id=current_user.school_id
+    ).first_or_404()
+    
+    db.session.delete(news_item)
+    db.session.commit()
+    
+    flash('Nyhet borttagen.', 'success')
+    return redirect(url_for('manage_school_news'))
+
+@app.route('/school_admin/grades')
+@login_required
+def view_all_grades():
+    """Visa alla elevers betyg på skolan"""
+    if not current_user.is_school_admin():
+        flash('Endast skolledning kan se alla betyg.', 'error')
+        return redirect(url_for('index'))
+    
+    # Hämta alla elever på skolan
+    students = User.query.filter(
+        User.school_id == current_user.school_id,
+        User.user_type == 'student',
+        User.is_active == True
+    ).order_by(User.last_name, User.first_name).all()
+    
+    # Hämta alla lärare på skolan
+    teachers = User.query.filter(
+        User.school_id == current_user.school_id,
+        User.user_type == 'teacher',
+        User.is_active == True
+    ).all()
+    
+    # Hämta alla ämnen skapade av lärare på skolan
+    teacher_ids = [t.id for t in teachers]
+    subjects = Subject.query.filter(
+        Subject.user_id.in_(teacher_ids)
+    ).all() if teacher_ids else []
+    
+    # Samla betygsinformation
+    grades_data = []
+    
+    for student in students:
+        student_grades = []
+        
+        for subject in subjects:
+            # Hämta betygsatta inlämningar
+            graded_submissions = AssignmentSubmission.query.join(Assignment).filter(
+                Assignment.subject_id == subject.id,
+                AssignmentSubmission.student_id == student.id,
+                AssignmentSubmission.grade.isnot(None)
+            ).all()
+            
+            # Hämta externa betyg
+            external_grades = ExternalAssignment.query.filter_by(
+                subject_id=subject.id,
+                student_id=student.id
+            ).all()
+            
+            # Beräkna genomsnitt om det finns betyg
+            all_grades = [s.grade for s in graded_submissions] + [e.grade for e in external_grades]
+            
+            if all_grades:
+                average_grade = round(sum(all_grades) / len(all_grades), 1)
+                grade_count = len(all_grades)
+                
+                student_grades.append({
+                    'subject_name': subject.name,
+                    'teacher_name': next((t.get_full_name() for t in teachers if t.id == subject.user_id), 'Okänd'),
+                    'average_grade': average_grade,
+                    'grade_count': grade_count,
+                    'individual_grades': all_grades
+                })
+        
+        if student_grades:  # Visa endast elever med betyg
+            grades_data.append({
+                'student': student,
+                'grades': student_grades,
+                'overall_average': round(sum([g['average_grade'] for g in student_grades]) / len(student_grades), 1) if student_grades else 0
+            })
+    
+    return render_template('school_admin_grades.html', 
+                         grades_data=grades_data,
+                         subjects=subjects)
+
+@app.route('/school_admin/student/<int:student_id>/grades')
+@login_required  
+def view_student_detailed_grades(student_id):
+    """Visa detaljerade betyg för en specifik elev"""
+    if not current_user.is_school_admin():
+        flash('Endast skolledning kan se elevbetyg.', 'error')
+        return redirect(url_for('index'))
+    
+    # Kontrollera att eleven tillhör samma skola
+    student = User.query.filter_by(
+        id=student_id,
+        school_id=current_user.school_id,
+        user_type='student'
+    ).first_or_404()
+    
+    # Hämta alla lärare på skolan
+    teachers = User.query.filter(
+        User.school_id == current_user.school_id,
+        User.user_type == 'teacher'
+    ).all()
+    
+    teacher_ids = [t.id for t in teachers]
+    subjects = Subject.query.filter(Subject.user_id.in_(teacher_ids)).all() if teacher_ids else []
+    
+    detailed_grades = []
+    
+    for subject in subjects:
+        # Hämta alla betygsatta inlämningar
+        submissions = db.session.query(AssignmentSubmission, Assignment).join(
+            Assignment
+        ).filter(
+            Assignment.subject_id == subject.id,
+            AssignmentSubmission.student_id == student.id,
+            AssignmentSubmission.grade.isnot(None)
+        ).all()
+        
+        # Hämta externa betyg
+        external_grades = ExternalAssignment.query.filter_by(
+            subject_id=subject.id,
+            student_id=student.id
+        ).all()
+        
+        if submissions or external_grades:
+            subject_data = {
+                'subject': subject,
+                'teacher': next((t for t in teachers if t.id == subject.user_id), None),
+                'submissions': submissions,
+                'external_grades': external_grades,
+                'average': 0
+            }
+            
+            # Beräkna genomsnitt
+            all_grades = [s[0].grade for s in submissions] + [e.grade for e in external_grades]
+            if all_grades:
+                subject_data['average'] = round(sum(all_grades) / len(all_grades), 1)
+            
+            detailed_grades.append(subject_data)
+    
+    return render_template('student_detailed_grades.html',
+                         student=student,
+                         detailed_grades=detailed_grades)
+
+@app.route('/api/school_admin/stats')
+@login_required
+def get_school_stats():
+    """API endpoint för att hämta skolstatistik"""
+    if not current_user.is_school_admin():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        # Grundläggande statistik
+        total_students = User.query.filter(
+            User.school_id == current_user.school_id,
+            User.user_type == 'student',
+            User.is_active == True
+        ).count()
+        
+        total_teachers = User.query.filter(
+            User.school_id == current_user.school_id,
+            User.user_type == 'teacher',
+            User.is_active == True
+        ).count()
+        
+        total_classes = SchoolClass.query.filter(
+            SchoolClass.school_id == current_user.school_id,
+            SchoolClass.is_active == True
+        ).count()
+        
+        # Betygsstatistik
+        teachers = User.query.filter(
+            User.school_id == current_user.school_id,
+            User.user_type == 'teacher'
+        ).all()
+        
+        teacher_ids = [t.id for t in teachers]
+        subjects_count = Subject.query.filter(Subject.user_id.in_(teacher_ids)).count() if teacher_ids else 0
+        
+        # Antal betygsatta uppgifter senaste månaden
+        from datetime import datetime, timedelta
+        last_month = datetime.utcnow() - timedelta(days=30)
+        
+        recent_grades = AssignmentSubmission.query.join(Assignment).filter(
+            Assignment.subject_id.in_(
+                db.session.query(Subject.id).filter(Subject.user_id.in_(teacher_ids))
+            ),
+            AssignmentSubmission.grade.isnot(None),
+            AssignmentSubmission.graded_at >= last_month
+        ).count() if teacher_ids else 0
+        
+        return jsonify({
+            'total_students': total_students,
+            'total_teachers': total_teachers,
+            'total_classes': total_classes,
+            'total_subjects': subjects_count,
+            'recent_grades': recent_grades
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/add_subject', methods=['POST'])
 @login_required
 def add_subject():
@@ -5280,7 +5623,121 @@ def delete_external_assignment():
 
 
 
-# Uppdatera din befintliga student_results route
+@app.route('/api/subject_grade/set', methods=['POST'])
+@login_required
+def set_subject_grade():
+    """Sätt eller uppdatera ämnesbetyg för en elev"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'status': 'error', 'message': 'Ingen data skickades'})
+        
+        subject_id = data.get('subject_id')
+        student_id = data.get('student_id')
+        grade = data.get('grade')
+        teacher_comment = data.get('teacher_comment', '')
+        
+        # Validering
+        if not all([subject_id, student_id, grade]):
+            return jsonify({'status': 'error', 'message': 'Saknade obligatoriska fält'})
+        
+        try:
+            grade = int(grade)
+            if grade < 1 or grade > 10:
+                return jsonify({'status': 'error', 'message': 'Betyget måste vara mellan 1 och 10'})
+        except (ValueError, TypeError):
+            return jsonify({'status': 'error', 'message': 'Ogiltigt betyg'})
+        
+        # Kontrollera att användaren äger ämnet
+        subject = Subject.query.filter_by(id=subject_id, user_id=current_user.id).first()
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Du har inte behörighet att sätta betyg i detta ämne'})
+        
+        # Kontrollera att eleven är medlem i ämnet
+        student_member = SubjectMember.query.filter_by(
+            subject_id=subject_id, 
+            user_id=student_id
+        ).first()
+        
+        if not student_member:
+            return jsonify({'status': 'error', 'message': 'Eleven är inte medlem i detta ämne'})
+        
+        # Kontrollera om betyg redan finns
+        existing_grade = SubjectGrade.query.filter_by(
+            subject_id=subject_id,
+            student_id=student_id
+        ).first()
+        
+        if existing_grade:
+            # Uppdatera befintligt betyg
+            existing_grade.grade = grade
+            existing_grade.teacher_comment = teacher_comment
+            existing_grade.graded_by = current_user.id
+            existing_grade.updated_at = datetime.utcnow()
+            action = 'uppdaterat'
+        else:
+            # Skapa nytt betyg
+            new_grade = SubjectGrade(
+                subject_id=subject_id,
+                student_id=student_id,
+                grade=grade,
+                teacher_comment=teacher_comment,
+                graded_by=current_user.id
+            )
+            db.session.add(new_grade)
+            action = 'sparat'
+        
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Betyget har {action} framgångsrikt!',
+            'grade': grade
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error setting subject grade: {e}")
+        return jsonify({'status': 'error', 'message': 'Ett fel uppstod vid sparning av betyget'})
+
+
+@app.route('/api/subject_grade/get/<int:subject_id>/<int:student_id>')
+@login_required
+def get_subject_grade(subject_id, student_id):
+    """Hämta ämnesbetyg för en specifik elev"""
+    try:
+        # Kontrollera behörighet
+        subject = Subject.query.filter_by(id=subject_id, user_id=current_user.id).first()
+        if not subject:
+            return jsonify({'status': 'error', 'message': 'Ingen behörighet'})
+        
+        grade = SubjectGrade.query.filter_by(
+            subject_id=subject_id,
+            student_id=student_id
+        ).first()
+        
+        if grade:
+            return jsonify({
+                'status': 'success',
+                'grade': grade.grade,
+                'teacher_comment': grade.teacher_comment,
+                'updated_at': grade.updated_at.isoformat()
+            })
+        else:
+            return jsonify({
+                'status': 'success',
+                'grade': None,
+                'teacher_comment': None,
+                'updated_at': None
+            })
+            
+    except Exception as e:
+        print(f"Error getting subject grade: {e}")
+        return jsonify({'status': 'error', 'message': 'Ett fel uppstod'})
+
+
+# Uppdatera din student_results route för att inkludera ämnesbetyg
 @app.route('/subject/<subject_name>/student_results')
 @login_required
 def student_results(subject_name):
@@ -5323,6 +5780,12 @@ def student_results(subject_name):
             student_id=user.id
         ).order_by(ExternalAssignment.created_at.desc()).all()
         
+        # Hämta ämnesbetyg för denna elev
+        subject_grade = SubjectGrade.query.filter_by(
+            subject_id=subject.id,
+            student_id=user.id
+        ).first()
+        
         # Create submission lookup by assignment_id
         submission_dict = {}
         student_grades = []
@@ -5361,7 +5824,11 @@ def student_results(subject_name):
             'submissions': submission_dict,
             'submitted_count': len(submissions),
             'external_assignments': external_assignments,
-            'avg_grade': avg_grade
+            'avg_grade': avg_grade,
+            # Lägg till ämnesbetyg-data
+            'subject_grade': subject_grade.grade if subject_grade else None,
+            'subject_grade_comment': subject_grade.teacher_comment if subject_grade else None,
+            'subject_grade_updated': subject_grade.updated_at if subject_grade else None
         }
         
         student_results.append(student_data)
@@ -5382,6 +5849,7 @@ def student_results(subject_name):
         avg_grade=avg_grade,
         now=datetime.utcnow()
     )
+
 
 
 
@@ -7329,15 +7797,19 @@ def register():
         email = request.form['email'].strip().lower()
         email_confirm = request.form['email_confirm'].strip().lower()
         password = request.form['password']
-        user_type = request.form['user_type']  # 'student', 'teacher', eller 'parent'
+        user_type = request.form['user_type']  # 'student', 'teacher', 'parent', eller 'school_admin'
         
         # För föräldrar
         first_name = request.form.get('first_name', '').strip()
         last_name = request.form.get('last_name', '').strip()
         student_code = request.form.get('student_code', '').strip() if user_type == 'parent' else None
+        
+        # För skolledning
+        school_code = request.form.get('school_code', '').strip() if user_type == 'school_admin' else None
 
         # Initialize student variable
         student = None
+        school = None
 
         # Validation
         if len(username) < 3:
@@ -7352,7 +7824,7 @@ def register():
         if len(password) < 6:
             flash('Lösenord måste vara minst 6 tecken långt.', 'danger')
             return redirect(url_for('register'))
-        if user_type not in ['student', 'teacher', 'parent']:
+        if user_type not in ['student', 'teacher', 'parent', 'school_admin']:
             flash('Ogiltigt kontotyp.', 'danger')
             return redirect(url_for('register'))
         
@@ -7372,6 +7844,21 @@ def register():
             ).first()
             if not student:
                 flash('Elevkoden hittades inte. Kontakta skolan för korrekt kod.', 'danger')
+                return redirect(url_for('register'))
+        
+        # Validering för skolledning
+        if user_type == 'school_admin':
+            if not first_name or not last_name:
+                flash('För- och efternamn krävs för skolledningskonton.', 'danger')
+                return redirect(url_for('register'))
+            if not school_code:
+                flash('Skolkod krävs för skolledningskonton.', 'danger')
+                return redirect(url_for('register'))
+            
+            # Kontrollera att skolkoden finns
+            school = School.query.filter_by(school_code=school_code).first()
+            if not school:
+                flash('Skolkoden hittades inte. Kontakta systemadministratören.', 'danger')
                 return redirect(url_for('register'))
 
         # Check existing username or email
@@ -7398,24 +7885,31 @@ def register():
             user.parent_student_id = student.id
             user.school_id = student.school_id  # Samma skola som barnet
         
+        # För skolledning, koppla till skolan
+        if user_type == 'school_admin' and school:
+            user.school_id = school.id
+        
         db.session.add(user)
         db.session.commit()
         
-        # Fix: Use student variable safely with a fallback
+        # Success messages
         if user_type == 'parent' and student:
             success_message = f'Föräldrakonto skapat och kopplat till {student.first_name} {student.last_name}! Nu kan du logga in.'
+        elif user_type == 'school_admin' and school:
+            success_message = f'Skolledningskonto skapat för {school.name}! Nu kan du logga in.'
         else:
             success_messages = {
                 'student': 'Elevkonto skapat! Nu kan du logga in.',
                 'teacher': 'Lärarkonto skapat! Kontakta administratören för att få behörigheter.',
-                'parent': 'Föräldrakonto skapat! Nu kan du logga in.'
+                'parent': 'Föräldrakonto skapat! Nu kan du logga in.',
+                'school_admin': 'Skolledningskonto skapat! Nu kan du logga in.'
             }
             success_message = success_messages.get(user_type, 'Kontot skapades! Nu kan du logga in.')
         
         flash(success_message, 'success')
         return redirect(url_for('login'))
 
-    # Render form (rest of the template stays the same)
+    # Render form with updated template
     return render_template_string('''
     <!DOCTYPE html>
     <html>
@@ -7494,7 +7988,7 @@ def register():
             }
             .user-type-selector {
                 display: grid;
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(2, 1fr);
                 gap: 15px;
                 margin: 20px 0;
             }
@@ -7518,14 +8012,14 @@ def register():
                 font-size: 2em;
                 margin-bottom: 10px;
             }
-            .parent-fields {
+            .parent-fields, .school-admin-fields {
                 display: none;
                 background: #f7fafc;
                 padding: 20px;
                 border-radius: 8px;
                 margin-top: 20px;
             }
-            .parent-fields.show {
+            .parent-fields.show, .school-admin-fields.show {
                 display: block;
             }
             .help-text {
@@ -7576,6 +8070,11 @@ def register():
                             <div><strong>Förälder</strong></div>
                             <div class="help-text">För föräldrar</div>
                         </div>
+                        <div class="user-type-option" data-type="school_admin">
+                            <div class="user-type-icon">🏫</div>
+                            <div><strong>Skolledning</strong></div>
+                            <div class="help-text">För rektorer och administratörer</div>
+                        </div>
                     </div>
                     <input type="hidden" name="user_type" id="user_type" required>
                 </div>
@@ -7623,6 +8122,29 @@ def register():
                     </div>
                 </div>
 
+                <!-- Ytterligare fält för skolledning -->
+                <div id="school-admin-fields" class="school-admin-fields">
+                    <h3>Skolledningsuppgifter</h3>
+                    
+                    <div class="form-group">
+                        <label for="first_name_admin">Förnamn:</label>
+                        <input type="text" name="first_name" id="first_name_admin">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="last_name_admin">Efternamn:</label>
+                        <input type="text" name="last_name" id="last_name_admin">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="school_code">Skolkod:</label>
+                        <input type="text" name="school_code" id="school_code" placeholder="t.ex. STHLM001">
+                        <div class="help-text">
+                            Du får skolkoden från systemadministratören. Den behövs för att koppla ditt konto till rätt skola.
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" id="submit-btn" disabled>Skapa konto</button>
             </form>
             
@@ -7636,6 +8158,7 @@ def register():
                 const userTypeOptions = document.querySelectorAll('.user-type-option');
                 const userTypeInput = document.getElementById('user_type');
                 const parentFields = document.getElementById('parent-fields');
+                const schoolAdminFields = document.getElementById('school-admin-fields');
                 const submitBtn = document.getElementById('submit-btn');
 
                 userTypeOptions.forEach(option => {
@@ -7650,19 +8173,29 @@ def register():
                         const selectedType = this.dataset.type;
                         userTypeInput.value = selectedType;
                         
-                        // Show/hide parent fields
+                        // Hide all special fields first
+                        parentFields.classList.remove('show');
+                        schoolAdminFields.classList.remove('show');
+                        
+                        // Reset required fields
+                        document.getElementById('first_name').required = false;
+                        document.getElementById('last_name').required = false;
+                        document.getElementById('student_code').required = false;
+                        document.getElementById('first_name_admin').required = false;
+                        document.getElementById('last_name_admin').required = false;
+                        document.getElementById('school_code').required = false;
+                        
+                        // Show/hide appropriate fields
                         if (selectedType === 'parent') {
                             parentFields.classList.add('show');
-                            // Make parent fields required
                             document.getElementById('first_name').required = true;
                             document.getElementById('last_name').required = true;
                             document.getElementById('student_code').required = true;
-                        } else {
-                            parentFields.classList.remove('show');
-                            // Make parent fields not required
-                            document.getElementById('first_name').required = false;
-                            document.getElementById('last_name').required = false;
-                            document.getElementById('student_code').required = false;
+                        } else if (selectedType === 'school_admin') {
+                            schoolAdminFields.classList.add('show');
+                            document.getElementById('first_name_admin').required = true;
+                            document.getElementById('last_name_admin').required = true;
+                            document.getElementById('school_code').required = true;
                         }
                         
                         // Enable submit button
@@ -7674,6 +8207,8 @@ def register():
     </body>
     </html>
     ''')
+
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -7695,9 +8230,14 @@ def login():
             next_page = request.args.get('next')
             if next_page:
                 return redirect(next_page)
+            
+            # Redirect based on user type
             if user.is_parent():
                 return redirect(url_for('parent_index'))
-            return redirect(url_for('index'))    
+            elif user.user_type == 'school_admin':
+                return redirect(url_for('school_admin_index'))
+            else:
+                return redirect(url_for('index'))    
         else:
             flash('Fel användarnamn/e-post eller lösenord.', 'danger')
 
@@ -7740,7 +8280,6 @@ def login():
     </body>
     </html>
     ''')
-
 
 @app.route('/dashboard')
 @login_required
