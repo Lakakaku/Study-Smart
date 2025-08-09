@@ -5,412 +5,616 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Elevbetyg - {{ school.name if school else 'Okänd skola' }}</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
             padding: 0;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            line-height: 1.6;
         }
 
         .header {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 1rem 2rem;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(10px);
+            padding: 1.25rem 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
         }
 
         .header h1 {
             margin: 0;
-            color: #2d3748;
-            font-size: 1.8rem;
+            color: #1a202c;
+            font-size: 1.75rem;
+            font-weight: 700;
         }
 
         .header .user-info {
-            color: #718096;
+            color: #4a5568;
+            font-size: 0.9rem;
+            text-align: right;
         }
 
         .header .user-info a {
-            color: #4299e1;
+            color: #3182ce;
             text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .header .user-info a:hover {
+            color: #2c5282;
         }
 
         .container {
             max-width: 1400px;
-            margin: 2rem auto;
-            padding: 0 2rem;
+            margin: 0 auto;
+            padding: 2rem;
+            width: 100%;
         }
 
         .back-link {
-            display: inline-block;
-            margin-bottom: 1rem;
-            padding: 0.5rem 1rem;
-            background: rgba(255, 255, 255, 0.9);
-            color: #4299e1;
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding: 0.75rem 1.25rem;
+            background: rgba(255, 255, 255, 0.95);
+            color: #3182ce;
             text-decoration: none;
-            border-radius: 6px;
-            transition: all 0.2s;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
         .back-link:hover {
             background: white;
-            transform: translateX(-2px);
+            transform: translateX(-3px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .search-container {
             background: white;
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
         }
 
         .search-form {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr auto;
-            gap: 1rem;
+            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 1.5rem;
             align-items: end;
         }
 
         .form-group {
             display: flex;
             flex-direction: column;
+            min-width: 0; /* Förhindrar overflow */
         }
 
         .form-group label {
             margin-bottom: 0.5rem;
-            font-weight: 500;
-            color: #4a5568;
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 0.9rem;
         }
 
-        .form-group input, .form-group select {
-            padding: 0.75rem;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
+        .form-group input, 
+        .form-group select {
+            padding: 0.875rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
             font-size: 1rem;
-            transition: border-color 0.2s;
+            transition: all 0.3s ease;
+            background: #fafafa;
+            width: 100%;
+            min-width: 0; /* Förhindrar overflow */
         }
 
-        .form-group input:focus, .form-group select:focus {
+        .form-group input:focus, 
+        .form-group select:focus {
             outline: none;
             border-color: #4299e1;
+            background: white;
             box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .form-group input:hover:not(:focus),
+        .form-group select:hover:not(:focus) {
+            border-color: #cbd5e0;
+            background: white;
         }
 
         .btn {
-            background: #4299e1;
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
             color: white;
-            padding: 0.75rem 1.5rem;
+            padding: 0.875rem 1.5rem;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: all 0.3s ease;
             height: fit-content;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
         }
 
         .btn:hover {
-            background: #3182ce;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4);
         }
 
         .btn-clear {
-            background: #718096;
-            margin-left: 0.5rem;
+            background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+            margin-left: 0.75rem;
+            box-shadow: 0 2px 8px rgba(113, 128, 150, 0.3);
         }
 
         .btn-clear:hover {
-            background: #4a5568;
+            box-shadow: 0 4px 12px rgba(113, 128, 150, 0.4);
         }
 
         .filter-checkbox-group {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-            padding: 0.5rem;
-            background: #f7fafc;
-            border-radius: 6px;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
         }
 
         .filter-checkbox {
-            width: auto;
+            width: 18px;
+            height: 18px;
             margin: 0;
+            accent-color: #4299e1;
         }
 
         .filter-checkbox-label {
             font-size: 0.9rem;
             color: #4a5568;
-            font-weight: normal;
+            font-weight: 500;
             margin: 0;
             cursor: pointer;
         }
 
+        .small-text {
+            color: #6b7280;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+
         .results-summary {
             background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
+            border-radius: 16px;
+            padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
         }
 
         .summary-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
 
         .stat-item {
             text-align: center;
-            padding: 1rem;
-            background: #f7fafc;
-            border-radius: 8px;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s ease;
+        }
+
+        .stat-item:hover {
+            transform: translateY(-2px);
         }
 
         .stat-number {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #4299e1;
+            font-size: 2.25rem;
+            font-weight: 800;
+            color: #3182ce;
             display: block;
+            margin-bottom: 0.5rem;
         }
 
         .stat-label {
             font-size: 0.9rem;
-            color: #718096;
-            margin-top: 0.25rem;
+            color: #4a5568;
+            font-weight: 600;
+        }
+
+        .export-section {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .export-button {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(72, 187, 120, 0.3);
+        }
+
+        .export-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(72, 187, 120, 0.4);
         }
 
         .students-grid {
             display: grid;
-            gap: 1.5rem;
+            gap: 2rem;
         }
 
         .student-card {
             background: white;
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 2rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            transition: transform 0.2s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            overflow: hidden;
         }
 
         .student-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
         }
 
         .student-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #e2e8f0;
+            align-items: flex-start;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 2px solid #f1f5f9;
+            gap: 2rem;
+        }
+
+        .student-info {
+            flex: 1;
+            min-width: 0;
         }
 
         .student-info h3 {
-            margin: 0 0 0.5rem 0;
-            color: #2d3748;
-            font-size: 1.3rem;
+            margin: 0 0 0.75rem 0;
+            color: #1a202c;
+            font-size: 1.4rem;
+            font-weight: 700;
+            word-break: break-word;
         }
 
         .student-meta {
-            color: #718096;
+            color: #4a5568;
             font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .student-meta strong {
+            color: #2d3748;
         }
 
         .student-stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
-            text-align: center;
+            min-width: 240px;
         }
 
         .student-stats .stat {
-            background: #f7fafc;
-            padding: 0.75rem;
-            border-radius: 8px;
+            background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
         }
 
         .student-stats .stat-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #4299e1;
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #3182ce;
+            margin-bottom: 0.25rem;
         }
 
         .student-stats .stat-label {
             font-size: 0.8rem;
-            color: #718096;
-            margin-top: 0.25rem;
-        }
-
-        .grades-section {
-            margin-top: 1.5rem;
+            color: #4a5568;
+            font-weight: 600;
         }
 
         .grades-section h4 {
-            margin: 0 0 1rem 0;
-            color: #2d3748;
+            margin: 0 0 1.5rem 0;
+            color: #1a202c;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            font-size: 1.2rem;
+            font-weight: 700;
         }
 
         .subjects-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
         }
 
         .subject-grade {
-            background: #f7fafc;
-            border-radius: 8px;
-            padding: 1rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
             text-align: center;
             position: relative;
-            transition: all 0.2s;
+            transition: all 0.3s ease;
+            overflow: hidden;
         }
 
         .subject-grade:hover {
-            background: #e2e8f0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
         }
 
         .subject-grade.subject-final-grade {
-            border: 2px solid #38a169;
-            background: #f0fff4;
+            border-color: #38a169;
+            background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+            position: relative;
+        }
+
+        .subject-grade.subject-final-grade::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #38a169, #48bb78);
         }
 
         .subject-grade.subject-final-grade .subject-name {
-            color: #38a169;
-            font-weight: bold;
-        }
-
-        .subject-name {
-            font-weight: 600;
-            color: #4a5568;
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-        }
-
-        .grade-value {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .grade-value.grade-excellent { color: #38a169; }
-        .grade-value.grade-good { color: #4299e1; }
-        .grade-value.grade-average { color: #ed8936; }
-        .grade-value.grade-poor { color: #e53e3e; }
-        .grade-value.no-grade { color: #a0aec0; }
-
-        .grade-details {
-            font-size: 0.8rem;
-            color: #718096;
+            color: #2f855a;
+            font-weight: 700;
         }
 
         .grade-type {
             font-size: 0.7rem;
             color: #38a169;
-            font-weight: bold;
+            font-weight: 700;
             text-transform: uppercase;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.5px;
+            background: rgba(56, 161, 105, 0.1);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .subject-name {
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            word-break: break-word;
+        }
+
+        .grade-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .grade-value.grade-excellent { 
+            color: #38a169; 
+            text-shadow: 0 2px 4px rgba(56, 161, 105, 0.2);
+        }
+        .grade-value.grade-good { 
+            color: #4299e1; 
+            text-shadow: 0 2px 4px rgba(66, 153, 225, 0.2);
+        }
+        .grade-value.grade-average { 
+            color: #ed8936; 
+            text-shadow: 0 2px 4px rgba(237, 137, 54, 0.2);
+        }
+        .grade-value.grade-poor { 
+            color: #e53e3e; 
+            text-shadow: 0 2px 4px rgba(229, 62, 62, 0.2);
+        }
+        .grade-value.no-grade { 
+            color: #a0aec0; 
+            font-size: 2rem;
+        }
+
+        .grade-details {
+            font-size: 0.85rem;
+            color: #4a5568;
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+        }
+
+        .grade-comment {
+            font-size: 0.8rem;
+            color: #6b7280;
+            font-style: italic;
+            margin: 0.75rem 0;
+            padding: 0.75rem;
+            background: rgba(107, 114, 128, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid #d1d5db;
+            max-height: 4rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
         }
 
         .teacher-name {
-            font-size: 0.7rem;
-            color: #a0aec0;
-            margin-top: 0.25rem;
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid #e5e7eb;
+            font-weight: 500;
         }
 
         .no-results {
             text-align: center;
-            padding: 3rem;
-            color: #718096;
+            padding: 4rem 2rem;
+            color: #4a5568;
             background: white;
-            border-radius: 12px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
         }
 
         .no-results .icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
             opacity: 0.5;
         }
 
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: #718096;
+        .no-results h3 {
+            color: #2d3748;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .no-results ul {
+            max-width: 400px;
+            margin: 1.5rem auto;
         }
 
         .alert {
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 6px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: 10px;
             border-left: 4px solid;
+            font-weight: 500;
         }
 
         .alert-error {
-            background: #fed7d7;
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
             color: #c53030;
             border-color: #e53e3e;
         }
 
         .alert-info {
-            background: #e6fffa;
+            background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%);
             color: #2c7a7b;
             border-color: #38b2ac;
-        }
-
-        .export-button {
-            background: #48bb78;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            margin-left: 1rem;
-        }
-
-        .export-button:hover {
-            background: #38a169;
-        }
-
-        .search-highlight {
-            background: #fed7d7;
-            padding: 0.1rem 0.2rem;
-            border-radius: 2px;
-            font-weight: 600;
         }
 
         .filter-info {
             font-size: 0.9rem;
             color: #4a5568;
-            margin-top: 1rem;
-            padding: 0.75rem;
-            background: #f7fafc;
-            border-radius: 6px;
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
         }
 
         .filter-badge {
             display: inline-block;
-            background: #4299e1;
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
             color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
             font-size: 0.8rem;
             margin: 0.25rem 0.5rem 0.25rem 0;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(66, 153, 225, 0.2);
+        }
+
+        .search-highlight {
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-weight: 700;
+            box-shadow: 0 1px 3px rgba(229, 62, 62, 0.2);
+        }
+
+        .no-grades-placeholder {
+            text-align: center;
+            color: #6b7280;
+            padding: 3rem 2rem;
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            border-radius: 12px;
+            border: 2px dashed #d1d5db;
+        }
+
+        .no-grades-placeholder .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.6;
+        }
+
+        /* Responsiv design */
+        @media (max-width: 1200px) {
+            .search-form {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .container {
+                padding: 1.5rem;
+            }
         }
 
         @media (max-width: 768px) {
-            .search-form {
-                grid-template-columns: 1fr;
+            .header {
+                flex-direction: column;
                 gap: 1rem;
+                text-align: center;
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .student-header {
+                flex-direction: column;
+                gap: 1.5rem;
             }
 
             .student-stats {
                 grid-template-columns: 1fr;
+                min-width: 100%;
             }
 
             .subjects-grid {
@@ -418,18 +622,57 @@
             }
 
             .summary-stats {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .export-section {
+                justify-content: center;
+            }
+
+            .search-form {
+                gap: 1rem;
             }
         }
 
-        .grade-comment {
-            font-size: 0.75rem;
-            color: #6b7280;
-            font-style: italic;
-            margin-top: 0.25rem;
-            max-height: 3rem;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        @media (max-width: 480px) {
+            .summary-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .export-section {
+                flex-direction: column;
+            }
+
+            .export-button {
+                justify-content: center;
+            }
+
+            .student-card {
+                padding: 1.5rem;
+            }
+
+            .subjects-grid {
+                gap: 1rem;
+            }
+
+            .subject-grade {
+                padding: 1.25rem;
+            }
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Loading animation för smooth transitions */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
@@ -460,19 +703,20 @@
         <div class="search-container">
             <form method="GET" class="search-form" id="searchForm">
                 <div class="form-group">
-                    <label for="search">Sök elev:</label>
+                    <label for="search">🔍 Sök elev:</label>
                     <input type="text" 
                            id="search" 
                            name="search" 
                            value="{{ request.args.get('search', '') }}" 
                            placeholder="Sök på namn, användarnamn eller email..."
                            autocomplete="off">
-                    <small style="color: #718096; font-size: 0.8rem; margin-top: 0.25rem;">
+                    <small class="small-text">
                         Tryck Enter för att söka eller använd sökknappen
                     </small>
                 </div>
+                
                 <div class="form-group">
-                    <label for="class_id">Filtrera efter klass:</label>
+                    <label for="class_id">🏫 Filtrera efter klass:</label>
                     <select id="class_id" name="class_id">
                         <option value="">Alla klasser</option>
                         {% for class in classes %}
@@ -484,8 +728,9 @@
                         {% endfor %}
                     </select>
                 </div>
+                
                 <div class="form-group">
-                    <label for="subject_filter">Filtrera efter ämne:</label>
+                    <label for="subject_filter">📚 Filtrera efter ämne:</label>
                     <select id="subject_filter" name="subject_filter">
                         <option value="">Alla ämnen</option>
                         {% for subject in all_subjects %}
@@ -506,12 +751,13 @@
                             📋 Visa endast ämnesbetyg (slutbetyg)
                         </label>
                     </div>
-                    <small style="color: #718096; font-size: 0.8rem; margin-top: 0.25rem;">
+                    <small class="small-text">
                         Kryssa i för att endast visa slutbetyg per ämne, inte individuella uppgifter/prov
                     </small>
                 </div>
+                
                 <div class="form-group">
-                    <label for="grade_type_filter">Typ av betyg:</label>
+                    <label for="grade_type_filter">🎯 Typ av betyg:</label>
                     <select id="grade_type_filter" name="grade_type_filter">
                         <option value="">Alla typer</option>
                         <option value="subject_final" {{ 'selected' if request.args.get('grade_type_filter') == 'subject_final' else '' }}>
@@ -522,73 +768,76 @@
                         </option>
                     </select>
                 </div>
-                <div>
+                
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                     <button type="submit" class="btn" id="searchBtn">🔍 Sök</button>
-                    <a href="{{ url_for('view_student_detailed_grades') }}" class="btn btn-clear">Rensa</a>
+                    <a href="{{ url_for('view_student_detailed_grades') }}" class="btn btn-clear">🔄 Rensa</a>
                 </div>
             </form>
             
             <!-- Visa aktiva filter -->
-            {% if request.args.get('search') or request.args.get('class_id') or request.args.get('subject_filter') or request.args.get('subject_grades_only') or request.args.get('grade_type_filter') %}
-            <div class="filter-info">
-                <strong>Aktiva filter:</strong>
-                {% if request.args.get('search') %}
-                    <span class="filter-badge">Sökning: "{{ request.args.get('search') }}"</span>
+            {% set active_filters = [] %}
+            {% if request.args.get('search') %}
+                {% set _ = active_filters.append(('Sökning: "' + request.args.get('search') + '"', '')) %}
+            {% endif %}
+            {% if request.args.get('class_id') %}
+                {% for class in classes %}
+                    {% if class.id|string == request.args.get('class_id') %}
+                        {% set _ = active_filters.append(('Klass: ' + class.name, '')) %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+            {% if request.args.get('subject_filter') %}
+                {% for subject in all_subjects %}
+                    {% if subject.id|string == request.args.get('subject_filter') %}
+                        {% set _ = active_filters.append(('Ämne: ' + subject.name, '')) %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+            <!-- Fixa dubbelfilter - visa bara EN badge för ämnesbetyg -->
+            {% if request.args.get('subject_grades_only') and not request.args.get('grade_type_filter') %}
+                {% set _ = active_filters.append(('📋 Endast ämnesbetyg', '')) %}
+            {% elif request.args.get('grade_type_filter') %}
+                {% if request.args.get('grade_type_filter') == 'subject_final' %}
+                    {% set _ = active_filters.append(('📋 Endast ämnesbetyg', '')) %}
+                {% elif request.args.get('grade_type_filter') == 'assignments' %}
+                    {% set _ = active_filters.append(('📝 Endast uppgifter/prov', '')) %}
                 {% endif %}
-                {% if request.args.get('class_id') %}
-                    {% for class in classes %}
-                        {% if class.id|string == request.args.get('class_id') %}
-                            <span class="filter-badge">Klass: {{ class.name }}</span>
-                        {% endif %}
+            {% endif %}
+            
+            {% if active_filters %}
+                <div class="filter-info">
+                    <strong>🔍 Aktiva filter:</strong>
+                    {% for filter_text, filter_class in active_filters %}
+                        <span class="filter-badge">{{ filter_text }}</span>
                     {% endfor %}
-                {% endif %}
-                {% if request.args.get('subject_filter') %}
-                    {% for subject in all_subjects %}
-                        {% if subject.id|string == request.args.get('subject_filter') %}
-                            <span class="filter-badge">Ämne: {{ subject.name }}</span>
-                        {% endif %}
-                    {% endfor %}
-                {% endif %}
-                {% if request.args.get('subject_grades_only') %}
-                    <span class="filter-badge">📋 Endast ämnesbetyg</span>
-                {% endif %}
-                {% if request.args.get('grade_type_filter') %}
-                    <span class="filter-badge">
-                        {% if request.args.get('grade_type_filter') == 'subject_final' %}
-                            📋 Endast ämnesbetyg
-                        {% elif request.args.get('grade_type_filter') == 'assignments' %}
-                            📝 Endast uppgifter/prov
-                        {% endif %}
-                    </span>
-                {% endif %}
-            </div>
+                </div>
             {% endif %}
         </div>
 
         {% if students %}
             <!-- Resultatsammanfattning -->
-            <div class="results-summary">
+            <div class="results-summary fade-in">
                 <div class="summary-stats">
                     <div class="stat-item">
                         <span class="stat-number">{{ students|length }}</span>
-                        <div class="stat-label">Elever hittade</div>
+                        <div class="stat-label">👥 Elever hittade</div>
                     </div>
                     <div class="stat-item">
                         <span class="stat-number">{{ total_grades }}</span>
-                        <div class="stat-label">Totala betyg</div>
+                        <div class="stat-label">📊 Totala betyg</div>
                     </div>
                     <div class="stat-item">
                         <span class="stat-number">{{ average_grade|round(1) if average_grade else 'N/A' }}</span>
-                        <div class="stat-label">Genomsnittligt betyg</div>
+                        <div class="stat-label">📈 Genomsnittligt betyg</div>
                     </div>
                     <div class="stat-item">
                         <span class="stat-number">{{ unique_subjects }}</span>
-                        <div class="stat-label">Ämnen representerade</div>
+                        <div class="stat-label">📚 Ämnen representerade</div>
                     </div>
                 </div>
                 
-                <div style="margin-top: 1rem; text-align: right;">
-                    <!-- Excel Export -->
+                <div class="export-section">
                     <a href="{{ url_for('export_grades', 
                                 format='excel',
                                 search=request.args.get('search', ''),
@@ -598,7 +847,6 @@
                                 grade_type_filter=request.args.get('grade_type_filter', '')
                             ) }}" class="export-button">📊 Exportera till Excel</a>
                     
-                    <!-- CSV Export -->
                     <a href="{{ url_for('export_grades', 
                                 format='csv',
                                 search=request.args.get('search', ''),
@@ -606,9 +854,8 @@
                                 subject_filter=request.args.get('subject_filter', ''),
                                 subject_grades_only=request.args.get('subject_grades_only', ''),
                                 grade_type_filter=request.args.get('grade_type_filter', '')
-                            ) }}" class="export-button">📊 Exportera till CSV</a>
+                            ) }}" class="export-button">📄 Exportera till CSV</a>
                     
-                    <!-- PDF Export -->
                     <a href="{{ url_for('export_grades', 
                                 format='pdf',
                                 search=request.args.get('search', ''),
@@ -616,55 +863,58 @@
                                 subject_filter=request.args.get('subject_filter', ''),
                                 subject_grades_only=request.args.get('subject_grades_only', ''),
                                 grade_type_filter=request.args.get('grade_type_filter', '')
-                            ) }}" class="export-button">📄 Exportera till PDF</a>
+                            ) }}" class="export-button">📋 Exportera till PDF</a>
                 </div>
             </div>
 
             <!-- Elevlista -->
             <div class="students-grid">
                 {% for student_data in students %}
-                    <div class="student-card">
+                    <div class="student-card fade-in">
                         <div class="student-header">
                             <div class="student-info">
                                 <h3 class="student-name">{{ student_data.student.get_full_name() or student_data.student.username }}</h3>
                                 <div class="student-meta">
-                                    <strong>Klass:</strong> {{ student_data.student.get_class_name() }} 
+                                    <strong>🏫 Klass:</strong> {{ student_data.student.get_class_name() }} 
                                     {% if student_data.student.school_class and student_data.student.school_class.year_level %}
                                         (Årskurs {{ student_data.student.school_class.year_level }})
                                     {% endif %}
-                                    | <strong>Email:</strong> <span class="student-email">{{ student_data.student.email }}</span> 
-                                    | <strong>Användarnamn:</strong> <span class="student-username">{{ student_data.student.username }}</span>
+                                    <br>
+                                    <strong>📧 Email:</strong> <span class="student-email">{{ student_data.student.email }}</span> 
+                                    <br>
+                                    <strong>👤 Användarnamn:</strong> <span class="student-username">{{ student_data.student.username }}</span>
                                     {% if student_data.student.personal_number %}
-                                        | <strong>Personnummer:</strong> {{ student_data.student.personal_number }}
+                                        <br><strong>🆔 Personnummer:</strong> {{ student_data.student.personal_number }}
                                     {% endif %}
                                 </div>
                             </div>
                             <div class="student-stats">
                                 <div class="stat">
                                     <div class="stat-value">{{ student_data.total_grades }}</div>
-                                    <div class="stat-label">Betyg</div>
+                                    <div class="stat-label">📊 Betyg</div>
                                 </div>
                                 <div class="stat">
                                     <div class="stat-value">{{ student_data.average_grade|round(1) if student_data.average_grade else 'N/A' }}</div>
-                                    <div class="stat-label">Snitt</div>
+                                    <div class="stat-label">📈 Snitt</div>
                                 </div>
                                 <div class="stat">
                                     <div class="stat-value">{{ student_data.subjects_count }}</div>
-                                    <div class="stat-label">Ämnen</div>
+                                    <div class="stat-label">📚 Ämnen</div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="grades-section">
-                            <h4>📚 
+                            <h4>
                                 {% if request.args.get('subject_grades_only') or request.args.get('grade_type_filter') == 'subject_final' %}
-                                    Ämnesbetyg (slutbetyg)
+                                    📋 Ämnesbetyg (slutbetyg)
                                 {% elif request.args.get('grade_type_filter') == 'assignments' %}
-                                    Uppgifter och Prov
+                                    📝 Uppgifter och Prov
                                 {% else %}
-                                    Ämnesbetyg
+                                    📚 Ämnesbetyg
                                 {% endif %}
                             </h4>
+                            
                             {% if student_data.grades %}
                                 <div class="subjects-grid">
                                     {% for grade_data in student_data.grades %}
@@ -683,36 +933,47 @@
                                             </div>
                                             <div class="grade-details">
                                                 {% if grade_data.grade %}
-                                                    Betyg: {{ grade_data.grade }}/10
-                                                    <br>{{ grade_data.type if grade_data.type else 'Betyg' }}
+                                                    <strong>Betyg:</strong> {{ grade_data.grade }}/10
+                                                    <br><strong>Typ:</strong> {{ grade_data.type if grade_data.type else 'Betyg' }}
                                                 {% else %}
-                                                    Inget betyg satt
+                                                    <em>Inget betyg satt</em>
                                                 {% endif %}
                                             </div>
                                             {% if grade_data.teacher_comment %}
                                                 <div class="grade-comment">
-                                                    "{{ grade_data.teacher_comment[:100] }}{% if grade_data.teacher_comment|length > 100 %}...{% endif %}"
+                                                    "{{ grade_data.teacher_comment[:150] }}{% if grade_data.teacher_comment|length > 150 %}...{% endif %}"
                                                 </div>
                                             {% endif %}
                                             <div class="teacher-name">
-                                                Lärare: {{ grade_data.teacher_name or 'Okänd' }}
+                                                <strong>👨‍🏫 Lärare:</strong> {{ grade_data.teacher_name or 'Okänd' }}
                                                 {% if grade_data.updated_at %}
-                                                    <br>Uppdaterad: {{ grade_data.updated_at.strftime('%Y-%m-%d') }}
+                                                    <br><strong>📅 Uppdaterad:</strong> {{ grade_data.updated_at.strftime('%Y-%m-%d') }}
                                                 {% endif %}
                                             </div>
                                         </div>
                                     {% endfor %}
                                 </div>
                             {% else %}
-                                <div style="text-align: center; color: #718096; padding: 2rem;">
-                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
+                                <div class="no-grades-placeholder">
+                                    <div class="icon">
+                                        {% if request.args.get('subject_grades_only') or request.args.get('grade_type_filter') == 'subject_final' %}
+                                            📋
+                                        {% elif request.args.get('grade_type_filter') == 'assignments' %}
+                                            📝
+                                        {% else %}
+                                            📊
+                                        {% endif %}
+                                    </div>
                                     <div>
                                         {% if request.args.get('subject_grades_only') or request.args.get('grade_type_filter') == 'subject_final' %}
-                                            Inga ämnesbetyg registrerade än
+                                            <strong>Inga ämnesbetyg registrerade än</strong>
+                                            <br><small>Slutbetyg har inte satts för denna elev</small>
                                         {% elif request.args.get('grade_type_filter') == 'assignments' %}
-                                            Inga uppgifts-/provbetyg registrerade än
+                                            <strong>Inga uppgifts-/provbetyg registrerade än</strong>
+                                            <br><small>Inga individuella uppgifter eller prov har bedömts</small>
                                         {% else %}
-                                            Inga betyg registrerade än
+                                            <strong>Inga betyg registrerade än</strong>
+                                            <br><small>Denna elev har inga betyg i systemet</small>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -724,7 +985,7 @@
 
         {% else %}
             <!-- Inga resultat -->
-            <div class="no-results">
+            <div class="no-results fade-in">
                 <div class="icon">🔍</div>
                 <h3>Inga elever hittades</h3>
                 <p>
@@ -733,15 +994,17 @@
                             Ingen elev matchade sökningen "<strong>{{ request.args.get('search') }}</strong>".
                             <br><br>
                         {% endif %}
-                        Prova att:
+                        <strong>Prova att:</strong>
                         <ul style="text-align: left; display: inline-block; margin-top: 1rem;">
-                            <li>Kontrollera stavningen</li>
-                            <li>Använd kortare söktermer</li>
-                            <li>Ändra klass-, ämnes- eller betygstypfilter</li>
-                            <li><a href="{{ url_for('view_student_detailed_grades') }}">Visa alla elever</a></li>
+                            <li>✏️ Kontrollera stavningen i sökfältet</li>
+                            <li>🔤 Använd kortare eller enklare söktermer</li>
+                            <li>🔄 Ändra klass-, ämnes- eller betygstypfilter</li>
+                            <li>🌐 <a href="{{ url_for('view_student_detailed_grades') }}" style="color: #3182ce; font-weight: 600;">Visa alla elever</a></li>
                         </ul>
                     {% else %}
                         Det finns inga elever registrerade på denna skola ännu.
+                        <br><br>
+                        <em>Kontakta systemadministratören för att lägga till elever.</em>
                     {% endif %}
                 </p>
             </div>
@@ -749,7 +1012,7 @@
     </div>
 
     <script>
-        // Förbättrad sökfunktionalitet
+        // Förbättrad sökfunktionalitet med bättre UX
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('search');
             const classSelect = document.getElementById('class_id');
@@ -759,109 +1022,179 @@
             const searchForm = document.getElementById('searchForm');
             const searchBtn = document.getElementById('searchBtn');
             
-            // Auto-submit när dropdown-filter ändras
+            // Lägg till loading-indikator
+            function showLoading() {
+                searchBtn.innerHTML = '⏳ Söker...';
+                searchBtn.disabled = true;
+            }
+            
+            function hideLoading() {
+                searchBtn.innerHTML = '🔍 Sök';
+                searchBtn.disabled = false;
+            }
+            
+            // Auto-submit med debounce för dropdowns
+            let submitTimeout;
+            function delayedSubmit() {
+                showLoading();
+                clearTimeout(submitTimeout);
+                submitTimeout = setTimeout(() => {
+                    searchForm.submit();
+                }, 300);
+            }
+            
+            // Event listeners för filter-ändringar
             classSelect.addEventListener('change', function() {
-                console.log('Class filter changed:', this.value);
-                searchForm.submit();
+                console.log('🏫 Class filter changed:', this.value);
+                delayedSubmit();
             });
             
             subjectSelect.addEventListener('change', function() {
-                console.log('Subject filter changed:', this.value);
-                searchForm.submit();
+                console.log('📚 Subject filter changed:', this.value);
+                delayedSubmit();
             });
 
-            // Auto-submit när checkbox ändras
+            // Synkronisering mellan checkbox och dropdown
             subjectGradesOnly.addEventListener('change', function() {
-                console.log('Subject grades only changed:', this.checked);
-                // Om checkbox är ikryssad, sätt grade_type_filter till 'subject_final'
+                console.log('📋 Subject grades only changed:', this.checked);
                 if (this.checked) {
                     gradeTypeFilter.value = 'subject_final';
                 } else if (gradeTypeFilter.value === 'subject_final') {
                     gradeTypeFilter.value = '';
                 }
-                searchForm.submit();
+                delayedSubmit();
             });
 
-            // Auto-submit när grade type filter ändras
             gradeTypeFilter.addEventListener('change', function() {
-                console.log('Grade type filter changed:', this.value);
-                // Synka med checkbox
-                subjectGradesOnly.checked = (this.value === 'subject_final');
-                searchForm.submit();
+                console.log('🎯 Grade type filter changed:', this.value);
+                // Synka med checkbox - uppdatera endast om nödvändigt
+                const shouldCheck = (this.value === 'subject_final');
+                if (subjectGradesOnly.checked !== shouldCheck) {
+                    subjectGradesOnly.checked = shouldCheck;
+                }
+                delayedSubmit();
             });
             
-            // Förbättrad hantering av sökfältet
+            // Förbättrad sökfälthantering
+            let searchTimeout;
+            searchInput.addEventListener('input', function() {
+                const length = this.value.length;
+                clearTimeout(searchTimeout);
+                
+                // Visuell feedback
+                if (length >= 2) {
+                    searchBtn.style.background = 'linear-gradient(135deg, #38a169 0%, #2f855a 100%)';
+                    searchBtn.style.boxShadow = '0 2px 8px rgba(56, 161, 105, 0.4)';
+                } else {
+                    searchBtn.style.background = 'linear-gradient(135deg, #4299e1 0%, #3182ce 100%)';
+                    searchBtn.style.boxShadow = '0 2px 8px rgba(66, 153, 225, 0.3)';
+                }
+            });
+            
             searchInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    console.log('Search triggered by Enter key:', this.value);
+                    console.log('🔍 Search triggered by Enter:', this.value);
+                    showLoading();
                     searchForm.submit();
                 }
             });
             
-            // Hantera sökknappen
             searchBtn.addEventListener('click', function(e) {
                 e.preventDefault();
-                console.log('Search triggered by button:', searchInput.value);
+                console.log('🔍 Search triggered by button:', searchInput.value);
+                showLoading();
                 searchForm.submit();
             });
             
-            // Auto-focus på sökfältet när sidan laddas
+            // Auto-focus och selection
             searchInput.focus();
+            if (searchInput.value) {
+                searchInput.select();
+            }
             
-            // Live-feedback för sökning
-            searchInput.addEventListener('input', function() {
-                const length = this.value.length;
-                if (length >= 2) {
-                    searchBtn.style.background = '#38a169'; // Grön när redo att söka
-                } else {
-                    searchBtn.style.background = '#4299e1'; // Standard blå
-                }
-            });
+            // Highlight search terms efter DOM är klar
+            setTimeout(highlightSearchTerms, 100);
             
-            // Markera söktermer i resultaten
-            highlightSearchTerms();
+            // Smooth scroll för bättre UX
+            if (window.location.hash) {
+                setTimeout(() => {
+                    document.querySelector(window.location.hash)?.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }, 500);
+            }
         });
         
-        // Förbättrad highlight-funktion
+        // Förbättrad highlight-funktion med bättre prestanda
         function highlightSearchTerms() {
             const searchTerm = '{{ request.args.get("search", "") }}';
-            if (searchTerm && searchTerm.trim().length > 0) {
-                console.log('Highlighting search term:', searchTerm);
-                
-                // Skapa regex för case-insensitive sökning
-                const regex = new RegExp(`(${escapeRegex(searchTerm.trim())})`, 'gi');
-                
-                // Sök i elevnamn, användarnamn och email
-                const elementsToSearch = document.querySelectorAll(
-                    '.student-name, .student-email, .student-username'
-                );
-                
-                elementsToSearch.forEach(element => {
-                    const originalText = element.textContent;
-                    const highlightedText = originalText.replace(regex, '<span class="search-highlight">$1</span>');
-                    
-                    if (originalText !== highlightedText) {
-                        element.innerHTML = highlightedText;
-                        console.log('Highlighted in element:', element.className);
-                    }
-                });
-            }
+            if (!searchTerm || searchTerm.trim().length < 2) return;
+            
+            console.log('🎯 Highlighting search term:', searchTerm);
+            
+            const regex = new RegExp(`(${escapeRegex(searchTerm.trim())})`, 'gi');
+            const selectors = '.student-name, .student-email, .student-username';
+            
+            document.querySelectorAll(selectors).forEach(element => {
+                const originalText = element.textContent;
+                if (regex.test(originalText)) {
+                    element.innerHTML = originalText.replace(regex, '<span class="search-highlight">$1</span>');
+                }
+            });
         }
         
-        // Hjälpfunktion för att escape-a regex-tecken
         function escapeRegex(string) {
-            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\            // Auto-focus på');
+            // Replace special regex characters with escaped version
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
+
+        // Performance monitoring
+        console.log('📊 Student Grades Page Loaded:', {
+            searchParams: {
+                search: '{{ request.args.get("search", "") }}',
+                class_id: '{{ request.args.get("class_id", "") }}',
+                subject_filter: '{{ request.args.get("subject_filter", "") }}',
+                subject_grades_only: {{ 'true' if request.args.get("subject_grades_only") else 'false' }},
+                grade_type_filter: '{{ request.args.get("grade_type_filter", "") }}'
+            },
+            results: {
+                total_students: {{ students|length if students else 0 }},
+                total_grades: {{ total_grades if total_grades else 0 }},
+                average_grade: {{ average_grade|round(2) if average_grade else 'null' }}
+            }
+        });
         
-        // Debug-information
-        console.log('Search page loaded with parameters:', {
-            search: '{{ request.args.get("search", "") }}',
-            class_id: '{{ request.args.get("class_id", "") }}',
-            subject_filter: '{{ request.args.get("subject_filter", "") }}',
-            subject_grades_only: '{{ request.args.get("subject_grades_only", "") }}',
-            grade_type_filter: '{{ request.args.get("grade_type_filter", "") }}',
-            total_students: {{ students|length if students else 0 }}
+        // Accessibility improvements
+        document.addEventListener('keydown', function(e) {
+            // ESC för att rensa sökfält
+            if (e.key === 'Escape' && document.activeElement === document.getElementById('search')) {
+                document.getElementById('search').value = '';
+                document.getElementById('search').focus();
+            }
+        });
+        
+        // Add fade-in animation to cards
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+        
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+        
+        // Observe all cards for smooth reveal animation
+        document.querySelectorAll('.student-card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(card);
         });
     </script>
 </body>
