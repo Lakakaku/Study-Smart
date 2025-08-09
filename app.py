@@ -5557,23 +5557,39 @@ def view_student_detailed_grades():
                          unique_subjects=unique_subjects_count)
 
 
-
-
 @app.route('/export_grades')
 @login_required 
 def export_grades():
-    """Exportera betygsdata till Excel eller PDF"""
+    """Exportera betygsdata till Excel, CSV eller PDF"""
     
     if not current_user.is_school_admin() or not current_user.can_access_school_data():
         flash('Du har inte behörighet att exportera data.', 'error')
         return redirect(url_for('index'))
     
-    export_format = request.args.get('format', 'excel')
+    export_format = request.args.get('format', 'csv')
     
     # Hämta samma data som huvudsidan (med filter)
     search_query = request.args.get('search', '').strip()
     class_filter = request.args.get('class_id', '')
     subject_filter = request.args.get('subject_filter', '')
+    subject_grades_only = request.args.get('subject_grades_only', '') == '1'
+    grade_type_filter = request.args.get('grade_type_filter', '')
+    
+    # Hämta klasser och ämnen för validering
+    classes = SchoolClass.query.filter(
+        SchoolClass.school_id == current_user.school_id
+    ).all()
+    
+    school_teachers = User.query.filter_by(
+        school_id=current_user.school_id,
+        user_type='teacher',
+        is_active=True
+    ).all()
+    
+    teacher_ids = [t.id for t in school_teachers]
+    all_subjects = Subject.query.filter(
+        Subject.user_id.in_(teacher_ids)
+    ).all() if teacher_ids else []
     
     # Samma logik som i view_student_detailed_grades för att hämta data
     students_query = User.query.filter(
@@ -5598,85 +5614,165 @@ def export_grades():
     students = students_query.order_by(User.last_name, User.first_name).all()
     
     if export_format == 'excel':
-        return export_to_excel(students, subject_filter)
+        return export_to_excel(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+    elif export_format == 'csv':
+        return export_to_csv(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
     elif export_format == 'pdf':
-        return export_to_pdf(students, subject_filter)
+        return export_to_pdf(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
     else:
         flash('Ogiltigt exportformat.', 'error')
         return redirect(url_for('view_student_detailed_grades'))
 
 
-def export_to_excel(students, subject_filter=None):
-    """Exportera till Excel-fil"""
+def export_to_csv(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None):
+    """Exportera till CSV-fil (fungerar utan externa dependencies)"""
     try:
-        import pandas as pd
-        from io import BytesIO
+        import csv
+        from io import StringIO
         
-        # Förbered data för Excel
-        excel_data = []
+        # Skapa CSV buffer
+        csv_buffer = StringIO()
+        writer = csv.writer(csv_buffer)
         
+        # Skriv headers
+        headers = [
+            'Elev ID', 'Namn', 'Användarnamn', 'Email', 'Klass', 
+            'Ämne', 'Betyg', 'Betygtyp', 'Lärarkommentar', 'Uppdaterat', 'Lärare'
+        ]
+        writer.writerow(headers)
+        
+        # Förbered data för CSV
         for student in students:
             # Samma logik som i huvudfunktionen för att hämta betyg
-            subject_grades_query = db.session.query(SubjectGrade).join(Subject).filter(
-                SubjectGrade.student_id == student.id
-            )
-            
-            if subject_filter and subject_filter.isdigit():
-                subject_grades_query = subject_grades_query.filter(SubjectGrade.subject_id == int(subject_filter))
-            
-            subject_grades = subject_grades_query.all()
+            grades_data = get_student_grades_data(student, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
             
             # Om inga betyg finns, lägg till en rad ändå
-            if not subject_grades:
-                excel_data.append({
-                    'Elev ID': student.id,
-                    'Namn': student.get_full_name(),
-                    'Användarnamn': student.username,
-                    'Email': student.email,
-                    'Klass': student.get_class_name(),
-                    'Ämne': 'Inga betyg',
-                    'Betyg': '',
-                    'Lärarkommentar': '',
-                    'Uppdaterat': '',
-                    'Lärare': ''
-                })
+            if not grades_data:
+                writer.writerow([
+                    student.id,
+                    student.get_full_name() or student.username,
+                    student.username,
+                    student.email or '',
+                    student.get_class_name() or 'Ingen klass',
+                    'Inga betyg',
+                    '',
+                    '',
+                    '',
+                    '',
+                    ''
+                ])
             else:
-                for grade in subject_grades:
-                    teacher = User.query.get(grade.graded_by) if grade.graded_by else None
-                    excel_data.append({
-                        'Elev ID': student.id,
-                        'Namn': student.get_full_name(),
-                        'Användarnamn': student.username,
-                        'Email': student.email,
-                        'Klass': student.get_class_name(),
-                        'Ämne': grade.subject.name,
-                        'Betyg': grade.grade,
-                        'Lärarkommentar': grade.teacher_comment or '',
-                        'Uppdaterat': grade.updated_at.strftime('%Y-%m-%d %H:%M') if grade.updated_at else '',
-                        'Lärare': teacher.get_full_name() if teacher else 'Okänd'
-                    })
+                for grade_info in grades_data:
+                    writer.writerow([
+                        student.id,
+                        student.get_full_name() or student.username,
+                        student.username,
+                        student.email or '',
+                        student.get_class_name() or 'Ingen klass',
+                        grade_info['subject_name'],
+                        grade_info['grade'] if grade_info['grade'] else '',
+                        grade_info['type'] or 'Betyg',
+                        grade_info['teacher_comment'] or '',
+                        grade_info['updated_at'].strftime('%Y-%m-%d %H:%M') if grade_info['updated_at'] else '',
+                        grade_info['teacher_name'] or 'Okänd'
+                    ])
         
-        # Skapa DataFrame och Excel-fil
-        df = pd.DataFrame(excel_data)
+        # Skapa response
+        csv_content = csv_buffer.getvalue()
+        csv_buffer.close()
         
-        # Skapa BytesIO buffer
+        # Skapa filnamn med datum
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f"elevbetyg_{current_user.school.name}_{timestamp}.csv"
+        
+        response = make_response(csv_content)
+        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response.headers['Content-type'] = 'text/csv; charset=utf-8'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Fel vid CSV-export: {str(e)}', 'error')
+        return redirect(url_for('view_student_detailed_grades'))
+
+
+def export_to_excel(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None):
+    """Exportera till Excel-fil (försöker med openpyxl först, annars CSV)"""
+    try:
+        # Försök med openpyxl först
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.utils.dataframe import dataframe_to_rows
+        from io import BytesIO
+        
+        # Skapa workbook och worksheet
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Elevbetyg"
+        
+        # Headers
+        headers = [
+            'Elev ID', 'Namn', 'Användarnamn', 'Email', 'Klass', 
+            'Ämne', 'Betyg', 'Betygtyp', 'Lärarkommentar', 'Uppdaterat', 'Lärare'
+        ]
+        
+        # Skriv headers med formatting
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Skriv data
+        row = 2
+        for student in students:
+            grades_data = get_student_grades_data(student, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+            
+            if not grades_data:
+                # Lägg till rad utan betyg
+                ws.cell(row=row, column=1, value=student.id)
+                ws.cell(row=row, column=2, value=student.get_full_name() or student.username)
+                ws.cell(row=row, column=3, value=student.username)
+                ws.cell(row=row, column=4, value=student.email or '')
+                ws.cell(row=row, column=5, value=student.get_class_name() or 'Ingen klass')
+                ws.cell(row=row, column=6, value='Inga betyg')
+                row += 1
+            else:
+                for grade_info in grades_data:
+                    ws.cell(row=row, column=1, value=student.id)
+                    ws.cell(row=row, column=2, value=student.get_full_name() or student.username)
+                    ws.cell(row=row, column=3, value=student.username)
+                    ws.cell(row=row, column=4, value=student.email or '')
+                    ws.cell(row=row, column=5, value=student.get_class_name() or 'Ingen klass')
+                    ws.cell(row=row, column=6, value=grade_info['subject_name'])
+                    ws.cell(row=row, column=7, value=grade_info['grade'] if grade_info['grade'] else '')
+                    ws.cell(row=row, column=8, value=grade_info['type'] or 'Betyg')
+                    ws.cell(row=row, column=9, value=grade_info['teacher_comment'] or '')
+                    ws.cell(row=row, column=10, value=grade_info['updated_at'].strftime('%Y-%m-%d %H:%M') if grade_info['updated_at'] else '')
+                    ws.cell(row=row, column=11, value=grade_info['teacher_name'] or 'Okänd')
+                    row += 1
+        
+        # Autofit kolumner
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Spara till BytesIO
         excel_buffer = BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name='Elevbetyg', index=False)
-            
-            # Formatera kolumner
-            workbook = writer.book
-            worksheet = writer.sheets['Elevbetyg']
-            
-            # Autofit kolumnbredd
-            for i, col in enumerate(df.columns):
-                max_length = max(df[col].astype(str).apply(len).max(), len(col))
-                worksheet.set_column(i, i, min(max_length + 2, 50))
-        
+        wb.save(excel_buffer)
         excel_buffer.seek(0)
         
         # Skapa filnamn med datum
-        filename = f"elevbetyg_{current_user.school.name}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f"elevbetyg_{current_user.school.name}_{timestamp}.xlsx"
         
         return send_file(
             excel_buffer,
@@ -5686,82 +5782,112 @@ def export_to_excel(students, subject_filter=None):
         )
         
     except ImportError:
-        flash('Excel-export kräver pandas. Kontakta administratören.', 'error')
-        return redirect(url_for('view_student_detailed_grades'))
+        # Fallback till CSV om openpyxl inte finns
+        flash('Excel-export kräver openpyxl. Exporterar som CSV istället.', 'info')
+        return export_to_csv(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
     except Exception as e:
         flash(f'Fel vid Excel-export: {str(e)}', 'error')
         return redirect(url_for('view_student_detailed_grades'))
 
 
-def export_to_pdf(students, subject_filter=None):
-    """Exportera till PDF-fil - enkel implementering"""
+def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None):
+    """Exportera till PDF-fil (enkel implementering med ReportLab)"""
     try:
-        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib.pagesizes import letter, A4, landscape
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib import colors
+        from reportlab.lib.units import inch
         from io import BytesIO
         
         # Skapa PDF buffer
         pdf_buffer = BytesIO()
         
-        # Skapa dokument
-        doc = SimpleDocTemplate(pdf_buffer, pagesize=A4)
+        # Skapa dokument i landscape för bättre plats
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=landscape(A4), 
+                              rightMargin=0.5*inch, leftMargin=0.5*inch,
+                              topMargin=0.5*inch, bottomMargin=0.5*inch)
         elements = []
         styles = getSampleStyleSheet()
         
         # Titel
-        title = Paragraph(f"Elevbetyg - {current_user.school.name}", styles['Title'])
+        title_text = f"Elevbetyg - {current_user.school.name}"
+        if subject_grades_only:
+            title_text += " (Endast ämnesbetyg)"
+        elif grade_type_filter == 'assignments':
+            title_text += " (Endast uppgifter/prov)"
+            
+        title = Paragraph(title_text, styles['Title'])
         elements.append(title)
         elements.append(Spacer(1, 20))
         
         # Skapa tabelldata
-        table_data = [['Namn', 'Klass', 'Ämne', 'Betyg', 'Uppdaterat']]
+        table_data = [['Namn', 'Klass', 'Ämne', 'Betyg', 'Typ', 'Lärare', 'Datum']]
         
         for student in students:
-            subject_grades = db.session.query(SubjectGrade).join(Subject).filter(
-                SubjectGrade.student_id == student.id
-            ).all()
+            grades_data = get_student_grades_data(student, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
             
-            if not subject_grades:
+            if not grades_data:
                 table_data.append([
-                    student.get_full_name(),
-                    student.get_class_name(),
+                    student.get_full_name() or student.username,
+                    student.get_class_name() or 'Ingen klass',
                     'Inga betyg',
+                    '-',
+                    '-',
                     '-',
                     '-'
                 ])
             else:
-                for grade in subject_grades:
+                for grade_info in grades_data:
+                    # Korta ned långa texter för PDF
+                    grade_type = grade_info['type'] or 'Betyg'
+                    if len(grade_type) > 15:
+                        grade_type = grade_type[:12] + '...'
+                    
+                    teacher_name = grade_info['teacher_name'] or 'Okänd'
+                    if len(teacher_name) > 15:
+                        teacher_name = teacher_name[:12] + '...'
+                    
                     table_data.append([
-                        student.get_full_name(),
-                        student.get_class_name(),
-                        grade.subject.name,
-                        str(grade.grade),
-                        grade.updated_at.strftime('%Y-%m-%d') if grade.updated_at else '-'
+                        student.get_full_name() or student.username,
+                        student.get_class_name() or 'Ingen',
+                        grade_info['subject_name'],
+                        str(grade_info['grade']) if grade_info['grade'] else '-',
+                        grade_type,
+                        teacher_name,
+                        grade_info['updated_at'].strftime('%Y-%m-%d') if grade_info['updated_at'] else '-'
                     ])
         
-        # Skapa tabell
-        table = Table(table_data)
+        # Skapa tabell med anpassad kolumnbredd
+        col_widths = [1.5*inch, 0.8*inch, 1.2*inch, 0.6*inch, 1.2*inch, 1.0*inch, 0.8*inch]
+        table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
         
         elements.append(table)
+        
+        # Lägg till footer med datum
+        elements.append(Spacer(1, 20))
+        footer = Paragraph(f"Exporterat: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles['Normal'])
+        elements.append(footer)
         
         # Bygg PDF
         doc.build(elements)
         pdf_buffer.seek(0)
         
         # Skapa filnamn
-        filename = f"elevbetyg_{current_user.school.name}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f"elevbetyg_{current_user.school.name}_{timestamp}.pdf"
         
         return send_file(
             pdf_buffer,
@@ -5776,6 +5902,227 @@ def export_to_pdf(students, subject_filter=None):
     except Exception as e:
         flash(f'Fel vid PDF-export: {str(e)}', 'error')
         return redirect(url_for('view_student_detailed_grades'))
+
+
+def get_student_grades_data(student, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None):
+    """Hjälpfunktion för att hämta studentens betygsdata med filtrering"""
+    
+    if teacher_ids is None:
+        school_teachers = User.query.filter_by(
+            school_id=current_user.school_id,
+            user_type='teacher',
+            is_active=True
+        ).all()
+        teacher_ids = [t.id for t in school_teachers]
+    
+    grades_data = []
+    
+    # 1. Hämta ämnesbetyg (slutbetyg)
+    if grade_type_filter != 'assignments':
+        subject_grades_query = db.session.query(SubjectGrade).join(Subject).filter(
+            SubjectGrade.student_id == student.id,
+            Subject.user_id.in_(teacher_ids) if teacher_ids else False
+        )
+        
+        # Applicera ämnesfilter
+        if subject_filter and subject_filter.isdigit():
+            subject_grades_query = subject_grades_query.filter(SubjectGrade.subject_id == int(subject_filter))
+        
+        subject_grades = subject_grades_query.all()
+        
+        # Lägg till ämnesbetyg
+        for subject_grade in subject_grades:
+            teacher = User.query.get(subject_grade.graded_by) if subject_grade.graded_by else None
+            teacher_name = teacher.get_full_name() if teacher else "Okänd lärare"
+            
+            grades_data.append({
+                'grade': subject_grade.grade,
+                'type': 'Ämnesbetyg',
+                'teacher_name': teacher_name,
+                'teacher_comment': subject_grade.teacher_comment,
+                'updated_at': subject_grade.updated_at,
+                'subject_name': subject_grade.subject.name
+            })
+    
+    # 2. Hämta uppgiftsbetyg (endast om inte "endast ämnesbetyg" är valt)
+    if not subject_grades_only and grade_type_filter != 'subject_final':
+        # Assignment submissions
+        assignment_grades_query = db.session.query(AssignmentSubmission, Assignment, Subject).join(
+            Assignment, AssignmentSubmission.assignment_id == Assignment.id
+        ).join(
+            Subject, Assignment.subject_id == Subject.id
+        ).filter(
+            AssignmentSubmission.student_id == student.id,
+            AssignmentSubmission.grade.isnot(None),
+            Subject.user_id.in_(teacher_ids) if teacher_ids else False
+        )
+        
+        if subject_filter and subject_filter.isdigit():
+            assignment_grades_query = assignment_grades_query.filter(Assignment.subject_id == int(subject_filter))
+        
+        assignment_grades = assignment_grades_query.all()
+        
+        # Lägg till uppgiftsbetyg
+        for submission, assignment, subject in assignment_grades:
+            teacher = User.query.get(submission.graded_by) if submission.graded_by else None
+            teacher_name = teacher.get_full_name() if teacher else "Okänd lärare"
+            
+            grades_data.append({
+                'grade': submission.grade,
+                'type': f'Uppgift: {assignment.title}',
+                'teacher_name': teacher_name,
+                'teacher_comment': None,
+                'updated_at': submission.graded_at,
+                'subject_name': subject.name
+            })
+        
+        # Externa uppgifter/prov
+        external_grades_query = db.session.query(ExternalAssignment, Subject).join(
+            Subject, ExternalAssignment.subject_id == Subject.id
+        ).filter(
+            ExternalAssignment.student_id == student.id,
+            Subject.user_id.in_(teacher_ids) if teacher_ids else False
+        )
+        
+        if subject_filter and subject_filter.isdigit():
+            external_grades_query = external_grades_query.filter(ExternalAssignment.subject_id == int(subject_filter))
+        
+        external_grades = external_grades_query.all()
+        
+        # Lägg till externa betyg
+        for external, subject in external_grades:
+            teacher = User.query.get(external.created_by) if external.created_by else None
+            teacher_name = teacher.get_full_name() if teacher else "Okänd lärare"
+            
+            grades_data.append({
+                'grade': external.grade,
+                'type': f'Prov/Test: {external.name}',
+                'teacher_name': teacher_name,
+                'teacher_comment': None,
+                'updated_at': external.created_at,
+                'subject_name': subject.name
+            })
+    
+    # Sortera betyg efter ämne och typ (ämnesbetyg först)
+    grades_data.sort(key=lambda x: (
+        x['subject_name'], 
+        0 if x['type'] == 'Ämnesbetyg' else 1, 
+        x['updated_at'] or datetime.min
+    ))
+    
+    return grades_data
+
+
+# Ytterligare hjälpfunktioner för installationshantering
+
+def check_and_install_dependencies():
+    """Kontrollera och installera nödvändiga dependencies för export"""
+    import subprocess
+    import sys
+    
+    dependencies = {
+        'openpyxl': 'Excel-export',
+        'reportlab': 'PDF-export'
+    }
+    
+    missing_deps = []
+    
+    for package, description in dependencies.items():
+        try:
+            __import__(package)
+            print(f"✓ {package} är installerat ({description})")
+        except ImportError:
+            missing_deps.append((package, description))
+            print(f"✗ {package} saknas ({description})")
+    
+    if missing_deps:
+        print("\nFör att installera saknade dependencies, kör:")
+        for package, description in missing_deps:
+            print(f"pip install {package}  # För {description}")
+        
+        # Alternativt, försök installera automatiskt (om tillåtet)
+        # for package, _ in missing_deps:
+        #     try:
+        #         subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        #         print(f"✓ Installerade {package}")
+        #     except subprocess.CalledProcessError:
+        #         print(f"✗ Kunde inte installera {package} automatiskt")
+    
+    return len(missing_deps) == 0
+
+
+# Lägg till denna route för att testa dependencies
+@app.route('/admin/check_dependencies')
+@login_required
+def check_dependencies():
+    """Admin-route för att kontrollera export-dependencies"""
+    if not current_user.is_school_admin():
+        flash('Du har inte behörighet att komma åt denna sida.', 'error')
+        return redirect(url_for('index'))
+    
+    all_good = check_and_install_dependencies()
+    
+    if all_good:
+        flash('Alla export-dependencies är installerade!', 'success')
+    else:
+        flash('Vissa export-dependencies saknas. Se server-loggar för detaljer.', 'warning')
+    
+    return redirect(url_for('school_admin_index'))
+
+
+# ALTERNATIV: Enklare export utan externa dependencies
+def simple_csv_export(students, subject_filter=None):
+    """Extremt enkel CSV-export som alltid fungerar"""
+    import csv
+    from io import StringIO
+    
+    output = StringIO()
+    writer = csv.writer(output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    
+    # Headers
+    writer.writerow(['Namn', 'Email', 'Klass', 'Ämne', 'Betyg', 'Datum'])
+    
+    # Data
+    for student in students:
+        # Enkla ämnesbetyg
+        subject_grades = db.session.query(SubjectGrade).join(Subject).filter(
+            SubjectGrade.student_id == student.id
+        ).all()
+        
+        if not subject_grades:
+            writer.writerow([
+                student.get_full_name() or student.username,
+                student.email or '',
+                student.get_class_name() or '',
+                'Inga betyg',
+                '',
+                ''
+            ])
+        else:
+            for grade in subject_grades:
+                writer.writerow([
+                    student.get_full_name() or student.username,
+                    student.email or '',
+                    student.get_class_name() or '',
+                    grade.subject.name,
+                    grade.grade or '',
+                    grade.updated_at.strftime('%Y-%m-%d') if grade.updated_at else ''
+                ])
+    
+    # Returnera CSV-innehåll
+    csv_content = output.getvalue()
+    output.close()
+    
+    response = make_response(csv_content)
+    response.headers['Content-Disposition'] = f'attachment; filename="elevbetyg_enkel.csv"'
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    
+    return response
+
+
+
+
+
 
 
 @app.route('/api/school_admin/stats')
