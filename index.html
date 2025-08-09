@@ -103,6 +103,8 @@
         {% endfor %}
       </div>
 
+      <!-- Ersätt nyhetsvisningen i index.html (runt rad 90-120) -->
+
       {% if news and news|length > 0 %}
       <div class="school-news-banner">  
         <div class="news-banner-header">
@@ -115,7 +117,7 @@
         </div>
         
         <div class="news-banner-content">
-          {% for news_item in news %}  <!-- ÄNDRAD: Tog bort [:3] för att visa alla nyheter -->
+          {% for news_item in news %}
           <div class="news-banner-item" onclick="toggleNewsExpansion(this)">
             <div class="news-item-header">
                 <h4 class="news-item-title">{{ news_item.title }}</h4>
@@ -126,6 +128,32 @@
             </div>
             <div class="news-full-content">
                 <p>{{ news_item.content|safe }}</p>
+                
+                <!-- NY: Visa bifogade dokument -->
+                {% if news_item.documents and news_item.documents|length > 0 %}
+                <div class="news-documents">
+                    <h4>📎 Bifogade dokument:</h4>
+                    <div class="document-list">
+                        {% for document in news_item.documents %}
+                        <a href="{{ url_for('download_news_document', document_id=document.id) }}" 
+                           class="document-item" 
+                           title="Ladda ner {{ document.original_filename }}">
+                            <span class="document-icon">
+                                {% if document.file_type.startswith('image/') %}🖼️
+                                {% elif 'pdf' in document.file_type.lower() %}📄
+                                {% elif 'word' in document.file_type.lower() %}📝
+                                {% else %}📎
+                                {% endif %}
+                            </span>
+                            <span>{{ document.original_filename }}</span>
+                            {% if document.download_count > 0 %}
+                            <span class="download-count">({{ document.download_count }})</span>
+                            {% endif %}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
             {% if news_item.content|length > 120 %}
             <button class="read-more-btn" onclick="event.stopPropagation(); toggleNewsExpansion(this.parentElement);">Läs mer</button>
@@ -3799,6 +3827,97 @@ async function leaveSubject(subjectId) {
 
       .products-container::-webkit-scrollbar {
         width: 8px;
+      }
+
+
+
+      /* Lägg till dessa CSS-stilar i index_styles.css eller i <style> sektionen av index.html */
+
+      .news-documents {
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 1px solid #e2e8f0;
+      }
+
+      .news-documents h4 {
+          margin: 0 0 0.75rem 0;
+          color: #4a5568;
+          font-size: 0.9rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-weight: 600;
+      }
+
+      .document-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+      }
+
+      .document-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          background: #f7fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 0.6rem 0.8rem;
+          text-decoration: none;
+          color: #4a5568;
+          font-size: 0.85rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .document-item:hover {
+          background: #edf2f7;
+          border-color: #cbd5e0;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          color: #2d3748;
+      }
+
+      .document-icon {
+          font-size: 1.1rem;
+          display: flex;
+          align-items: center;
+      }
+
+      .download-count {
+          color: #718096;
+          font-size: 0.75rem;
+          margin-left: 0.25rem;
+          opacity: 0.8;
+      }
+
+      /* Responsivt för mobil */
+      @media (max-width: 768px) {
+          .document-list {
+              flex-direction: column;
+          }
+          
+          .document-item {
+              width: 100%;
+              justify-content: flex-start;
+          }
+      }
+
+      /* Animation för dokumentlista */
+      .document-list {
+          animation: fadeInUp 0.3s ease-out;
+      }
+
+      @keyframes fadeInUp {
+          from {
+              opacity: 0;
+              transform: translateY(10px);
+          }
+          to {
+              opacity: 1;
+              transform: translateY(0);
+          }
       }
 
       .products-container::-webkit-scrollbar-track {
