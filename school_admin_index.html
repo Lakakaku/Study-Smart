@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skolledning - {{ school.name if school else 'Okänd skola' }}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #2d3748;
+            font-size: 1.8rem;
+        }
+
+        .header .user-info {
+            color: #718096;
+            margin-left: auto;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            color: #2d3748;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            opacity: 0.9;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .news-form {
+            background: #f7fafc;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .btn {
+            background: #4299e1;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background: #3182ce;
+        }
+
+        .btn-secondary {
+            background: #718096;
+        }
+
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+
+        .recent-news {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .news-item {
+            background: #f7fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #4299e1;
+        }
+
+        .news-item h4 {
+            margin: 0 0 0.5rem 0;
+            color: #2d3748;
+        }
+
+        .news-item .news-meta {
+            font-size: 0.8rem;
+            color: #718096;
+            margin-bottom: 0.5rem;
+        }
+
+        .news-item .news-content {
+            color: #4a5568;
+            line-height: 1.5;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            background: white;
+            border: 2px solid #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #4a5568;
+            text-align: center;
+            flex: 1;
+            min-width: 200px;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            border-color: #4299e1;
+            color: #4299e1;
+            transform: translateY(-1px);
+        }
+
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            color: #22543d;
+            border-color: #38a169;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #c53030;
+            border-color: #e53e3e;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-actions {
+                flex-direction: column;
+            }
+
+            .action-btn {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏫 Skolledning - {{ school.name if school else 'Okänd skola' }}</h1>
+        <div class="user-info">
+            Inloggad som: {{ current_user.get_full_name() or current_user.username }} | 
+            <a href="{{ url_for('logout') }}" style="color: #4299e1;">Logga ut</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'danger' else category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Statistik översikt -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-number">{{ total_students }}</span>
+                <div class="stat-label">Elever</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">{{ total_teachers }}</span>
+                <div class="stat-label">Lärare</div>
+            </div>
+        </div>
+
+        <!-- Huvudinnehåll -->
+        <div class="dashboard-grid">
+            
+            <!-- Skapa ny nyhet -->
+            <div class="card">
+                <h3>📢 Ny skolnyhet</h3>
+                <form action="{{ url_for('manage_school_news') }}" method="POST" class="news-form">
+                    <div class="form-group">
+                        <label for="title">Rubrik:</label>
+                        <input type="text" id="title" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="content">Innehåll:</label>
+                        <textarea id="content" name="content" placeholder="Skriv din nyhet här..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn">Publicera nyhet</button>
+                </form>
+            </div>
+
+            <!-- Senaste nyheter -->
+            <div class="card">
+                <h3>📰 Senaste nyheter</h3>
+                <div class="recent-news">
+                    {% if recent_news %}
+                        {% for news in recent_news %}
+                            <div class="news-item">
+                                <h4>{{ news.title }}</h4>
+                                <div class="news-meta">
+                                    Av {{ news.author.get_full_name() if news.author else 'Okänd' }} • 
+                                    {{ news.created_at.strftime('%Y-%m-%d %H:%M') if news.created_at else 'Okänt datum' }}
+                                    {% if not news.is_active %}<span style="color: #e53e3e;"> • INAKTIV</span>{% endif %}
+                                </div>
+                                <div class="news-content">{{ news.content[:150] }}{% if news.content|length > 150 %}...{% endif %}</div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p style="color: #718096; text-align: center;">Inga nyheter ännu.</p>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('manage_school_news') }}" class="btn btn-secondary" style="margin-top: 1rem;">Hantera alla nyheter</a>
+            </div>
+        </div>
+
+        <!-- Snabbåtgärder -->
+        <div class="card">
+            <h3>⚡ Snabbåtgärder</h3>
+            <div class="quick-actions">
+                <a href="{{ url_for('view_all_grades') }}" class="action-btn">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                    <div><strong>Visa alla betyg</strong></div>
+                    <div style="font-size: 0.9rem; color: #718096;">Se elevers betyg i alla ämnen</div>
+                </a>
+                <a href="{{ url_for('manage_school_news') }}" class="action-btn">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
+                    <div><strong>Hantera nyheter</strong></div>
+                    <div style="font-size: 0.9rem; color: #718096;">Redigera och ta bort nyheter</div>
+                </a>
+                <a href="#" onclick="loadSchoolStats()" class="action-btn">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📈</div>
+                    <div><strong>Detaljerad statistik</strong></div>
+                    <div style="font-size: 0.9rem; color: #718096;">Visa omfattande skolstatistik</div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Statistik detaljer (dolt som standard) -->
+        <div id="detailed-stats" class="card" style="display: none;">
+            <h3>📈 Detaljerad statistik</h3>
+            <div id="stats-content">
+                <p>Laddar statistik...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function loadSchoolStats() {
+            const statsDiv = document.getElementById('detailed-stats');
+            const statsContent = document.getElementById('stats-content');
+            
+            statsDiv.style.display = 'block';
+            statsContent.innerHTML = '<p>Laddar statistik...</p>';
+            
+            fetch('/api/school_admin/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        statsContent.innerHTML = `<p style="color: #e53e3e;">Fel: ${data.error}</p>`;
+                        return;
+                    }
+                    
+                    statsContent.innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 2rem; color: #4299e1; font-weight: bold;">${data.total_students}</div>
+                                <div>Totalt antal elever</div>
+                            </div>
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 2rem; color: #48bb78; font-weight: bold;">${data.total_teachers}</div>
+                                <div>Totalt antal lärare</div>
+                            </div>
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 2rem; color: #ed8936; font-weight: bold;">${data.total_classes}</div>
+                                <div>Antal klasser</div>
+                            </div>
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 2rem; color: #9f7aea; font-weight: bold;">${data.total_subjects}</div>
+                                <div>Antal ämnen</div>
+                            </div>
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 2rem; color: #38b2ac; font-weight: bold;">${data.recent_grades}</div>
+                                <div>Betyg senaste månaden</div>
+                            </div>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    statsContent.innerHTML = `<p style="color: #e53e3e;">Kunde inte ladda statistik: ${error.message}</p>`;
+                });
+        }
+        
+        // Auto-resize textarea
+        document.addEventListener('DOMContentLoaded', function() {
+            const textarea = document.getElementById('content');
+            if (textarea) {
+                textarea.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = this.scrollHeight + 'px';
+                });
+            }
+        });
+    </script>
+</body>
+</html>
