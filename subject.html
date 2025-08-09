@@ -4153,15 +4153,25 @@ body .main-layout + .shared-files-section {
       </div>
       
       <div class="email-controls-group">
-        <input type="email" 
-              id="owner-email-input" 
-              class="owner-email-input" 
-              placeholder="Skriv in din email-adress" 
-              value="{{ subject.owner_email or '' }}">
-        <button class="save-email-btn" onclick="saveOwnerEmail()">Spara Email</button>
-        <button class="view-members-btn" onclick="toggleMembersList()">
-          👥 Visa Medlemmar
-        </button>
+          <input type="email"
+                id="owner-email-input"
+                class="owner-email-input"
+                placeholder="Skriv in din email-adress"
+                value="{{ subject.owner_email or '' }}">
+          <button class="save-email-btn" onclick="saveOwnerEmail()">Spara Email</button>
+          <button class="view-members-btn" onclick="toggleMembersList()">
+              👥 Visa Medlemmar
+          </button>
+      </div>
+
+      <!-- LÄGG TILL DETTA HÄR: -->
+      <div id="members-list" class="members-list" style="display: none;">
+          <div class="members-list-header">
+              <h4>Medlemmar (<span id="members-list-count">0</span>)</h4>
+          </div>
+          <div id="members-container" class="members-container">
+              <!-- Medlemmar kommer att laddas här dynamiskt -->
+          </div>
       </div>
     </div>
 
@@ -5411,6 +5421,13 @@ body .main-layout + .shared-files-section {
     // Toggle members list visibility
     async function toggleMembersList() {
       const membersList = document.getElementById('members-list');
+      const button = document.querySelector('.view-members-btn');
+      
+      if (!membersList) {
+        console.error('members-list element not found in DOM');
+        showAlert('Kunde inte hitta medlemslistan', 'error');
+        return;
+      }
       
       if (membersList.style.display === 'none' || membersList.style.display === '') {
         // Show members list
@@ -5418,22 +5435,27 @@ body .main-layout + .shared-files-section {
         
         // Load members if not already loaded
         if (membersData.length === 0) {
-          await loadMembersList();
+          try {
+            await loadMembersList();
+          } catch (error) {
+            console.error('Error loading members list:', error);
+            showAlert('Kunde inte ladda medlemslistan', 'error');
+            membersList.style.display = 'none';
+            return;
+          }
         }
         
         // Update button text
-        const button = document.querySelector('.view-members-btn');
         if (button) {
-          button.textContent = '👥 Dölj Medlemmar';
+          button.innerHTML = '👥 Dölj Medlemmar';
         }
       } else {
         // Hide members list
         membersList.style.display = 'none';
         
         // Update button text
-        const button = document.querySelector('.view-members-btn');
         if (button) {
-          button.textContent = '👥 Visa Medlemmar';
+          button.innerHTML = '👥 Visa Medlemmar';
         }
       }
     }
@@ -6801,27 +6823,43 @@ body .main-layout + .shared-files-section {
       const container = document.getElementById('members-container');
       const countSpan = document.getElementById('members-list-count');
       
+      if (!container) {
+        throw new Error('members-container element not found');
+      }
+      
       try {
         container.innerHTML = '<div class="loading-members">Laddar medlemmar...</div>';
         
         const response = await fetch(`/api/subject/${subjectId}/members/detailed`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
         if (data.status === 'success') {
           membersData = data.members;
           renderMembersList(membersData);
-          countSpan.textContent = `${membersData.length} medlem${membersData.length !== 1 ? 'mar' : ''}`;
+          if (countSpan) {
+            countSpan.textContent = `${membersData.length} medlem${membersData.length !== 1 ? 'mar' : ''}`;
+          }
         } else {
           throw new Error(data.message || 'Kunde inte ladda medlemmar');
         }
       } catch (error) {
         console.error('Error loading members:', error);
-        container.innerHTML = `
-          <div class="error-loading-members">
-            Fel vid laddning av medlemmar: ${error.message}
-          </div>
-        `;
-        countSpan.textContent = 'Fel';
+        if (container) {
+          container.innerHTML = `
+            <div class="error-loading-members">
+              Fel vid laddning av medlemmar: ${error.message}
+            </div>
+          `;
+        }
+        if (countSpan) {
+          countSpan.textContent = 'Fel';
+        }
+        throw error; // Re-throw so toggleMembersList can handle it
       }
     }
 
