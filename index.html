@@ -3250,11 +3250,7 @@ async function leaveSubject(subjectId) {
             transform: translateY(-2px);
         }
         
-        .news-item-header {
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: white;
-            padding: 20px;
-        }
+        
         
         .news-title {
             font-size: 1.5em;
@@ -3834,49 +3830,52 @@ async function leaveSubject(subjectId) {
       /* Lägg till dessa CSS-stilar i index_styles.css eller i <style> sektionen av index.html */
 
       .news-documents {
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid #e2e8f0;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid #e5e7eb;
       }
 
       .news-documents h4 {
-          margin: 0 0 0.75rem 0;
-          color: #4a5568;
-          font-size: 0.9rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-weight: 600;
+        margin: 0 0 12px 0;
+        color: #374151;
+        font-size: 0.875rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
       }
 
       .document-list {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
       }
 
       .document-item {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.4rem;
-          background: #f7fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          padding: 0.6rem 0.8rem;
-          text-decoration: none;
-          color: #4a5568;
-          font-size: 0.85rem;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 6px 10px;
+        text-decoration: none;
+        color: #374151;
+        font-size: 0.8rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
       }
 
       .document-item:hover {
-          background: #edf2f7;
-          border-color: #cbd5e0;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          color: #2d3748;
+        background: #e5e7eb;
+        border-color: #d1d5db;
+        color: #111827;
+      }
+
+      .download-count {
+        color: #9ca3af;
+        font-size: 0.7rem;
+        margin-left: 4px;
       }
 
       .document-icon {
@@ -3885,12 +3884,8 @@ async function leaveSubject(subjectId) {
           align-items: center;
       }
 
-      .download-count {
-          color: #718096;
-          font-size: 0.75rem;
-          margin-left: 0.25rem;
-          opacity: 0.8;
-      }
+     
+      
 
       /* Responsivt för mobil */
       @media (max-width: 768px) {
@@ -5154,10 +5149,21 @@ async function leaveSubject(subjectId) {
         border: 1px solid var(--border-color);
       }
 
+
+      @media (max-width: 768px) {
+        .news-banner-content {
+          max-height: 300px !important; /* Behåll samma höjd på mobil */
+        }
+        
+        .school-news-banner {
+          margin: 15px;
+        }
+      }
+
       /* Extra styling för när det bara finns få nyheter */
       .news-banner-content:has(.news-banner-item:nth-child(-n+2)) {
-        max-height: none; /* Ta bort max-height om det finns 2 eller färre nyheter */
-        overflow-y: visible;
+        max-height: 300px !important; /* Behåll 300px även om det finns få nyheter */
+        overflow-y: auto !important;
       }
 
       /* Alternativ styling om du vill visa en indikation att det finns mer innehåll */
@@ -5169,7 +5175,7 @@ async function leaveSubject(subjectId) {
       }
 
       .news-banner-content {
-        max-height: 300px; /* Begränsa höjden */
+        max-height: 300px !important; /* Begränsa höjden */
         overflow-y: auto; /* Lägg till vertikal scroll */
         padding: 0; /* Ta bort padding här */
         scrollbar-width: thin; /* För Firefox */
@@ -5181,194 +5187,263 @@ async function leaveSubject(subjectId) {
         width: 8px;
       }
 
-      /* Skolnyheter banner */
       .school-news-banner {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: #ffffff;
+        color: #1f2937;
         margin: 20px auto;
         max-width: 1200px;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         position: relative;
-        overflow: hidden; 
+        overflow: hidden;
       }
 
       .news-banner-header {
         display: flex;
         align-items: center;
         gap: 15px;
-        margin-bottom: 15px;
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        background: #f9fafb;
       }
 
       .news-banner-icon {
-        font-size: 2rem;
-        background: rgba(255, 255, 255, 0.2);
-        padding: 10px;
-        border-radius: 8px;
+        font-size: 1.5rem;
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 8px;
+        border-radius: 6px;
       }
 
       .news-banner-text h3 {
         margin: 0;
-        font-size: 1.4rem;
+        font-size: 1.25rem;
         font-weight: 600;
+        color: #111827;
       }
 
       .view-all-news {
-        color: rgba(255, 255, 255, 0.9);
+        color: #4f46e5;
         text-decoration: none;
-        font-size: 0.9rem;
-        margin-top: 5px;
+        font-size: 0.875rem;
+        margin-top: 4px;
         display: inline-block;
         transition: color 0.2s;
+        font-weight: 500;
       }
 
       .view-all-news:hover {
-        color: white;
+        color: #3730a3;
         text-decoration: underline;
       }
 
       .close-news-banner {
         position: absolute;
-        top: 15px;
-        right: 15px;
-        background: rgba(255, 255, 255, 0.2);
+        top: 16px;
+        right: 16px;
+        background: #f3f4f6;
         border: none;
-        color: white;
-        font-size: 1.5rem;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
+        color: #6b7280;
+        font-size: 1.25rem;
+        width: 28px;
+        height: 28px;
+        border-radius: 4px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: background-color 0.2s;
+        transition: all 0.2s;
       }
 
       .close-news-banner:hover {
-        background: rgba(255, 255, 255, 0.3);
+        background: #e5e7eb;
+        color: #374151;
       }
 
+      /* Nyhetslista - varje nyhet på en rad */
       .news-banner-content {
-        display: grid;
-        gap: 15px;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        max-height: 400px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 #f1f5f9;
       }
 
-      /* Expanderade nyheter */
-      .news-banner-item {
-          cursor: pointer;
-          transition: all 0.3s ease;
-          position: relative;
+      .news-banner-content::-webkit-scrollbar {
+        width: 6px;
       }
 
-      .news-banner-item:hover {
-          background: rgba(255, 255, 255, 0.15);
-          transform: translateY(-2px);
+      .news-banner-content::-webkit-scrollbar-track {
+        background: #f1f5f9;
       }
 
-      .news-banner-item.expanded {
-          background: rgba(255, 255, 255, 0.95);
-          color: #333;
-          border-left-color: #667eea;
-          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-          z-index: 10;
-      }
-
-      .news-full-content {
-          max-height: 0;
-          overflow: hidden;
-          transition: max-height 0.4s ease;
-          margin-top: 10px;
-      }
-
-      .news-banner-item.expanded .news-full-content {
-          max-height: 300px;
+      .news-banner-content::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
       }
 
       .read-more-btn {
-          background: none;
-          border: none;
-          color: inherit;
-          font-size: 0.85rem;
-          font-weight: 600;
-          cursor: pointer;
-          margin-top: 8px;
-          padding: 4px 8px;
-          border-radius: 4px;
-          transition: all 0.2s ease;
-          opacity: 0.8;
+        background: none;
+        border: none;
+        color: #4f46e5;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 8px;
+        padding: 4px 0;
+        transition: color 0.2s;
+      }
+
+      .read-more-btn:hover {
+        color: #3730a3;
       }
 
       .news-banner-item::after {
-          content: "⌄";
-          position: absolute;
-          bottom: 10px;
-          right: 15px;
-          font-size: 1.2rem;
-          opacity: 0.6;
-          transition: all 0.3s ease;
+        content: "›";
+        position: absolute;
+        right: 24px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1.25rem;
+        color: #9ca3af;
+        transition: all 0.2s ease;
+        pointer-events: none;
       }
 
       .news-banner-item.expanded::after {
-          content: "⌃";
-          opacity: 0.8;
+        content: "⌄";
+        color: #4f46e5;
+      }
+
+
+      .news-banner-item {
+        display: block;
+        padding: 16px 24px;
+        border-bottom: 1px solid #f3f4f6;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+        background: #ffffff;
+        margin:5px;
+      }
+
+      .news-banner-item:last-child {
+        border-bottom: none;
+      }
+
+      .news-banner-item:hover {
+        background: #f9fafb;
+      }
+
+      .news-banner-item.expanded {
+        background: #f8fafc;
+        border-left: 3px solid #4f46e5;
+        box-shadow: inset 0 0 0 1px #e0e7ff;
       }
 
       .news-item-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        gap: 10px;
+        gap: 16px;
         margin-bottom: 8px;
       }
 
       .news-item-title {
         margin: 0;
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 600;
+        color: #111827;
         flex: 1;
+        line-height: 1.4;
       }
 
       .news-item-date {
-        font-size: 0.85rem;
-        opacity: 0.8;
+        font-size: 0.8rem;
+        color: #6b7280;
         white-space: nowrap;
+        font-weight: 500;
+        background: #f3f4f6;
+        padding: 2px 8px;
+        border-radius: 4px;
+      }
+
+
+      /* Expanderat innehåll */
+      .news-full-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        margin-top: 12px;
+      }
+
+      .news-banner-item.expanded .news-full-content {
+        max-height: 300px;
+        overflow-y: auto;
+      }
+
+      .news-full-content p {
+        margin: 0;
+        font-size: 0.875rem;
+        line-height: 1.6;
+        color: #374151;
       }
 
       .news-item-preview {
         margin: 0;
-        font-size: 0.9rem;
-        line-height: 1.4;
-        opacity: 0.9;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #4b5563;
       }
 
-      /* Responsiv design */
       @media (max-width: 768px) {
         .school-news-banner {
           margin: 15px;
-          padding: 15px;
+          border-radius: 6px;
         }
         
         .news-banner-header {
+          padding: 16px 20px 12px;
           flex-direction: column;
           align-items: flex-start;
-          gap: 10px;
-        }
-        
-        .news-banner-content {
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
-        
-        .news-banner-icon {
-          font-size: 1.5rem;
-          padding: 8px;
+          gap: 8px;
         }
         
         .news-banner-text h3 {
-          font-size: 1.2rem;
+          font-size: 1.125rem;
+        }
+        
+        .news-banner-item {
+          padding: 14px 20px;
+        }
+        
+        .news-item-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        
+        .news-item-date {
+          align-self: flex-end;
+          margin-top: -6px;
+        }
+        
+        .close-news-banner {
+          top: 12px;
+          right: 12px;
+        }
+        
+        .news-banner-item::after {
+          right: 20px;
+        }
+        
+        .document-list {
+          flex-direction: column;
+        }
+        
+        .document-item {
+          width: 100%;
+          justify-content: flex-start;
         }
       }
 
