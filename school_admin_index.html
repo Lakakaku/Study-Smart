@@ -249,8 +249,9 @@
     <div class="header">
         <h1>🏫 Skolledning - {{ school.name if school else 'Okänd skola' }}</h1>
         <div class="user-info">
-            Inloggad som: {{ current_user.get_full_name() or current_user.username }} | 
-            <a href="{{ url_for('logout') }}" style="color: #4299e1;">Logga ut</a>
+            <form method="POST" action="{{ url_for('logout') }}" style="display: inline;">
+                <button type="submit" class="logout-btn">LOGGA UT</button>
+            </form>
         </div>
     </div>
 
