@@ -115,7 +115,8 @@
         </div>
         
         <div class="news-banner-content">
-          {% for news_item in news %}  <!-- ÄNDRAD: Tog bort [:3] för att visa alla nyheter -->
+          {% for news_item in news|sort(attribute='created_at')|reverse %}
+
           <div class="news-banner-item">
             <div class="news-item-header">
               <h4 class="news-item-title">{{ news_item.title }}</h4>
@@ -1546,6 +1547,139 @@ document.addEventListener('DOMContentLoaded', () => {
     clearEventForm(); 
   });
 
+
+  document.addEventListener('DOMContentLoaded', function() {
+      console.log('🔧 Initialiserar nyhetsbannerens scrollfunktion...');
+      
+      const newsContent = document.querySelector('.news-banner-content');
+      
+      if (newsContent) {
+          // Tvinga rätt inställningar
+          newsContent.style.display = 'flex';
+          newsContent.style.flexDirection = 'column';
+          newsContent.style.maxHeight = '450px';
+          newsContent.style.overflowY = 'auto';
+          newsContent.style.overflowX = 'hidden';
+          newsContent.style.gap = '12px';
+          
+          // Räkna antal nyheter
+          const newsItems = newsContent.querySelectorAll('.news-banner-item');
+          console.log(`📰 Hittade ${newsItems.length} nyheter`);
+          
+          // Om många nyheter (>8), aktivera grid på stora skärmar
+          if (newsItems.length > 8 && window.innerWidth >= 1200) {
+              newsContent.classList.add('has-many-items');
+          }
+          
+          // Debug information
+          console.log('📏 NewsContent dimensioner:', {
+              scrollHeight: newsContent.scrollHeight,
+              clientHeight: newsContent.clientHeight,
+              offsetHeight: newsContent.offsetHeight,
+              isScrollable: newsContent.scrollHeight > newsContent.clientHeight
+          });
+          
+          // Lägg till scroll-indikator om innehållet är scrollbart
+          if (newsContent.scrollHeight > newsContent.clientHeight) {
+              console.log('✅ Innehållet är scrollbart - aktiverar indikatorer');
+              
+              // Lägg till scroll-indikatorklasser
+              newsContent.classList.add('scrollable-content');
+              
+              // Hantera scroll events för visuell feedback
+              let scrollTimeout;
+              newsContent.addEventListener('scroll', function() {
+                  // Visa scrollbar tydligare under scrollning
+                  this.style.scrollbarColor = 'rgba(255, 255, 255, 0.6) rgba(255, 255, 255, 0.2)';
+                  
+                  clearTimeout(scrollTimeout);
+                  scrollTimeout = setTimeout(() => {
+                      this.style.scrollbarColor = 'rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1)';
+                  }, 1000);
+              });
+              
+              // Lägg till smooth scroll för alla länkar i nyhetsområdet
+              newsContent.style.scrollBehavior = 'smooth';
+          } else {
+              console.log('ℹ️ Allt innehåll syns utan scrollning');
+          }
+          
+          // Förbättra tillgänglighet
+          newsContent.setAttribute('role', 'region');
+          newsContent.setAttribute('aria-label', 'Senaste skolnyheter');
+          
+          // Lägg till keyboard navigation
+          newsContent.addEventListener('keydown', function(e) {
+              const focusedElement = document.activeElement;
+              const newsItems = Array.from(this.querySelectorAll('.news-banner-item'));
+              const currentIndex = newsItems.findIndex(item => item.contains(focusedElement));
+              
+              switch(e.key) {
+                  case 'ArrowDown':
+                      e.preventDefault();
+                      if (currentIndex < newsItems.length - 1) {
+                          newsItems[currentIndex + 1].focus();
+                          newsItems[currentIndex + 1].scrollIntoView({ 
+                              behavior: 'smooth', 
+                              block: 'nearest' 
+                          });
+                      }
+                      break;
+                  case 'ArrowUp':
+                      e.preventDefault();
+                      if (currentIndex > 0) {
+                          newsItems[currentIndex - 1].focus();
+                          newsItems[currentIndex - 1].scrollIntoView({ 
+                              behavior: 'smooth', 
+                              block: 'nearest' 
+                          });
+                      }
+                      break;
+              }
+          });
+          
+          // Gör nyhetsobjekt focusbara för keyboard navigation
+          newsItems.forEach((item, index) => {
+              item.setAttribute('tabindex', '0');
+              item.setAttribute('role', 'article');
+              item.addEventListener('focus', function() {
+                  this.style.outline = '2px solid rgba(255, 255, 255, 0.5)';
+                  this.style.outlineOffset = '2px';
+              });
+              item.addEventListener('blur', function() {
+                  this.style.outline = 'none';
+              });
+          });
+          
+          console.log('✅ Nyhetsbannerens scrollfunktion initialiserad');
+      } else {
+          console.log('⚠️ Ingen nyhetsbanner hittades');
+      }
+      
+      // Hantera fönsterstorlek ändringar
+      let resizeTimeout;
+      window.addEventListener('resize', function() {
+          clearTimeout(resizeTimeout);
+          resizeTimeout = setTimeout(function() {
+              const newsContent = document.querySelector('.news-banner-content');
+              if (newsContent) {
+                  const newsItems = newsContent.querySelectorAll('.news-banner-item');
+                  
+                  // Uppdatera layout baserat på skärmstorlek
+                  if (newsItems.length > 8) {
+                      if (window.innerWidth >= 1200) {
+                          newsContent.classList.add('has-many-items');
+                      } else {
+                          newsContent.classList.remove('has-many-items');
+                      }
+                  }
+                  
+                  console.log('🔄 Layout uppdaterad för ny skärmstorlek');
+              }
+          }, 250);
+      });
+  });
+
   function clearEventForm() {
     ['subject-select','test-type-select','event-title','event-description'].forEach(id => {
       const el = document.getElementById(id);
@@ -2263,6 +2397,24 @@ async function confirmDelete(subjectName, form) {
   }
 }
 
+function refreshNewsScroll() {
+    const newsContent = document.querySelector('.news-banner-content');
+    if (newsContent) {
+        // Tvinga reflow
+        newsContent.style.display = 'none';
+        newsContent.offsetHeight; // trigger reflow
+        newsContent.style.display = 'flex';
+        
+        console.log('🔄 Nyhetsscroll uppdaterad');
+    }
+}
+
+// Exportera funktionen för användning från andra delar av koden
+window.refreshNewsScroll = refreshNewsScroll;
+
+
+
+
 // Tab functionality for create/join modal
 function showTab(tabName) {
   // Hide all tabs
@@ -2404,6 +2556,8 @@ async function deleteQuizAndRefresh(quizId, subjectName) {
         });
     }
 }
+
+
 
 // Lägg till denna funktion för att uppdatera kalendern
 function refreshCalendarData() {
@@ -3092,20 +3246,7 @@ async function leaveSubject(subjectId) {
             min-height: 100vh;
         }
         
-        .news-header {
-            text-align: center;
-            margin-bottom: 30px;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
         
-        .news-header h1 {
-            color: #4f46e5;
-            margin: 0 0 10px 0;
-            font-size: 2.5em;
-        }
         
         .school-name {
             color: #6b7280;
@@ -3128,41 +3269,8 @@ async function leaveSubject(subjectId) {
             background: #3730a3;
         }
         
-        .news-item {
-            background: white;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-            transition: transform 0.2s;
-        }
         
-        .news-item:hover {
-            transform: translateY(-2px);
-        }
-        
-        .news-item-header {
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: white;
-            padding: 20px;
-        }
-        
-        .news-title {
-            font-size: 1.5em;
-            font-weight: bold;
-            margin: 0 0 10px 0;
-        }
-        
-        .news-meta {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
-        
-        .news-content {
-            padding: 20px;
-            line-height: 1.6;
-            color: #374151;
-        }
+      
         
         .no-news {
             text-align: center;
@@ -4955,169 +5063,18 @@ async function leaveSubject(subjectId) {
       }
 
       /* Extra styling för när det bara finns få nyheter */
-      .news-banner-content:has(.news-banner-item:nth-child(-n+2)) {
-        max-height: none; /* Ta bort max-height om det finns 2 eller färre nyheter */
-        overflow-y: visible;
-      }
+      
 
-      /* Alternativ styling om du vill visa en indikation att det finns mer innehåll */
-      .news-banner-content::after {
-        content: "";
-        display: block;
-        height: 1px;
-        background: transparent;
-      }
 
-      .news-banner-content {
-        max-height: 300px; /* Begränsa höjden */
-        overflow-y: auto; /* Lägg till vertikal scroll */
-        padding: 0; /* Ta bort padding här */
-        scrollbar-width: thin; /* För Firefox */
-        scrollbar-color: #cbd5e1 #f1f5f9; /* För Firefox */
-      }
+      
 
-      /* Anpassade scrollbar för WebKit-baserade webbläsare (Chrome, Safari, etc.) */
-      .news-banner-content::-webkit-scrollbar {
-        width: 8px;
-      }
+      
 
-      /* Skolnyheter banner */
-      .school-news-banner {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        margin: 20px auto;
-        max-width: 1200px;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        position: relative;
-        overflow: hidden; 
-      }
+      
 
-      .news-banner-header {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 15px;
-      }
+      
 
-      .news-banner-icon {
-        font-size: 2rem;
-        background: rgba(255, 255, 255, 0.2);
-        padding: 10px;
-        border-radius: 8px;
-      }
-
-      .news-banner-text h3 {
-        margin: 0;
-        font-size: 1.4rem;
-        font-weight: 600;
-      }
-
-      .view-all-news {
-        color: rgba(255, 255, 255, 0.9);
-        text-decoration: none;
-        font-size: 0.9rem;
-        margin-top: 5px;
-        display: inline-block;
-        transition: color 0.2s;
-      }
-
-      .view-all-news:hover {
-        color: white;
-        text-decoration: underline;
-      }
-
-      .close-news-banner {
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        color: white;
-        font-size: 1.5rem;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background-color 0.2s;
-      }
-
-      .close-news-banner:hover {
-        background: rgba(255, 255, 255, 0.3);
-      }
-
-      .news-banner-content {
-        display: grid;
-        gap: 15px;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      }
-
-      .news-banner-item {
-        background: rgba(255, 255, 255, 0.1);
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid rgba(255, 255, 255, 0.3);
-      }
-
-      .news-item-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 10px;
-        margin-bottom: 8px;
-      }
-
-      .news-item-title {
-        margin: 0;
-        font-size: 1.1rem;
-        font-weight: 600;
-        flex: 1;
-      }
-
-      .news-item-date {
-        font-size: 0.85rem;
-        opacity: 0.8;
-        white-space: nowrap;
-      }
-
-      .news-item-preview {
-        margin: 0;
-        font-size: 0.9rem;
-        line-height: 1.4;
-        opacity: 0.9;
-      }
-
-      /* Responsiv design */
-      @media (max-width: 768px) {
-        .school-news-banner {
-          margin: 15px;
-          padding: 15px;
-        }
-        
-        .news-banner-header {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 10px;
-        }
-        
-        .news-banner-content {
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
-        
-        .news-banner-icon {
-          font-size: 1.5rem;
-          padding: 8px;
-        }
-        
-        .news-banner-text h3 {
-          font-size: 1.2rem;
-        }
-      }
+      
 
       .my-confirm-btn {
         background-color: var(--primary-color);
