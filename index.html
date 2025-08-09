@@ -120,45 +120,61 @@
           {% for news_item in news %}
           <div class="news-banner-item" onclick="toggleNewsExpansion(this)">
             <div class="news-item-header">
+              <div class="news-title-container">
                 <h4 class="news-item-title">{{ news_item.title }}</h4>
-                <span class="news-item-date">{{ news_item.created_at.strftime('%d %b') }}</span>
-            </div>
-            <div class="news-item-preview">
-                {{ news_item.content[:120] }}{% if news_item.content|length > 120 %}...{% endif %}
-            </div>
-            <div class="news-full-content">
-                <p>{{ news_item.content|safe }}</p>
-                
-                <!-- NY: Visa bifogade dokument -->
+                <!-- NY: Ikon för bilagor -->
                 {% if news_item.documents and news_item.documents|length > 0 %}
-                <div class="news-documents">
-                    <h4>📎 Bifogade dokument:</h4>
-                    <div class="document-list">
-                        {% for document in news_item.documents %}
-                        <a href="{{ url_for('download_news_document', document_id=document.id) }}" 
-                           class="document-item" 
-                           title="Ladda ner {{ document.original_filename }}">
-                            <span class="document-icon">
-                                {% if document.file_type.startswith('image/') %}🖼️
-                                {% elif 'pdf' in document.file_type.lower() %}📄
-                                {% elif 'word' in document.file_type.lower() %}📝
-                                {% else %}📎
-                                {% endif %}
-                            </span>
-                            <span>{{ document.original_filename }}</span>
-                            {% if document.download_count > 0 %}
-                            <span class="download-count">({{ document.download_count }})</span>
-                            {% endif %}
-                        </a>
-                        {% endfor %}
-                    </div>
-                </div>
+                <span class="attachment-icon" title="{{ news_item.documents|length }} bifogade fil(er)">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+                  </svg>
+                  <span class="attachment-count">{{ news_item.documents|length }}</span>
+                </span>
                 {% endif %}
+              </div>
+              <span class="news-item-date">{{ news_item.created_at.strftime('%d %b') }}</span>
             </div>
+            
+            <div class="news-item-preview">
+              {{ news_item.content[:120] }}{% if news_item.content|length > 120 %}...{% endif %}
+            </div>
+            
+            <div class="news-full-content">
+              <p>{{ news_item.content|safe }}</p>
+              
+              <!-- Visa bifogade dokument -->
+              {% if news_item.documents and news_item.documents|length > 0 %}
+              <div class="news-documents">
+                <h4>📎 Bifogade dokument:</h4>
+                <div class="document-list">
+                  {% for document in news_item.documents %}
+                  <a href="{{ url_for('download_news_document', document_id=document.id) }}" 
+                    class="document-item" 
+                    title="Ladda ner {{ document.original_filename }}">
+                    <span class="document-icon">
+                      {% if document.file_type.startswith('image/') %}🖼️
+                      {% elif 'pdf' in document.file_type.lower() %}📄
+                      {% elif 'word' in document.file_type.lower() %}📝
+                      {% else %}📎
+                      {% endif %}
+                    </span>
+                    <span>{{ document.original_filename }}</span>
+                    {% if document.download_count > 0 %}
+                    <span class="download-count">({{ document.download_count }})</span>
+                    {% endif %}
+                  </a>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+            </div>
+            
             {% if news_item.content|length > 120 %}
-            <button class="read-more-btn" onclick="event.stopPropagation(); toggleNewsExpansion(this.parentElement);">Läs mer</button>
+            <button class="read-more-btn" onclick="event.stopPropagation(); toggleNewsExpansion(this.parentElement);">
+              Läs mer
+            </button>
             {% endif %}
-        </div>
+          </div>
           {% endfor %}
         </div>
       </div>
@@ -3248,6 +3264,140 @@ async function leaveSubject(subjectId) {
         
         .news-item:hover {
             transform: translateY(-2px);
+        }
+
+
+
+        .news-title-container {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+        }
+
+        .news-item-title {
+          margin: 0;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #111827;
+          line-height: 1.4;
+          flex: 1;
+        }
+
+        .attachment-icon {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: #f3f4f6;
+          color: #6b7280;
+          padding: 4px 8px;
+          border-radius: 12px;
+          font-size: 0.75rem;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+
+        .attachment-icon svg {
+          width: 14px;
+          height: 14px;
+          stroke-width: 2;
+        }
+
+        .attachment-count {
+          font-size: 0.7rem;
+          font-weight: 600;
+          background: #4f46e5;
+          color: white;
+          border-radius: 50%;
+          min-width: 16px;
+          height: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+        }
+
+        /* Hover-effekt för attachment-ikon */
+        .attachment-icon:hover {
+          background: #e5e7eb;
+          color: #374151;
+          transform: scale(1.05);
+        }
+
+        .news-banner-item:hover .attachment-icon {
+          background: #e0e7ff;
+          color: #4f46e5;
+        }
+
+        .news-banner-item.expanded .attachment-icon {
+          background: #dbeafe;
+          color: #2563eb;
+        }
+
+        /* Anpassning för mindre skärmar */
+        @media (max-width: 768px) {
+          .news-title-container {
+            gap: 6px;
+          }
+          
+          .attachment-icon {
+            padding: 3px 6px;
+            border-radius: 10px;
+          }
+          
+          .attachment-icon svg {
+            width: 12px;
+            height: 12px;
+          }
+          
+          .attachment-count {
+            min-width: 14px;
+            height: 14px;
+            font-size: 0.65rem;
+          }
+        }
+
+        /* Specialvariant för kompakta nyheter */
+        .news-banner-item.compact .attachment-icon {
+          padding: 2px 4px;
+          font-size: 0.7rem;
+        }
+
+        .news-banner-item.compact .attachment-icon svg {
+          width: 12px;
+          height: 12px;
+        }
+
+        /* Alternativ ikon-stil (mer diskret) */
+        .attachment-icon.minimal {
+          background: transparent;
+          color: #9ca3af;
+          padding: 2px;
+          border-radius: 4px;
+        }
+
+        .attachment-icon.minimal:hover {
+          background: #f3f4f6;
+          color: #4f46e5;
+        }
+
+        /* Animerad hover-effekt */
+        @keyframes pulse-attachment {
+          0% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.1);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        .attachment-icon:hover svg {
+          animation: pulse-attachment 0.3s ease-in-out;
         }
         
         
