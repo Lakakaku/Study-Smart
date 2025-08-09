@@ -1794,39 +1794,7 @@ body .main-layout + .shared-files-section {
       to { opacity: 1; }
     }
 
-    .assignments-toggle-btn-large:hover::before {
-      content: attr(data-tooltip);
-      position: absolute;
-      bottom: -35px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 6px 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      white-space: nowrap;
-      opacity: 0;
-      /*animation: tooltip-fade-in 0.3s ease forwards; */
-      font-weight: normal;
-      text-transform: none;
-      letter-spacing: normal;
-    }
-
-    /* Stop pulsing when active */
-    .assignments-toggle-btn-large.active {
-      /*animation: none; */
-      background: var(--primary-yellow);
-    }
-
-    .assignment-action-btn.undo-submission {
-      background-color: #fd7e14;
-      color: white;
-    }
-
-    .assignment-action-btn.undo-submission:hover {
-      background-color: #e8590c;
-    }
+    
 
     /* Submission actions container */
     .submission-actions {
@@ -3050,7 +3018,8 @@ body .main-layout + .shared-files-section {
       }
     }
 
-    .assignments-toggle-btn-large::after {
+    .assignments-toggle-btn-large::after,
+    .student-results-btn::after {
       content: '▼';
       font-size: 16px;
       transition: all 0.3s ease;
@@ -3083,44 +3052,7 @@ body .main-layout + .shared-files-section {
     }
 
     /* ERSÄTTER BEFINTLIG .assignments-toggle-btn-large CSS */
-    .assignments-toggle-btn-large {
-      background: var(--primary-yellow);
-      color: white;
-      border: none;
-      padding: 18px 48px;
-      border-radius: 16px;
-      font-size: 20px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      margin-top: 5vh;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      min-width: 250px;
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-    }
     
-
-    .assignments-toggle-btn-large:hover {
-      transform: translateY(-3px);
-      background: var(--primary-yellow);
-    }
-
-    .assignments-toggle-btn-large:active {
-      transform: translateY(-1px);
-      box-shadow: 0 12px 35px var(--primary-yellow);
-
-    }
-
-    /* När uppgifts-sektionen är öppen */
-    .assignments-toggle-btn-large.active::after {
-      transform: rotate(180deg);
-      opacity: 1;
-    }
 
     .assignments-section {
       background: #fff;
@@ -3934,48 +3866,101 @@ body .main-layout + .shared-files-section {
 
     /* Add this CSS to your subject.css file */
 
+
+    .assignments-toggle-btn-large:hover::before,
+    .student-results-btn:hover::before {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: -35px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      opacity: 0;
+      /*animation: tooltip-fade-in 0.3s ease forwards; */
+      font-weight: normal;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    /* Stop pulsing when active */
+    .assignments-toggle-btn-large.active,
+    .student-results-btn.active {
+      /*animation: none; */
+      background: var(--primary-yellow);
+    }
+
+    .assignment-action-btn.undo-submission {
+      background-color: #fd7e14;
+      color: white;
+    }
+
+    .assignment-action-btn.undo-submission:hover {
+      background-color: #e8590c;
+    }
+
+
+    .assignments-toggle-btn-large,
     .student-results-btn {
-        background: linear-gradient(135deg, #17a2b8, #138496);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 12px 20px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      background: var(--primary-yellow);
+      color: white;
+      border: none;
+      padding: 18px 48px;
+      border-radius: 16px;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 5vh;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      min-width: 300px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin: 20px;
+      
+      
+      /* Lägg till dessa för konsistent storlek: */
+      height: 70px; /* Fast höjd */
+      width: 250px; /* Fast bredd (samma som min-width) */
+      box-sizing: border-box; /* Inkluderar padding och border i storleken */
+      flex-shrink: 0; /* Förhindrar att knappen krymper */
+      white-space: nowrap; /* Förhindrar att text bryts på flera rader */
+      overflow: hidden; /* Döljer text som inte får plats */
+      text-overflow: ellipsis; /* Visar ... om texten är för lång */
     }
 
+    .assignments-toggle-btn-large:hover,
     .student-results-btn:hover {
-        background: linear-gradient(135deg, #138496, #0f6674);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        color: white;
-        text-decoration: none;
+      transform: translateY(-3px);
+      background: var(--primary-yellow);
     }
 
+    .assignments-toggle-btn-large:active,
     .student-results-btn:active {
-        transform: translateY(0);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transform: translateY(-1px);
+      box-shadow: 0 12px 35px var(--primary-yellow);
     }
 
-    /* Responsive adjustments */
-    @media (max-width: 768px) {
-        .assignments-toggle-container-centered {
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .student-results-btn {
-            margin-left: 0 !important;
-            width: 100%;
-        }
+    /* När uppgifts-sektionen är öppen */
+    .assignments-toggle-btn-large.active::after,
+    .student-results-btn.active::after {
+      transform: rotate(180deg);
+      opacity: 1;
     }
+
+    
+
+    
+
+    
 
     .error-loading-comments {
       text-align: center;
@@ -3994,22 +3979,24 @@ body .main-layout + .shared-files-section {
     }
 
     @media (max-width: 768px) {
-      .assignments-toggle-btn-large {
+      .assignments-toggle-btn-large,
+      .student-results-btn {
+        height: 60px;
+        width: 200px;
+        min-width: 200px;
         padding: 16px 36px;
         font-size: 18px;
-        min-width: 200px;
-      }
-      
-      .assignments-toggle-btn-large::after {
-        font-size: 14px;
       }
     }
 
     @media (max-width: 480px) {
-      .assignments-toggle-btn-large {
+      .assignments-toggle-btn-large,
+      .student-results-btn {
+        height: 55px;
+        width: 180px;
+        min-width: 180px;
         padding: 14px 28px;
         font-size: 16px;
-        min-width: 180px;
       }
     }
 
@@ -4033,7 +4020,8 @@ body .main-layout + .shared-files-section {
     }
 
     @media (max-width: 480px) {
-      .assignments-toggle-btn-large {
+      .assignments-toggle-btn-large,
+      .student-results-btn {
         padding: 14px 28px;
         font-size: 16px;
         min-width: 180px;
@@ -4188,15 +4176,15 @@ body .main-layout + .shared-files-section {
     <button id="assignments-toggle" 
             class="assignments-toggle-btn-large" 
             data-tooltip="Klicka för att fälla ut uppgifter">
-      <span class="toggle-label">📝 Uppgifter</span>
+      <span class="toggle-label">Uppgifter</span>
       <span id="unseen-badge" class="pending-count-badge" style="display:none;"></span>
     </button>
     
     <!-- NY: Elevresultat-knapp -->
     <a href="{{ url_for('student_results', subject_name=subject_name) }}" 
       class="assignments-toggle-btn-large student-results-btn" 
-      style="margin-left: 10px; text-decoration: none;">
-      <span class="toggle-label">📊 Elevresultat</span>
+       style="text-decoration: none;">
+      <span class="toggle-label">Elevresultat</span>
     </a>
   </div>
   {% endif %}
