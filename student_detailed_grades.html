@@ -588,12 +588,35 @@
                 </div>
                 
                 <div style="margin-top: 1rem; text-align: right;">
-                    <a href="{{ url_for('export_grades', format='excel') }}{{ '?' + request.query_string.decode() if request.query_string else '' }}" 
-                       class="export-button">📊 Exportera till Excel</a>
-                    <a href="{{ url_for('export_grades', format='csv') }}{{ '?' + request.query_string.decode() if request.query_string else '' }}" 
-                       class="export-button">📊 Exportera till CSV</a>
-                    <a href="{{ url_for('export_grades', format='pdf') }}{{ '?' + request.query_string.decode() if request.query_string else '' }}" 
-                       class="export-button">📄 Exportera till PDF</a>
+                    <!-- Excel Export -->
+                    <a href="{{ url_for('export_grades', 
+                                format='excel',
+                                search=request.args.get('search', ''),
+                                class_id=request.args.get('class_id', ''),
+                                subject_filter=request.args.get('subject_filter', ''),
+                                subject_grades_only=request.args.get('subject_grades_only', ''),
+                                grade_type_filter=request.args.get('grade_type_filter', '')
+                            ) }}" class="export-button">📊 Exportera till Excel</a>
+                    
+                    <!-- CSV Export -->
+                    <a href="{{ url_for('export_grades', 
+                                format='csv',
+                                search=request.args.get('search', ''),
+                                class_id=request.args.get('class_id', ''),
+                                subject_filter=request.args.get('subject_filter', ''),
+                                subject_grades_only=request.args.get('subject_grades_only', ''),
+                                grade_type_filter=request.args.get('grade_type_filter', '')
+                            ) }}" class="export-button">📊 Exportera till CSV</a>
+                    
+                    <!-- PDF Export -->
+                    <a href="{{ url_for('export_grades', 
+                                format='pdf',
+                                search=request.args.get('search', ''),
+                                class_id=request.args.get('class_id', ''),
+                                subject_filter=request.args.get('subject_filter', ''),
+                                subject_grades_only=request.args.get('subject_grades_only', ''),
+                                grade_type_filter=request.args.get('grade_type_filter', '')
+                            ) }}" class="export-button">📄 Exportera till PDF</a>
                 </div>
             </div>
 
