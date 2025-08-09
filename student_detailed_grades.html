@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elevbetyg - {{ school.name if school else 'Okänd skola' }}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #2d3748;
+            font-size: 1.8rem;
+        }
+
+        .header .user-info {
+            color: #718096;
+        }
+
+        .header .user-info a {
+            color: #4299e1;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.9);
+            color: #4299e1;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .back-link:hover {
+            background: white;
+            transform: translateX(-2px);
+        }
+
+        .search-container {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .search-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr auto;
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .form-group input, .form-group select {
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+
+        .btn {
+            background: #4299e1;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            height: fit-content;
+        }
+
+        .btn:hover {
+            background: #3182ce;
+        }
+
+        .btn-clear {
+            background: #718096;
+            margin-left: 0.5rem;
+        }
+
+        .btn-clear:hover {
+            background: #4a5568;
+        }
+
+        .filter-checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: #f7fafc;
+            border-radius: 6px;
+        }
+
+        .filter-checkbox {
+            width: auto;
+            margin: 0;
+        }
+
+        .filter-checkbox-label {
+            font-size: 0.9rem;
+            color: #4a5568;
+            font-weight: normal;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .results-summary {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4299e1;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #718096;
+            margin-top: 0.25rem;
+        }
+
+        .students-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .student-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s ease;
+        }
+
+        .student-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .student-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .student-info h3 {
+            margin: 0 0 0.5rem 0;
+            color: #2d3748;
+            font-size: 1.3rem;
+        }
+
+        .student-meta {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        .student-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            text-align: center;
+        }
+
+        .student-stats .stat {
+            background: #f7fafc;
+            padding: 0.75rem;
+            border-radius: 8px;
+        }
+
+        .student-stats .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #4299e1;
+        }
+
+        .student-stats .stat-label {
+            font-size: 0.8rem;
+            color: #718096;
+            margin-top: 0.25rem;
+        }
+
+        .grades-section {
+            margin-top: 1.5rem;
+        }
+
+        .grades-section h4 {
+            margin: 0 0 1rem 0;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .subjects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .subject-grade {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .subject-grade:hover {
+            background: #e2e8f0;
+        }
+
+        .subject-grade.subject-final-grade {
+            border: 2px solid #38a169;
+            background: #f0fff4;
+        }
+
+        .subject-grade.subject-final-grade .subject-name {
+            color: #38a169;
+            font-weight: bold;
+        }
+
+        .subject-name {
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .grade-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .grade-value.grade-excellent { color: #38a169; }
+        .grade-value.grade-good { color: #4299e1; }
+        .grade-value.grade-average { color: #ed8936; }
+        .grade-value.grade-poor { color: #e53e3e; }
+        .grade-value.no-grade { color: #a0aec0; }
+
+        .grade-details {
+            font-size: 0.8rem;
+            color: #718096;
+        }
+
+        .grade-type {
+            font-size: 0.7rem;
+            color: #38a169;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+        }
+
+        .teacher-name {
+            font-size: 0.7rem;
+            color: #a0aec0;
+            margin-top: 0.25rem;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 3rem;
+            color: #718096;
+            background: white;
+            border-radius: 12px;
+        }
+
+        .no-results .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #718096;
+        }
+
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #c53030;
+            border-color: #e53e3e;
+        }
+
+        .alert-info {
+            background: #e6fffa;
+            color: #2c7a7b;
+            border-color: #38b2ac;
+        }
+
+        .export-button {
+            background: #48bb78;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin-left: 1rem;
+        }
+
+        .export-button:hover {
+            background: #38a169;
+        }
+
+        .search-highlight {
+            background: #fed7d7;
+            padding: 0.1rem 0.2rem;
+            border-radius: 2px;
+            font-weight: 600;
+        }
+
+        .filter-info {
+            font-size: 0.9rem;
+            color: #4a5568;
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: #f7fafc;
+            border-radius: 6px;
+        }
+
+        .filter-badge {
+            display: inline-block;
+            background: #4299e1;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin: 0.25rem 0.5rem 0.25rem 0;
+        }
+
+        @media (max-width: 768px) {
+            .search-form {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .student-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .subjects-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .summary-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .grade-comment {
+            font-size: 0.75rem;
+            color: #6b7280;
+            font-style: italic;
+            margin-top: 0.25rem;
+            max-height: 3rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Elevbetyg - {{ school.name if school else 'Okänd skola' }}</h1>
+        <div class="user-info">
+            Inloggad som: {{ current_user.get_full_name() or current_user.username }} | 
+            <a href="{{ url_for('logout') }}">Logga ut</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <a href="{{ url_for('school_admin_index') }}" class="back-link">← Tillbaka till Skolledning</a>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'danger' else category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Sökformulär -->
+        <div class="search-container">
+            <form method="GET" class="search-form" id="searchForm">
+                <div class="form-group">
+                    <label for="search">Sök elev:</label>
+                    <input type="text" 
+                           id="search" 
+                           name="search" 
+                           value="{{ request.args.get('search', '') }}" 
+                           placeholder="Sök på namn, användarnamn eller email..."
+                           autocomplete="off">
+                    <small style="color: #718096; font-size: 0.8rem; margin-top: 0.25rem;">
+                        Tryck Enter för att söka eller använd sökknappen
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="class_id">Filtrera efter klass:</label>
+                    <select id="class_id" name="class_id">
+                        <option value="">Alla klasser</option>
+                        {% for class in classes %}
+                            <option value="{{ class.id }}" 
+                                    {{ 'selected' if request.args.get('class_id') == class.id|string else '' }}>
+                                {{ class.name }}
+                                {% if class.year_level %}(Årskurs {{ class.year_level }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="subject_filter">Filtrera efter ämne:</label>
+                    <select id="subject_filter" name="subject_filter">
+                        <option value="">Alla ämnen</option>
+                        {% for subject in all_subjects %}
+                            <option value="{{ subject.id }}" 
+                                    {{ 'selected' if request.args.get('subject_filter') == subject.id|string else '' }}>
+                                {{ subject.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="filter-checkbox-group">
+                        <input type="checkbox" 
+                               id="subject_grades_only" 
+                               name="subject_grades_only" 
+                               value="1" 
+                               class="filter-checkbox"
+                               {{ 'checked' if request.args.get('subject_grades_only') else '' }}>
+                        <label for="subject_grades_only" class="filter-checkbox-label">
+                            📋 Visa endast ämnesbetyg (slutbetyg)
+                        </label>
+                    </div>
+                    <small style="color: #718096; font-size: 0.8rem; margin-top: 0.25rem;">
+                        Kryssa i för att endast visa slutbetyg per ämne, inte individuella uppgifter/prov
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="grade_type_filter">Typ av betyg:</label>
+                    <select id="grade_type_filter" name="grade_type_filter">
+                        <option value="">Alla typer</option>
+                        <option value="subject_final" {{ 'selected' if request.args.get('grade_type_filter') == 'subject_final' else '' }}>
+                            📋 Endast ämnesbetyg
+                        </option>
+                        <option value="assignments" {{ 'selected' if request.args.get('grade_type_filter') == 'assignments' else '' }}>
+                            📝 Endast uppgifter/prov
+                        </option>
+                    </select>
+                </div>
+                <div>
+                    <button type="submit" class="btn" id="searchBtn">🔍 Sök</button>
+                    <a href="{{ url_for('view_student_detailed_grades') }}" class="btn btn-clear">Rensa</a>
+                </div>
+            </form>
+            
+            <!-- Visa aktiva filter -->
+            {% if request.args.get('search') or request.args.get('class_id') or request.args.get('subject_filter') or request.args.get('subject_grades_only') or request.args.get('grade_type_filter') %}
+            <div class="filter-info">
+                <strong>Aktiva filter:</strong>
+                {% if request.args.get('search') %}
+                    <span class="filter-badge">Sökning: "{{ request.args.get('search') }}"</span>
+                {% endif %}
+                {% if request.args.get('class_id') %}
+                    {% for class in classes %}
+                        {% if class.id|string == request.args.get('class_id') %}
+                            <span class="filter-badge">Klass: {{ class.name }}</span>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                {% if request.args.get('subject_filter') %}
+                    {% for subject in all_subjects %}
+                        {% if subject.id|string == request.args.get('subject_filter') %}
+                            <span class="filter-badge">Ämne: {{ subject.name }}</span>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                {% if request.args.get('subject_grades_only') %}
+                    <span class="filter-badge">📋 Endast ämnesbetyg</span>
+                {% endif %}
+                {% if request.args.get('grade_type_filter') %}
+                    <span class="filter-badge">
+                        {% if request.args.get('grade_type_filter') == 'subject_final' %}
+                            📋 Endast ämnesbetyg
+                        {% elif request.args.get('grade_type_filter') == 'assignments' %}
+                            📝 Endast uppgifter/prov
+                        {% endif %}
+                    </span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if students %}
+            <!-- Resultatsammanfattning -->
+            <div class="results-summary">
+                <div class="summary-stats">
+                    <div class="stat-item">
+                        <span class="stat-number">{{ students|length }}</span>
+                        <div class="stat-label">Elever hittade</div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">{{ total_grades }}</span>
+                        <div class="stat-label">Totala betyg</div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">{{ average_grade|round(1) if average_grade else 'N/A' }}</span>
+                        <div class="stat-label">Genomsnittligt betyg</div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">{{ unique_subjects }}</span>
+                        <div class="stat-label">Ämnen representerade</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem; text-align: right;">
+                    <a href="{{ url_for('export_grades', format='excel') }}{{ '?' + request.query_string.decode() if request.query_string else '' }}" 
+                       class="export-button">📊 Exportera till Excel</a>
+                    <a href="{{ url_for('export_grades', format='pdf') }}{{ '?' + request.query_string.decode() if request.query_string else '' }}" 
+                       class="export-button">📄 Exportera till PDF</a>
+                </div>
+            </div>
+
+            <!-- Elevlista -->
+            <div class="students-grid">
+                {% for student_data in students %}
+                    <div class="student-card">
+                        <div class="student-header">
+                            <div class="student-info">
+                                <h3 class="student-name">{{ student_data.student.get_full_name() or student_data.student.username }}</h3>
+                                <div class="student-meta">
+                                    <strong>Klass:</strong> {{ student_data.student.get_class_name() }} 
+                                    {% if student_data.student.school_class and student_data.student.school_class.year_level %}
+                                        (Årskurs {{ student_data.student.school_class.year_level }})
+                                    {% endif %}
+                                    | <strong>Email:</strong> <span class="student-email">{{ student_data.student.email }}</span> 
+                                    | <strong>Användarnamn:</strong> <span class="student-username">{{ student_data.student.username }}</span>
+                                    {% if student_data.student.personal_number %}
+                                        | <strong>Personnummer:</strong> {{ student_data.student.personal_number }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="student-stats">
+                                <div class="stat">
+                                    <div class="stat-value">{{ student_data.total_grades }}</div>
+                                    <div class="stat-label">Betyg</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">{{ student_data.average_grade|round(1) if student_data.average_grade else 'N/A' }}</div>
+                                    <div class="stat-label">Snitt</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">{{ student_data.subjects_count }}</div>
+                                    <div class="stat-label">Ämnen</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grades-section">
+                            <h4>📚 
+                                {% if request.args.get('subject_grades_only') or request.args.get('grade_type_filter') == 'subject_final' %}
+                                    Ämnesbetyg (slutbetyg)
+                                {% elif request.args.get('grade_type_filter') == 'assignments' %}
+                                    Uppgifter och Prov
+                                {% else %}
+                                    Ämnesbetyg
+                                {% endif %}
+                            </h4>
+                            {% if student_data.grades %}
+                                <div class="subjects-grid">
+                                    {% for grade_data in student_data.grades %}
+                                        <div class="subject-grade {{ 'subject-final-grade' if grade_data.type == 'Ämnesbetyg' else '' }}">
+                                            {% if grade_data.type == 'Ämnesbetyg' %}
+                                                <div class="grade-type">📋 SLUTBETYG</div>
+                                            {% endif %}
+                                            <div class="subject-name">{{ grade_data.subject_name }}</div>
+                                            <div class="grade-value 
+                                                {% if grade_data.grade >= 8 %}grade-excellent
+                                                {% elif grade_data.grade >= 6 %}grade-good
+                                                {% elif grade_data.grade >= 4 %}grade-average
+                                                {% elif grade_data.grade %}grade-poor
+                                                {% else %}no-grade{% endif %}">
+                                                {{ grade_data.grade if grade_data.grade else '—' }}
+                                            </div>
+                                            <div class="grade-details">
+                                                {% if grade_data.grade %}
+                                                    Betyg: {{ grade_data.grade }}/10
+                                                    <br>{{ grade_data.type if grade_data.type else 'Betyg' }}
+                                                {% else %}
+                                                    Inget betyg satt
+                                                {% endif %}
+                                            </div>
+                                            {% if grade_data.teacher_comment %}
+                                                <div class="grade-comment">
+                                                    "{{ grade_data.teacher_comment[:100] }}{% if grade_data.teacher_comment|length > 100 %}...{% endif %}"
+                                                </div>
+                                            {% endif %}
+                                            <div class="teacher-name">
+                                                Lärare: {{ grade_data.teacher_name or 'Okänd' }}
+                                                {% if grade_data.updated_at %}
+                                                    <br>Uppdaterad: {{ grade_data.updated_at.strftime('%Y-%m-%d') }}
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div style="text-align: center; color: #718096; padding: 2rem;">
+                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
+                                    <div>
+                                        {% if request.args.get('subject_grades_only') or request.args.get('grade_type_filter') == 'subject_final' %}
+                                            Inga ämnesbetyg registrerade än
+                                        {% elif request.args.get('grade_type_filter') == 'assignments' %}
+                                            Inga uppgifts-/provbetyg registrerade än
+                                        {% else %}
+                                            Inga betyg registrerade än
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+        {% else %}
+            <!-- Inga resultat -->
+            <div class="no-results">
+                <div class="icon">🔍</div>
+                <h3>Inga elever hittades</h3>
+                <p>
+                    {% if request.args.get('search') or request.args.get('class_id') or request.args.get('subject_filter') or request.args.get('subject_grades_only') or request.args.get('grade_type_filter') %}
+                        {% if request.args.get('search') %}
+                            Ingen elev matchade sökningen "<strong>{{ request.args.get('search') }}</strong>".
+                            <br><br>
+                        {% endif %}
+                        Prova att:
+                        <ul style="text-align: left; display: inline-block; margin-top: 1rem;">
+                            <li>Kontrollera stavningen</li>
+                            <li>Använd kortare söktermer</li>
+                            <li>Ändra klass-, ämnes- eller betygstypfilter</li>
+                            <li><a href="{{ url_for('view_student_detailed_grades') }}">Visa alla elever</a></li>
+                        </ul>
+                    {% else %}
+                        Det finns inga elever registrerade på denna skola ännu.
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Förbättrad sökfunktionalitet
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('search');
+            const classSelect = document.getElementById('class_id');
+            const subjectSelect = document.getElementById('subject_filter');
+            const subjectGradesOnly = document.getElementById('subject_grades_only');
+            const gradeTypeFilter = document.getElementById('grade_type_filter');
+            const searchForm = document.getElementById('searchForm');
+            const searchBtn = document.getElementById('searchBtn');
+            
+            // Auto-submit när dropdown-filter ändras
+            classSelect.addEventListener('change', function() {
+                console.log('Class filter changed:', this.value);
+                searchForm.submit();
+            });
+            
+            subjectSelect.addEventListener('change', function() {
+                console.log('Subject filter changed:', this.value);
+                searchForm.submit();
+            });
+
+            // Auto-submit när checkbox ändras
+            subjectGradesOnly.addEventListener('change', function() {
+                console.log('Subject grades only changed:', this.checked);
+                // Om checkbox är ikryssad, sätt grade_type_filter till 'subject_final'
+                if (this.checked) {
+                    gradeTypeFilter.value = 'subject_final';
+                } else if (gradeTypeFilter.value === 'subject_final') {
+                    gradeTypeFilter.value = '';
+                }
+                searchForm.submit();
+            });
+
+            // Auto-submit när grade type filter ändras
+            gradeTypeFilter.addEventListener('change', function() {
+                console.log('Grade type filter changed:', this.value);
+                // Synka med checkbox
+                subjectGradesOnly.checked = (this.value === 'subject_final');
+                searchForm.submit();
+            });
+            
+            // Förbättrad hantering av sökfältet
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    console.log('Search triggered by Enter key:', this.value);
+                    searchForm.submit();
+                }
+            });
+            
+            // Hantera sökknappen
+            searchBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('Search triggered by button:', searchInput.value);
+                searchForm.submit();
+            });
+            
+            // Auto-focus på sökfältet när sidan laddas
+            searchInput.focus();
+            
+            // Live-feedback för sökning (valfritt - visar antal tecken)
+            searchInput.addEventListener('input', function() {
+                const length = this.value.length;
+                if (length >= 2) {
+                    searchBtn.style.background = '#38a169'; // Grön när redo att söka
+                } else {
+                    searchBtn.style.background = '#4299e1'; // Standard blå
+                }
+            });
+            
+            // Markera söktermer i resultaten
+            highlightSearchTerms();
+        });
+        
+        // Förbättrad highlight-funktion
+        function highlightSearchTerms() {
+            const searchTerm = '{{ request.args.get("search", "") }}';
+            if (searchTerm && searchTerm.trim().length > 0) {
+                console.log('Highlighting search term:', searchTerm);
+                
+                // Skapa regex för case-insensitive sökning
+                const regex = new RegExp(`(${escapeRegex(searchTerm.trim())})`, 'gi');
+                
+                // Sök i elevnamn, användarnamn och email
+                const elementsToSearch = document.querySelectorAll(
+                    '.student-name, .student-email, .student-username'
+                );
+                
+                elementsToSearch.forEach(element => {
+                    const originalText = element.textContent;
+                    const highlightedText = originalText.replace(regex, '<span class="search-highlight">$1</span>');
+                    
+                    if (originalText !== highlightedText) {
+                        element.innerHTML = highlightedText;
+                        console.log('Highlighted in element:', element.className);
+                    }
+                });
+            }
+        }
+        
+        // Hjälpfunktion för att escape-a regex-tecken
+        function escapeRegex(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\            // Live-feedback för sökning (valfritt - visar antal tecken)
+            searchInput.addEventListener('input', function() {
+                const length = this.value.length;
+                if (length >= 2) {
+                    searchBtn.style.background = '#38a169'; // Grön när redo att söka
+                } else {
+                    searchBtn.style.backgroun');
+        }
+        
+        // Debug-information
+        console.log('Search page loaded with parameters:', {
+            search: '{{ request.args.get("search", "") }}',
+            class_id: '{{ request.args.get("class_id", "") }}',
+            subject_filter: '{{ request.args.get("subject_filter", "") }}',
+            subject_grades_only: '{{ request.args.get("subject_grades_only", "") }}',
+            grade_type_filter: '{{ request.args.get("grade_type_filter", "") }}',
+            total_students: {{ students|length if students else 0 }}
+        });
+    </script>
+</body>
+</html>
