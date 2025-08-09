@@ -1271,46 +1271,63 @@
             subjectFilter.addEventListener('change', filterRecords);
             
             // Export funktion
+            // Export funktion
             window.exportData = function() {
                 const visibleItems = document.querySelectorAll('.record-item:not([style*="display: none"])');
-                
+
                 if (visibleItems.length === 0) {
                     alert('Inga data att exportera med nuvarande filter.');
                     return;
                 }
-                
+
                 let csvContent = '';
                 const timespanText = getTimespanDescription(currentTimespan);
-                
+
                 if (selectedStudentId) {
-                    // Export för specifik elev
+                    // Export för specifik elev - lägg till kolumn för närvaroprocent
                     const student = studentStats.find(s => s.id == selectedStudentId);
-                    csvContent = `Elev,Datum,Ämne,Status,Ankomsttid,Anteckningar,Tidsperiod\n`;
-                    
+                    csvContent = `Elev,Datum,Ämne,Status,Ankomsttid,Anteckningar,Tidsperiod,Närvaroprocent\n`;
+
+                    let presentCount = 0;
+                    let totalLessons = visibleItems.length;
+
                     visibleItems.forEach(item => {
                         const date = item.dataset.date;
                         const subject = item.dataset.subject || 'Okänt ämne';
                         const recordId = item.dataset.recordId;
                         const personalRecord = personalAttendanceData[recordId];
-                        
+
                         const status = personalRecord ? personalRecord.status : 'ej_rapporterad';
                         const arrivalTime = personalRecord?.arrival_time || '';
                         const notes = personalRecord?.notes || '';
-                        
+
                         const statusText = {
                             'present': 'Närvarande',
-                            'late': 'Sen', 
+                            'late': 'Sen',
                             'absent': 'Frånvarande',
                             'excused': 'Ursäktad',
                             'ej_rapporterad': 'Ej rapporterad'
                         }[status] || 'Okänd';
-                        
-                        csvContent += `"${student.name}","${date}","${subject}","${statusText}","${arrivalTime}","${notes.replace(/"/g, '""')}","${timespanText}"\n`;
+
+                        // Räkna närvarande (inkl. sena)
+                        if (status === 'present' || status === 'late') {
+                            presentCount++;
+                        }
+
+                        // Skriv rad (sista kolumn är tom för radvisa poster)
+                        csvContent += `"${student.name}","${date}","${subject}","${statusText}","${arrivalTime}","${notes.replace(/"/g, '""')}","${timespanText}",""\n`;
                     });
+
+                    // Beräkna procent (om totalt > 0)
+                    const rate = totalLessons > 0 ? Math.round((presentCount / totalLessons) * 100) : 0;
+
+                    // Lägg till sammanfattningsrad längst ner med både X/Y och procent
+                    // Placera "Närvarande X / Y lektioner" i Status-kolumn och procentsatsen i sista kolumnen.
+                    csvContent += `"${student.name}","SAMMANFATTNING","", "Närvarande: ${presentCount} / ${totalLessons} lektioner","","","${timespanText}","${rate}%"\n`;
                 } else {
-                    // Export för hela klassen
+                    // Export för hela klassen (oförändrad)
                     csvContent = 'Datum,Ämne,Närvarande,Sena,Frånvarande,Ursäktade,Närvaro %,Anteckningar,Tidsperiod\n';
-                    
+
                     visibleItems.forEach(item => {
                         const date = item.dataset.date;
                         const subject = item.dataset.subject || 'Okänt ämne';
@@ -1321,28 +1338,29 @@
                         const excused = stats[3]?.textContent || '0';
                         const attendanceRate = item.querySelector('.attendance-rate')?.textContent?.replace('% närvaro', '') || '0';
                         const notes = item.querySelector('.record-notes')?.textContent?.replace('Lektionsanteckningar: ', '') || '';
-                        
+
                         csvContent += `"${date}","${subject}","${present}","${late}","${absent}","${excused}","${attendanceRate}","${notes.replace(/"/g, '""')}","${timespanText}"\n`;
                     });
                 }
-                
+
                 // Skapa och ladda ner fil
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
                 const url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
-                
+
                 const timespanSuffix = currentTimespan.replace('days', 'd').replace('month', 'm').replace('semester', 's').replace('all', 'total').replace('custom', 'custom');
-                const filename = selectedStudentId 
+                const filename = selectedStudentId
                     ? `personlig_narvarohistorik_${timespanSuffix}_${new Date().toISOString().split('T')[0]}.csv`
                     : `narvarohistorik_${timespanSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
-                    
+
                 link.setAttribute('download', filename);
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
             };
+
 
             // Gör filterRecords globalt tillgänglig
             window.filterRecords = filterRecords;
