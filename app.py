@@ -1,5 +1,5 @@
 import json
-from flask import Flask, render_template, request, redirect, url_for, flash, render_template_string, jsonify, send_file, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, render_template_string, jsonify, send_file, abort, make_response
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import requests
@@ -22,6 +22,7 @@ import wave
 import math
 
 from flask_migrate import Migrate
+
 
 
 
@@ -5566,14 +5567,29 @@ def export_grades():
         flash('Du har inte behörighet att exportera data.', 'error')
         return redirect(url_for('index'))
     
-    export_format = request.args.get('format', 'csv')
+    # Hämta och validera export format
+    export_format = request.args.get('format', '').lower().strip()
+    
+    print(f"[DEBUG EXPORT] Raw format parameter: '{request.args.get('format')}'")
+    print(f"[DEBUG EXPORT] Processed format: '{export_format}'")
+    print(f"[DEBUG EXPORT] All args: {dict(request.args)}")
+    
+    # Validera export format
+    valid_formats = ['excel', 'csv', 'pdf']
+    if not export_format or export_format not in valid_formats:
+        print(f"[ERROR EXPORT] Invalid format: '{export_format}', valid formats: {valid_formats}")
+        flash(f'Ogiltigt exportformat: "{export_format}". Giltiga format: {", ".join(valid_formats)}.', 'error')
+        return redirect(url_for('view_student_detailed_grades'))
     
     # Hämta samma data som huvudsidan (med filter)
     search_query = request.args.get('search', '').strip()
-    class_filter = request.args.get('class_id', '')
-    subject_filter = request.args.get('subject_filter', '')
-    subject_grades_only = request.args.get('subject_grades_only', '') == '1'
-    grade_type_filter = request.args.get('grade_type_filter', '')
+    class_filter = request.args.get('class_id', '').strip()
+    subject_filter = request.args.get('subject_filter', '').strip()
+    subject_grades_only = request.args.get('subject_grades_only', '').strip() == '1'
+    grade_type_filter = request.args.get('grade_type_filter', '').strip()
+    
+    print(f"[DEBUG EXPORT] Parameters: format={export_format}, subject_grades_only={subject_grades_only}, grade_type_filter={grade_type_filter}")
+    print(f"[DEBUG EXPORT] Search: '{search_query}', Class: '{class_filter}', Subject: '{subject_filter}'")
     
     # Hämta klasser och ämnen för validering
     classes = SchoolClass.query.filter(
@@ -5598,41 +5614,116 @@ def export_grades():
         User.is_active == True
     )
     
+    # Applicera filter
     if search_query:
         students_query = students_query.filter(
             db.or_(
                 User.username.ilike(f'%{search_query}%'),
                 User.first_name.ilike(f'%{search_query}%'),
                 User.last_name.ilike(f'%{search_query}%'),
-                User.email.ilike(f'%{search_query}%')
+                User.email.ilike(f'%{search_query}%'),
+                db.func.concat(User.first_name, ' ', User.last_name).ilike(f'%{search_query}%')
             )
         )
     
     if class_filter and class_filter.isdigit():
-        students_query = students_query.filter(User.class_id == int(class_filter))
+        class_id = int(class_filter)
+        valid_class = next((cls for cls in classes if cls.id == class_id), None)
+        if valid_class:
+            students_query = students_query.filter(User.class_id == class_id)
     
     students = students_query.order_by(User.last_name, User.first_name).all()
     
-    if export_format == 'excel':
-        return export_to_excel(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
-    elif export_format == 'csv':
-        return export_to_csv(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
-    elif export_format == 'pdf':
-        return export_to_pdf(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
-    else:
-        flash('Ogiltigt exportformat.', 'error')
+    print(f"[DEBUG EXPORT] Found {len(students)} students to export")
+    
+    # Anropa rätt exportfunktion
+    try:
+        if export_format == 'excel':
+            return export_to_excel(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+        elif export_format == 'csv':
+            return export_to_csv(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+        elif export_format == 'pdf':
+            return export_to_pdf(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+    except Exception as e:
+        print(f"[ERROR] Export failed: {str(e)}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        flash(f'Fel vid export: {str(e)}', 'error')
         return redirect(url_for('view_student_detailed_grades'))
 
+# Add this helper function to your main Flask app file (where you have @app.route definitions)
 
-def export_to_csv(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None):
+@app.template_global()
+def export_url(format_type):
+    """Generate export URL with current filters"""
+    from flask import request, url_for
+    
+    params = {
+        'format': format_type,
+        'search': request.args.get('search', ''),
+        'class_id': request.args.get('class_id', ''),
+        'subject_filter': request.args.get('subject_filter', ''),
+        'subject_grades_only': request.args.get('subject_grades_only', ''),
+        'grade_type_filter': request.args.get('grade_type_filter', '')
+    }
+    
+    # Remove empty parameters to keep URLs clean
+    clean_params = {k: v for k, v in params.items() if v and v.strip()}
+    
+    return url_for('export_grades', **clean_params)
+
+
+# Alternative: Add this as a context processor if you prefer
+@app.context_processor
+def utility_processor():
+    def create_export_url(format_type):
+        """Generate export URL with current filters"""
+        from flask import request, url_for
+        
+        params = {
+            'format': format_type,
+            'search': request.args.get('search', ''),
+            'class_id': request.args.get('class_id', ''),
+            'subject_filter': request.args.get('subject_filter', ''),
+            'subject_grades_only': request.args.get('subject_grades_only', ''),
+            'grade_type_filter': request.args.get('grade_type_filter', '')
+        }
+        
+        # Remove empty parameters
+        clean_params = {k: v for k, v in params.items() if v and v.strip()}
+        
+        return url_for('export_grades', **clean_params)
+    
+    return dict(export_url=create_export_url)
+
+
+@app.template_global()
+def export_url(format_type):
+    """Generate export URL with current filters"""
+    params = {
+        'format': format_type,
+        'search': request.args.get('search', ''),
+        'class_id': request.args.get('class_id', ''),
+        'subject_filter': request.args.get('subject_filter', ''),
+        'subject_grades_only': request.args.get('subject_grades_only', ''),
+        'grade_type_filter': request.args.get('grade_type_filter', '')
+    }
+    # Remove empty parameters to keep URLs clean
+    params = {k: v for k, v in params.items() if v}
+    return url_for('export_grades', **params)
+
+def export_to_csv(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None, all_subjects=None):
     """Exportera till CSV-fil (fungerar utan externa dependencies)"""
     try:
         import csv
         from io import StringIO
+        from flask import make_response
+        
+        print(f"[DEBUG CSV] Starting export with {len(students)} students, subject_grades_only={subject_grades_only}")
         
         # Skapa CSV buffer
         csv_buffer = StringIO()
-        writer = csv.writer(csv_buffer)
+        writer = csv.writer(csv_buffer, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         
         # Skriv headers
         headers = [
@@ -5641,10 +5732,14 @@ def export_to_csv(students, subject_filter=None, subject_grades_only=False, grad
         ]
         writer.writerow(headers)
         
+        total_rows_written = 0
+        
         # Förbered data för CSV
         for student in students:
             # Samma logik som i huvudfunktionen för att hämta betyg
             grades_data = get_student_grades_data(student, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+            
+            print(f"[DEBUG CSV] Student {student.get_full_name()}: {len(grades_data)} grades found")
             
             # Om inga betyg finns, lägg till en rad ändå
             if not grades_data:
@@ -5661,6 +5756,7 @@ def export_to_csv(students, subject_filter=None, subject_grades_only=False, grad
                     '',
                     ''
                 ])
+                total_rows_written += 1
             else:
                 for grade_info in grades_data:
                     writer.writerow([
@@ -5676,14 +5772,29 @@ def export_to_csv(students, subject_filter=None, subject_grades_only=False, grad
                         grade_info['updated_at'].strftime('%Y-%m-%d %H:%M') if grade_info['updated_at'] else '',
                         grade_info['teacher_name'] or 'Okänd'
                     ])
+                    total_rows_written += 1
+        
+        print(f"[DEBUG CSV] Total rows written: {total_rows_written}")
         
         # Skapa response
         csv_content = csv_buffer.getvalue()
         csv_buffer.close()
         
-        # Skapa filnamn med datum
+        # Skapa filnamn med datum och filter-info
         timestamp = datetime.now().strftime('%Y%m%d_%H%M')
-        filename = f"elevbetyg_{current_user.school.name}_{timestamp}.csv"
+        filter_suffix = ""
+        if subject_grades_only or grade_type_filter == 'subject_final':
+            filter_suffix = "_slutbetyg"
+        elif grade_type_filter == 'assignments':
+            filter_suffix = "_uppgifter"
+        
+        # Lägg till ämnesfilter i filnamn om valt
+        if subject_filter and all_subjects:
+            subject_name = next((s.name for s in all_subjects if s.id == int(subject_filter)), None)
+            if subject_name:
+                filter_suffix += f"_{subject_name.replace(' ', '_')}"
+            
+        filename = f"elevbetyg_{current_user.school.name}{filter_suffix}_{timestamp}.csv"
         
         response = make_response(csv_content)
         response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -5692,11 +5803,13 @@ def export_to_csv(students, subject_filter=None, subject_grades_only=False, grad
         return response
         
     except Exception as e:
+        print(f"[ERROR CSV] {str(e)}")
+        from flask import redirect, url_for, flash
         flash(f'Fel vid CSV-export: {str(e)}', 'error')
         return redirect(url_for('view_student_detailed_grades'))
 
 
-def export_to_excel(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None):
+def export_to_excel(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None, all_subjects=None):
     """Exportera till Excel-fil (försöker med openpyxl först, annars CSV)"""
     try:
         # Försök med openpyxl först
@@ -5704,6 +5817,9 @@ def export_to_excel(students, subject_filter=None, subject_grades_only=False, gr
         from openpyxl.styles import Font, Alignment, PatternFill
         from openpyxl.utils.dataframe import dataframe_to_rows
         from io import BytesIO
+        from flask import send_file
+        
+        print(f"[DEBUG EXCEL] Starting export with {len(students)} students, subject_grades_only={subject_grades_only}")
         
         # Skapa workbook och worksheet
         wb = openpyxl.Workbook()
@@ -5725,8 +5841,12 @@ def export_to_excel(students, subject_filter=None, subject_grades_only=False, gr
         
         # Skriv data
         row = 2
+        total_rows_written = 0
+        
         for student in students:
             grades_data = get_student_grades_data(student, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+            
+            print(f"[DEBUG EXCEL] Student {student.get_full_name()}: {len(grades_data)} grades found")
             
             if not grades_data:
                 # Lägg till rad utan betyg
@@ -5737,6 +5857,7 @@ def export_to_excel(students, subject_filter=None, subject_grades_only=False, gr
                 ws.cell(row=row, column=5, value=student.get_class_name() or 'Ingen klass')
                 ws.cell(row=row, column=6, value='Inga betyg')
                 row += 1
+                total_rows_written += 1
             else:
                 for grade_info in grades_data:
                     ws.cell(row=row, column=1, value=student.id)
@@ -5751,6 +5872,9 @@ def export_to_excel(students, subject_filter=None, subject_grades_only=False, gr
                     ws.cell(row=row, column=10, value=grade_info['updated_at'].strftime('%Y-%m-%d %H:%M') if grade_info['updated_at'] else '')
                     ws.cell(row=row, column=11, value=grade_info['teacher_name'] or 'Okänd')
                     row += 1
+                    total_rows_written += 1
+        
+        print(f"[DEBUG EXCEL] Total rows written: {total_rows_written}")
         
         # Autofit kolumner
         for column in ws.columns:
@@ -5770,9 +5894,21 @@ def export_to_excel(students, subject_filter=None, subject_grades_only=False, gr
         wb.save(excel_buffer)
         excel_buffer.seek(0)
         
-        # Skapa filnamn med datum
+        # Skapa filnamn med datum och filter-info
         timestamp = datetime.now().strftime('%Y%m%d_%H%M')
-        filename = f"elevbetyg_{current_user.school.name}_{timestamp}.xlsx"
+        filter_suffix = ""
+        if subject_grades_only or grade_type_filter == 'subject_final':
+            filter_suffix = "_slutbetyg"
+        elif grade_type_filter == 'assignments':
+            filter_suffix = "_uppgifter"
+        
+        # Lägg till ämnesfilter i filnamn om valt
+        if subject_filter and all_subjects:
+            subject_name = next((s.name for s in all_subjects if s.id == int(subject_filter)), None)
+            if subject_name:
+                filter_suffix += f"_{subject_name.replace(' ', '_')}"
+            
+        filename = f"elevbetyg_{current_user.school.name}{filter_suffix}_{timestamp}.xlsx"
         
         return send_file(
             excel_buffer,
@@ -5783,14 +5919,17 @@ def export_to_excel(students, subject_filter=None, subject_grades_only=False, gr
         
     except ImportError:
         # Fallback till CSV om openpyxl inte finns
+        from flask import flash
         flash('Excel-export kräver openpyxl. Exporterar som CSV istället.', 'info')
-        return export_to_csv(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+        return export_to_csv(students, subject_filter, subject_grades_only, grade_type_filter, teacher_ids, all_subjects)
     except Exception as e:
+        print(f"[ERROR EXCEL] {str(e)}")
+        from flask import flash, redirect, url_for
         flash(f'Fel vid Excel-export: {str(e)}', 'error')
         return redirect(url_for('view_student_detailed_grades'))
 
 
-def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None):
+def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grade_type_filter=None, teacher_ids=None, all_subjects=None):
     """Exportera till PDF-fil (enkel implementering med ReportLab)"""
     try:
         from reportlab.lib.pagesizes import letter, A4, landscape
@@ -5799,6 +5938,9 @@ def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grad
         from reportlab.lib import colors
         from reportlab.lib.units import inch
         from io import BytesIO
+        from flask import send_file
+        
+        print(f"[DEBUG PDF] Starting export with {len(students)} students, subject_grades_only={subject_grades_only}")
         
         # Skapa PDF buffer
         pdf_buffer = BytesIO()
@@ -5810,12 +5952,18 @@ def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grad
         elements = []
         styles = getSampleStyleSheet()
         
-        # Titel
+        # Titel med filter-info
         title_text = f"Elevbetyg - {current_user.school.name}"
-        if subject_grades_only:
-            title_text += " (Endast ämnesbetyg)"
+        if subject_grades_only or grade_type_filter == 'subject_final':
+            title_text += " (Endast ämnesbetyg/slutbetyg)"
         elif grade_type_filter == 'assignments':
             title_text += " (Endast uppgifter/prov)"
+        
+        # Lägg till ämnesfilter i titel om valt
+        if subject_filter and all_subjects:
+            subject_name = next((s.name for s in all_subjects if s.id == int(subject_filter)), None)
+            if subject_name:
+                title_text += f" - Ämne: {subject_name}"
             
         title = Paragraph(title_text, styles['Title'])
         elements.append(title)
@@ -5823,9 +5971,12 @@ def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grad
         
         # Skapa tabelldata
         table_data = [['Namn', 'Klass', 'Ämne', 'Betyg', 'Typ', 'Lärare', 'Datum']]
+        total_rows_added = 0
         
         for student in students:
             grades_data = get_student_grades_data(student, subject_filter, subject_grades_only, grade_type_filter, teacher_ids)
+            
+            print(f"[DEBUG PDF] Student {student.get_full_name()}: {len(grades_data)} grades found")
             
             if not grades_data:
                 table_data.append([
@@ -5837,6 +5988,7 @@ def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grad
                     '-',
                     '-'
                 ])
+                total_rows_added += 1
             else:
                 for grade_info in grades_data:
                     # Korta ned långa texter för PDF
@@ -5857,6 +6009,9 @@ def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grad
                         teacher_name,
                         grade_info['updated_at'].strftime('%Y-%m-%d') if grade_info['updated_at'] else '-'
                     ])
+                    total_rows_added += 1
+        
+        print(f"[DEBUG PDF] Total rows added: {total_rows_added}")
         
         # Skapa tabell med anpassad kolumnbredd
         col_widths = [1.5*inch, 0.8*inch, 1.2*inch, 0.6*inch, 1.2*inch, 1.0*inch, 0.8*inch]
@@ -5876,9 +6031,15 @@ def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grad
         
         elements.append(table)
         
-        # Lägg till footer med datum
+        # Lägg till footer med datum och filter-info
         elements.append(Spacer(1, 20))
-        footer = Paragraph(f"Exporterat: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles['Normal'])
+        footer_text = f"Exporterat: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        if subject_grades_only or grade_type_filter == 'subject_final':
+            footer_text += " | Filter: Endast ämnesbetyg/slutbetyg"
+        elif grade_type_filter == 'assignments':
+            footer_text += " | Filter: Endast uppgifter/prov"
+        
+        footer = Paragraph(footer_text, styles['Normal'])
         elements.append(footer)
         
         # Bygg PDF
@@ -5887,7 +6048,19 @@ def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grad
         
         # Skapa filnamn
         timestamp = datetime.now().strftime('%Y%m%d_%H%M')
-        filename = f"elevbetyg_{current_user.school.name}_{timestamp}.pdf"
+        filter_suffix = ""
+        if subject_grades_only or grade_type_filter == 'subject_final':
+            filter_suffix = "_slutbetyg"
+        elif grade_type_filter == 'assignments':
+            filter_suffix = "_uppgifter"
+        
+        # Lägg till ämnesfilter i filnamn om valt
+        if subject_filter and all_subjects:
+            subject_name = next((s.name for s in all_subjects if s.id == int(subject_filter)), None)
+            if subject_name:
+                filter_suffix += f"_{subject_name.replace(' ', '_')}"
+            
+        filename = f"elevbetyg_{current_user.school.name}{filter_suffix}_{timestamp}.pdf"
         
         return send_file(
             pdf_buffer,
@@ -5897,9 +6070,12 @@ def export_to_pdf(students, subject_filter=None, subject_grades_only=False, grad
         )
         
     except ImportError:
+        from flask import flash, redirect, url_for
         flash('PDF-export kräver reportlab. Kontakta administratören.', 'error')
         return redirect(url_for('view_student_detailed_grades'))
     except Exception as e:
+        print(f"[ERROR PDF] {str(e)}")
+        from flask import flash, redirect, url_for
         flash(f'Fel vid PDF-export: {str(e)}', 'error')
         return redirect(url_for('view_student_detailed_grades'))
 
@@ -5917,7 +6093,9 @@ def get_student_grades_data(student, subject_filter=None, subject_grades_only=Fa
     
     grades_data = []
     
-    # 1. Hämta ämnesbetyg (slutbetyg)
+    print(f"[DEBUG GRADES] Student {student.get_full_name()}: subject_grades_only={subject_grades_only}, grade_type_filter={grade_type_filter}")
+    
+    # 1. Hämta ämnesbetyg (slutbetyg) - bara om inte endast uppgifter efterfrågas
     if grade_type_filter != 'assignments':
         subject_grades_query = db.session.query(SubjectGrade).join(Subject).filter(
             SubjectGrade.student_id == student.id,
@@ -5929,6 +6107,8 @@ def get_student_grades_data(student, subject_filter=None, subject_grades_only=Fa
             subject_grades_query = subject_grades_query.filter(SubjectGrade.subject_id == int(subject_filter))
         
         subject_grades = subject_grades_query.all()
+        
+        print(f"[DEBUG GRADES] Found {len(subject_grades)} subject grades")
         
         # Lägg till ämnesbetyg
         for subject_grade in subject_grades:
@@ -5946,6 +6126,9 @@ def get_student_grades_data(student, subject_filter=None, subject_grades_only=Fa
     
     # 2. Hämta uppgiftsbetyg (endast om inte "endast ämnesbetyg" är valt)
     if not subject_grades_only and grade_type_filter != 'subject_final':
+        assignment_grades_count = 0
+        external_grades_count = 0
+        
         # Assignment submissions
         assignment_grades_query = db.session.query(AssignmentSubmission, Assignment, Subject).join(
             Assignment, AssignmentSubmission.assignment_id == Assignment.id
@@ -5961,6 +6144,7 @@ def get_student_grades_data(student, subject_filter=None, subject_grades_only=Fa
             assignment_grades_query = assignment_grades_query.filter(Assignment.subject_id == int(subject_filter))
         
         assignment_grades = assignment_grades_query.all()
+        assignment_grades_count = len(assignment_grades)
         
         # Lägg till uppgiftsbetyg
         for submission, assignment, subject in assignment_grades:
@@ -5988,6 +6172,7 @@ def get_student_grades_data(student, subject_filter=None, subject_grades_only=Fa
             external_grades_query = external_grades_query.filter(ExternalAssignment.subject_id == int(subject_filter))
         
         external_grades = external_grades_query.all()
+        external_grades_count = len(external_grades)
         
         # Lägg till externa betyg
         for external, subject in external_grades:
@@ -6002,6 +6187,8 @@ def get_student_grades_data(student, subject_filter=None, subject_grades_only=Fa
                 'updated_at': external.created_at,
                 'subject_name': subject.name
             })
+        
+        print(f"[DEBUG GRADES] Found {assignment_grades_count} assignment grades, {external_grades_count} external grades")
     
     # Sortera betyg efter ämne och typ (ämnesbetyg först)
     grades_data.sort(key=lambda x: (
@@ -6009,6 +6196,8 @@ def get_student_grades_data(student, subject_filter=None, subject_grades_only=Fa
         0 if x['type'] == 'Ämnesbetyg' else 1, 
         x['updated_at'] or datetime.min
     ))
+    
+    print(f"[DEBUG GRADES] Returning {len(grades_data)} total grades for student {student.get_full_name()}")
     
     return grades_data
 
