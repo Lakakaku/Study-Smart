@@ -8,7 +8,7 @@ import pytesseract
 import threading
 from pydub import AudioSegment  # IMPORTERA AudioSegment
 import calendar
-
+import os
 from threading import Thread
 
 import whisper
@@ -24,6 +24,13 @@ import math
 from flask_migrate import Migrate
 
 
+UPLOAD_FOLDER = os.path.join('static', 'uploads', 'news_documents')
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'gif', 'txt', 'md'}
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB max filstorlek
+
+
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 import ssl
@@ -73,7 +80,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'site.db')
-
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'data')
 
 db = SQLAlchemy(app)
@@ -1162,6 +1170,9 @@ class SchoolNews(db.Model):
     school = db.relationship('School', backref='news')
     author = db.relationship('User', backref='authored_news')
     
+    
+
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -1205,8 +1216,49 @@ class SchoolClass(db.Model):
                                      foreign_keys=[homeroom_teacher_id], 
                                      backref='homeroom_classes')
     
+  
+    
     def __repr__(self):
         return f"SchoolClass('{self.name}', school_id={self.school_id})"
+    
+
+
+
+# Lägg till denna modell i din models.py fil
+
+class NewsDocument(db.Model):
+    """Dokument kopplade till skolnyheter"""
+    __tablename__ = 'news_documents'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    news_id = db.Column(db.Integer, db.ForeignKey('school_news.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)
+    file_type = db.Column(db.String(100))
+    original_filename = db.Column(db.String(255), nullable=False)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    download_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationer
+    news = db.relationship('SchoolNews', backref='documents')
+    uploader = db.relationship('User', backref='uploaded_news_documents')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'filename': self.original_filename,
+            'file_size': self.file_size,
+            'file_type': self.file_type,
+            'download_count': self.download_count,
+            'uploaded_at': self.created_at.isoformat() if self.created_at else None,
+            'uploader_name': self.uploader.get_full_name() if self.uploader else 'Okänd'
+        }
+    
+    def __repr__(self):
+        return f"NewsDocument('{self.original_filename}', news_id={self.news_id})"
+
 
 class Quiz(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -5071,7 +5123,7 @@ def index():
                 news = SchoolNews.query.filter_by(
                     school_id=current_user.school_id,
                     is_active=True
-                ).order_by(SchoolNews.created_at.desc()).limit(5).all()
+                ).order_by(SchoolNews.created_at.desc()).all()
                 
                 # Hämta skolans namn
                 school = School.query.get(current_user.school_id)
@@ -5140,7 +5192,7 @@ def school_admin_index():
         news = SchoolNews.query.filter_by(
             school_id=current_user.school_id,
             is_active=True
-        ).order_by(SchoolNews.created_at.desc()).limit(5).all()
+        ).order_by(SchoolNews.created_at.desc()).all()
         
         # Samla statistik
         stats = {
@@ -5166,10 +5218,16 @@ def school_admin_index():
 
 
 
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Ersätt den befintliga manage_school_news route med denna uppdaterade version:
+
 @app.route('/school_admin/news', methods=['GET', 'POST'])
 @login_required
 def manage_school_news():
-    """Hantera skolnyheter"""
+    """Hantera skolnyheter med dokumentuppladdning"""
     if not current_user.is_school_admin():
         flash('Endast skolledning kan hantera nyheter.', 'error')
         return redirect(url_for('index'))
@@ -5183,6 +5241,7 @@ def manage_school_news():
             return redirect(url_for('manage_school_news'))
         
         try:
+            # Skapa nyhetspost
             news_item = SchoolNews(
                 school_id=current_user.school_id,
                 title=title,
@@ -5190,20 +5249,96 @@ def manage_school_news():
                 author_id=current_user.id
             )
             db.session.add(news_item)
+            db.session.flush()  # För att få news_item.id
+            
+            # Hantera filuppladdningar
+            uploaded_files = request.files.getlist('documents')
+            successful_uploads = 0
+            
+            for file in uploaded_files:
+                if file and file.filename and allowed_file(file.filename):
+                    try:
+                        # Säker filnamn
+                        filename = secure_filename(file.filename)
+                        original_filename = file.filename
+                        
+                        # Skapa unikt filnamn för att undvika konflikter
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        base, ext = os.path.splitext(filename)
+                        unique_filename = f"{base}_{timestamp}_{news_item.id}{ext}"
+                        
+                        # Spara filen
+                        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                        file.save(file_path)
+                        
+                        # Skapa databaspost för dokumentet
+                        document = NewsDocument(
+                            news_id=news_item.id,
+                            filename=unique_filename,
+                            file_path=file_path,
+                            file_size=os.path.getsize(file_path),
+                            file_type=file.content_type or 'application/octet-stream',
+                            original_filename=original_filename,
+                            uploaded_by=current_user.id
+                        )
+                        db.session.add(document)
+                        successful_uploads += 1
+                        
+                    except Exception as e:
+                        print(f"Error uploading file {file.filename}: {e}")
+                        continue
+            
             db.session.commit()
-            flash('Nyhet publicerad!', 'success')
+            
+            if successful_uploads > 0:
+                flash(f'Nyhet publicerad med {successful_uploads} dokument!', 'success')
+            else:
+                flash('Nyhet publicerad!', 'success')
+                
         except Exception as e:
             db.session.rollback()
             flash(f'Fel vid publicering: {str(e)}', 'error')
         
         return redirect(url_for('manage_school_news'))
     
-    # Hämta alla nyheter för skolan
+    # Hämta alla nyheter för skolan med dokument
     all_news = SchoolNews.query.filter_by(
         school_id=current_user.school_id
     ).order_by(SchoolNews.created_at.desc()).all()
     
     return render_template('manage_school_news.html', news_items=all_news)
+
+
+
+@app.route('/download/news_document/<int:document_id>')
+@login_required
+def download_news_document(document_id):
+    """Ladda ner nyhetsdokument"""
+    try:
+        # Hämta dokumentet
+        document = NewsDocument.query.get_or_404(document_id)
+        
+        # Kontrollera att användaren har tillgång till dokumentet (samma skola)
+        news = SchoolNews.query.get(document.news_id)
+        if not news or news.school_id != current_user.school_id:
+            flash('Du har inte tillgång till detta dokument.', 'error')
+            return redirect(url_for('index'))
+        
+        # Öka nedladdningsräknaren
+        document.download_count += 1
+        db.session.commit()
+        
+        # Skicka filen
+        return send_file(
+            document.file_path,
+            as_attachment=True,
+            download_name=document.original_filename
+        )
+        
+    except Exception as e:
+        print(f"Error downloading document: {e}")
+        flash('Fel vid nedladdning av dokument.', 'error')
+        return redirect(url_for('school_news'))
 
 @app.route('/school_admin/news/<int:news_id>/toggle')
 @login_required
