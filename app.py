@@ -33,7 +33,19 @@ except AttributeError:
 
 
 
-
+def fix_missing_user_methods():
+    with app.app_context():
+        # Kontrollera om alla användare har user_type
+        users = User.query.filter(
+            db.or_(User.user_type == None, User.user_type == '')
+        ).all()
+        
+        for user in users:
+            user.user_type = 'student'  # Default
+            
+        if users:
+            db.session.commit()
+            print(f"Fixed {len(users)} users")
 
 import urllib.parse
 from pdf2image import convert_from_path
@@ -572,6 +584,54 @@ class User(db.Model, UserMixin):
         if self.class_id and self.class_id > 0:
             return self.school_class.name if self.school_class else "Okänd klass"
         return "Ingen klass"
+    
+
+
+
+
+    # Lägg till dessa metoder i din User-modell
+
+    def is_school_admin(self):
+        """Kontrollera om användaren är skoladministratör"""
+        return self.user_type == 'school_admin'
+
+    def get_school_teachers(self):
+        """Hämta alla lärare på samma skola"""
+        if not self.school_id or self.school_id == 0:
+            return []
+        return User.query.filter(
+            User.school_id == self.school_id,
+            User.user_type == 'teacher',
+            User.is_active == True
+        ).all()
+
+    def get_school_students(self):
+        """Hämta alla elever på samma skola"""
+        if not self.school_id or self.school_id == 0:
+            return []
+        return User.query.filter(
+            User.school_id == self.school_id,
+            User.user_type == 'student',
+            User.is_active == True
+        ).order_by(User.last_name, User.first_name).all()
+
+    def get_school_subjects(self):
+        """Hämta alla ämnen skapade av lärare på samma skola"""
+        if not self.school_id or self.school_id == 0:
+            return []
+        
+        # Hämta alla lärare på skolan
+        teachers = self.get_school_teachers()
+        teacher_ids = [t.id for t in teachers]
+        
+        if not teacher_ids:
+            return []
+        
+        return Subject.query.filter(Subject.user_id.in_(teacher_ids)).all()
+
+    def can_access_school_data(self):
+        """Kontrollera om användaren kan komma åt skoldata"""
+        return self.is_school_admin() and self.school_id and self.school_id > 0
     
     def get_full_name(self):
         """Hämta användarens fullständiga namn"""
@@ -5044,10 +5104,7 @@ def index():
 
 
 
-
-
-
-@app.route('/school_admin')
+@app.route('/school-admin')
 @login_required
 def school_admin_index():
     """Huvudsida för skolledning"""
@@ -5055,35 +5112,58 @@ def school_admin_index():
         flash('Denna sida är endast för skolledning.', 'error')
         return redirect(url_for('index'))
     
-    # Hämta skolinformation
-    school = School.query.get(current_user.school_id) if current_user.school_id else None
-    if not school:
-        flash('Ingen skola kopplad till ditt konto. Kontakta systemadministratören.', 'error')
+    # Kontrollera att användaren har en kopplad skola
+    if not current_user.school_id or current_user.school_id == 0:
+        flash('Inget skola kopplat till ditt konto. Kontakta systemadministratören.', 'error')
         return redirect(url_for('index'))
     
-    # Hämta statistik
-    total_students = User.query.filter(
-        User.school_id == current_user.school_id,
-        User.user_type == 'student',
-        User.is_active == True
-    ).count()
-    
-    total_teachers = User.query.filter(
-        User.school_id == current_user.school_id,
-        User.user_type == 'teacher',
-        User.is_active == True
-    ).count()
-    
-    # Hämta senaste nyheterna för redigering
-    recent_news = SchoolNews.query.filter_by(
-        school_id=current_user.school_id
-    ).order_by(SchoolNews.created_at.desc()).limit(5).all()
-    
-    return render_template('school_admin_index.html', 
-                         school=school,
-                         total_students=total_students,
-                         total_teachers=total_teachers,
-                         recent_news=recent_news)
+    try:
+        # Hämta skolinformation
+        school = School.query.get(current_user.school_id)
+        if not school:
+            flash('Skolan hittades inte. Kontakta systemadministratören.', 'error')
+            return redirect(url_for('index'))
+        
+        # Hämta statistik för skolan
+        teachers = current_user.get_school_teachers()
+        students = current_user.get_school_students()
+        subjects = current_user.get_school_subjects()
+        
+        # Hämta klasser
+        classes = SchoolClass.query.filter_by(
+            school_id=current_user.school_id,
+            is_active=True
+        ).order_by(SchoolClass.year_level, SchoolClass.name).all()
+        
+        # Hämta skolnyheter
+        news = SchoolNews.query.filter_by(
+            school_id=current_user.school_id,
+            is_active=True
+        ).order_by(SchoolNews.created_at.desc()).limit(5).all()
+        
+        # Samla statistik
+        stats = {
+            'total_teachers': len(teachers),
+            'total_students': len(students),
+            'total_subjects': len(subjects),
+            'total_classes': len(classes)
+        }
+        
+        return render_template('school_admin_index.html',
+                             school=school,
+                             teachers=teachers,
+                             students=students,
+                             subjects=subjects,
+                             classes=classes,
+                             news=news,
+                             stats=stats)
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to load school admin page: {e}")
+        flash('Ett fel uppstod när sidan skulle laddas.', 'error')
+        return redirect(url_for('index'))
+
+
 
 @app.route('/school_admin/news', methods=['GET', 'POST'])
 @login_required
@@ -8214,7 +8294,7 @@ def register():
 def login():
     # Redirect authenticated users
     if current_user.is_authenticated:
-        return redirect(url_for('home'))
+        return redirect(url_for('index'))
 
     if request.method == 'POST':
         identity = request.form['identity'].strip()
@@ -8227,16 +8307,29 @@ def login():
         if user and bcrypt.check_password_hash(user.password_hash, password):
             login_user(user)
             flash(f'Välkommen {user.username}!', 'success')
+            
+            # Debug logging
+            print(f"[DEBUG] User logged in: {user.username}")
+            print(f"[DEBUG] User type: {user.user_type}")
+            print(f"[DEBUG] School ID: {user.school_id}")
+            print(f"[DEBUG] is_school_admin(): {user.is_school_admin()}")
+            
             next_page = request.args.get('next')
+            
+            # Om användaren försökte komma åt en specifik sida, skicka dit
             if next_page:
+                print(f"[DEBUG] Redirecting to next page: {next_page}")
                 return redirect(next_page)
             
-            # Redirect based on user type
-            if user.is_parent():
+            # Redirect based on user type - med debug
+            if user.user_type == 'parent':
+                print("[DEBUG] Redirecting to parent_index")
                 return redirect(url_for('parent_index'))
             elif user.user_type == 'school_admin':
+                print("[DEBUG] Redirecting to school_admin_index")
                 return redirect(url_for('school_admin_index'))
             else:
+                print(f"[DEBUG] Redirecting to regular index (user_type: {user.user_type})")
                 return redirect(url_for('index'))    
         else:
             flash('Fel användarnamn/e-post eller lösenord.', 'danger')
@@ -11083,4 +11176,5 @@ if __name__ == '__main__':
         setup_lunch_menu_data()  
 
     cleanup_on_startup()   # om den inte behöver context
+    
     app.run(debug=True)
