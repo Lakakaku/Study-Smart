@@ -590,6 +590,8 @@
                 <div style="margin-top: 1rem; text-align: right;">
                     <a href="{{ url_for('export_grades', format='excel') }}{{ '?' + request.query_string.decode() if request.query_string else '' }}" 
                        class="export-button">📊 Exportera till Excel</a>
+                    <a href="{{ url_for('export_grades', format='csv') }}{{ '?' + request.query_string.decode() if request.query_string else '' }}" 
+                       class="export-button">📊 Exportera till CSV</a>
                     <a href="{{ url_for('export_grades', format='pdf') }}{{ '?' + request.query_string.decode() if request.query_string else '' }}" 
                        class="export-button">📄 Exportera till PDF</a>
                 </div>
@@ -784,7 +786,7 @@
             // Auto-focus på sökfältet när sidan laddas
             searchInput.focus();
             
-            // Live-feedback för sökning (valfritt - visar antal tecken)
+            // Live-feedback för sökning
             searchInput.addEventListener('input', function() {
                 const length = this.value.length;
                 if (length >= 2) {
@@ -826,13 +828,7 @@
         
         // Hjälpfunktion för att escape-a regex-tecken
         function escapeRegex(string) {
-            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\            // Live-feedback för sökning (valfritt - visar antal tecken)
-            searchInput.addEventListener('input', function() {
-                const length = this.value.length;
-                if (length >= 2) {
-                    searchBtn.style.background = '#38a169'; // Grön när redo att söka
-                } else {
-                    searchBtn.style.backgroun');
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\            // Auto-focus på');
         }
         
         // Debug-information
