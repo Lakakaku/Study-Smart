@@ -151,52 +151,25 @@
             background: #4a5568;
         }
 
-        .recent-news {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .news-item {
-            background: #f7fafc;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            border-left: 4px solid #4299e1;
-        }
-
-        .news-item h4 {
-            margin: 0 0 0.5rem 0;
-            color: #2d3748;
-        }
-
-        .news-item .news-meta {
-            font-size: 0.8rem;
-            color: #718096;
-            margin-bottom: 0.5rem;
-        }
-
-        .news-item .news-content {
-            color: #4a5568;
-            line-height: 1.5;
-        }
-
-        .quick-actions {
+        .action-buttons {
             display: flex;
             gap: 1rem;
+            margin-bottom: 2rem;
             flex-wrap: wrap;
         }
 
         .action-btn {
             background: white;
             border: 2px solid #e2e8f0;
-            padding: 1rem;
+            padding: 1rem 1.5rem;
             border-radius: 8px;
             text-decoration: none;
             color: #4a5568;
             text-align: center;
-            flex: 1;
-            min-width: 200px;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         .action-btn:hover {
@@ -224,6 +197,42 @@
             border-color: #e53e3e;
         }
 
+        .detailed-stats {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-top: 2rem;
+        }
+
+        .detailed-stats h3 {
+            margin-top: 0;
+            color: #2d3748;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .detailed-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .detailed-stat-item {
+            background: #f7fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .detailed-stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4299e1;
+        }
+
         @media (max-width: 768px) {
             .header {
                 flex-direction: column;
@@ -235,12 +244,17 @@
                 grid-template-columns: 1fr;
             }
 
-            .quick-actions {
+            .action-buttons {
                 flex-direction: column;
             }
 
             .action-btn {
-                min-width: auto;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .detailed-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
@@ -279,6 +293,18 @@
             </div>
         </div>
 
+        <!-- Åtgärdsknappar -->
+        <div class="action-buttons">
+            <a href="{{ url_for('view_all_grades') }}" class="action-btn">
+                <span style="font-size: 1.5rem;">📊</span>
+                <strong>Visa alla betyg</strong>
+            </a>
+            <a href="{{ url_for('manage_school_news') }}" class="action-btn">
+                <span style="font-size: 1.5rem;">📝</span>
+                <strong>Hantera alla nyheter</strong>
+            </a>
+        </div>
+
         <!-- Huvudinnehåll -->
         <div class="dashboard-grid">
             
@@ -297,110 +323,42 @@
                     <button type="submit" class="btn">Publicera nyhet</button>
                 </form>
             </div>
-
-            <!-- Senaste nyheter -->
-            <div class="card">
-                <h3>📰 Senaste nyheter</h3>
-                <div class="recent-news">
-                    {% if recent_news %}
-                        {% for news in recent_news %}
-                            <div class="news-item">
-                                <h4>{{ news.title }}</h4>
-                                <div class="news-meta">
-                                    Av {{ news.author.get_full_name() if news.author else 'Okänd' }} • 
-                                    {{ news.created_at.strftime('%Y-%m-%d %H:%M') if news.created_at else 'Okänt datum' }}
-                                    {% if not news.is_active %}<span style="color: #e53e3e;"> • INAKTIV</span>{% endif %}
-                                </div>
-                                <div class="news-content">{{ news.content[:150] }}{% if news.content|length > 150 %}...{% endif %}</div>
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <p style="color: #718096; text-align: center;">Inga nyheter ännu.</p>
-                    {% endif %}
-                </div>
-                <a href="{{ url_for('manage_school_news') }}" class="btn btn-secondary" style="margin-top: 1rem;">Hantera alla nyheter</a>
-            </div>
         </div>
 
-        <!-- Snabbåtgärder -->
-        <div class="card">
-            <h3>⚡ Snabbåtgärder</h3>
-            <div class="quick-actions">
-                <a href="{{ url_for('view_all_grades') }}" class="action-btn">
-                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
-                    <div><strong>Visa alla betyg</strong></div>
-                    <div style="font-size: 0.9rem; color: #718096;">Se elevers betyg i alla ämnen</div>
-                </a>
-                <a href="{{ url_for('manage_school_news') }}" class="action-btn">
-                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
-                    <div><strong>Hantera nyheter</strong></div>
-                    <div style="font-size: 0.9rem; color: #718096;">Redigera och ta bort nyheter</div>
-                </a>
-                <a href="#" onclick="loadSchoolStats()" class="action-btn">
-                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📈</div>
-                    <div><strong>Detaljerad statistik</strong></div>
-                    <div style="font-size: 0.9rem; color: #718096;">Visa omfattande skolstatistik</div>
-                </a>
-            </div>
-        </div>
-
-        <!-- Statistik detaljer (dolt som standard) -->
-        <div id="detailed-stats" class="card" style="display: none;">
+        <!-- Detaljerad statistik (alltid synlig) -->
+        <div class="detailed-stats">
             <h3>📈 Detaljerad statistik</h3>
-            <div id="stats-content">
-                <p>Laddar statistik...</p>
+            <div class="detailed-stats-grid" id="stats-content">
+                <div class="detailed-stat-item">
+                    <div class="detailed-stat-number">{{ total_students }}</div>
+                    <div>Totalt antal elever</div>
+                </div>
+                <div class="detailed-stat-item">
+                    <div class="detailed-stat-number" style="color: #48bb78;">{{ total_teachers }}</div>
+                    <div>Totalt antal lärare</div>
+                </div>
+                <div class="detailed-stat-item">
+                    <div class="detailed-stat-number" style="color: #ed8936;" id="total-classes">-</div>
+                    <div>Antal klasser</div>
+                </div>
+                <div class="detailed-stat-item">
+                    <div class="detailed-stat-number" style="color: #9f7aea;" id="total-subjects">-</div>
+                    <div>Antal ämnen</div>
+                </div>
+                <div class="detailed-stat-item">
+                    <div class="detailed-stat-number" style="color: #38b2ac;" id="recent-grades">-</div>
+                    <div>Betyg senaste månaden</div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        function loadSchoolStats() {
-            const statsDiv = document.getElementById('detailed-stats');
-            const statsContent = document.getElementById('stats-content');
-            
-            statsDiv.style.display = 'block';
-            statsContent.innerHTML = '<p>Laddar statistik...</p>';
-            
-            fetch('/api/school_admin/stats')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        statsContent.innerHTML = `<p style="color: #e53e3e;">Fel: ${data.error}</p>`;
-                        return;
-                    }
-                    
-                    statsContent.innerHTML = `
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 2rem; color: #4299e1; font-weight: bold;">${data.total_students}</div>
-                                <div>Totalt antal elever</div>
-                            </div>
-                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 2rem; color: #48bb78; font-weight: bold;">${data.total_teachers}</div>
-                                <div>Totalt antal lärare</div>
-                            </div>
-                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 2rem; color: #ed8936; font-weight: bold;">${data.total_classes}</div>
-                                <div>Antal klasser</div>
-                            </div>
-                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 2rem; color: #9f7aea; font-weight: bold;">${data.total_subjects}</div>
-                                <div>Antal ämnen</div>
-                            </div>
-                            <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 2rem; color: #38b2ac; font-weight: bold;">${data.recent_grades}</div>
-                                <div>Betyg senaste månaden</div>
-                            </div>
-                        </div>
-                    `;
-                })
-                .catch(error => {
-                    statsContent.innerHTML = `<p style="color: #e53e3e;">Kunde inte ladda statistik: ${error.message}</p>`;
-                });
-        }
-        
-        // Auto-resize textarea
+        // Ladda detaljerad statistik vid sidladdning
         document.addEventListener('DOMContentLoaded', function() {
+            loadSchoolStats();
+            
+            // Auto-resize textarea
             const textarea = document.getElementById('content');
             if (textarea) {
                 textarea.addEventListener('input', function() {
@@ -409,6 +367,29 @@
                 });
             }
         });
+        
+        function loadSchoolStats() {
+            fetch('/api/school_admin/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Fel vid laddning av statistik:', data.error);
+                        return;
+                    }
+                    
+                    // Uppdatera värden
+                    const totalClasses = document.getElementById('total-classes');
+                    const totalSubjects = document.getElementById('total-subjects');
+                    const recentGrades = document.getElementById('recent-grades');
+                    
+                    if (totalClasses) totalClasses.textContent = data.total_classes || '-';
+                    if (totalSubjects) totalSubjects.textContent = data.total_subjects || '-';
+                    if (recentGrades) recentGrades.textContent = data.recent_grades || '-';
+                })
+                .catch(error => {
+                    console.error('Kunde inte ladda statistik:', error);
+                });
+        }
     </script>
 </body>
 </html>
