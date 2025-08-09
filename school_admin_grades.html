@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alla elevers betyg - Skolledning</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #2d3748;
+        }
+
+        .nav-links {
+            margin-top: 1rem;
+        }
+
+        .nav-links a {
+            color: #4299e1;
+            text-decoration: none;
+            margin-right: 1rem;
+        }
+
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .filters {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 1rem;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .filter-group input, .filter-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        .student-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .student-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f7fafc;
+        }
+
+        .student-info h3 {
+            margin: 0;
+            color: #2d3748;
+            font-size: 1.4rem;
+        }
+
+        .student-meta {
+            color: #718096;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .overall-grade {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 50px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .overall-grade .grade-number {
+            font-size: 2rem;
+            font-weight: bold;
+            display: block;
+            line-height: 1;
+        }
+
+        .overall-grade .grade-label {
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+
+        .subjects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .subject-card {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 1.5rem;
+            border-left: 4px solid #4299e1;
+        }
+
+        .subject-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .subject-name {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .subject-teacher {
+            font-size: 0.9rem;
+            color: #718096;
+        }
+
+        .subject-grade {
+            background: #4299e1;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .grade-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #4a5568;
+        }
+
+        .grade-count {
+            background: #e2e8f0;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+        }
+
+        .detailed-grades {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .grade-chips {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .grade-chip {
+            background: #e2e8f0;
+            color: #4a5568;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .no-grades {
+            text-align: center;
+            color: #718096;
+            padding: 3rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .btn {
+            background: #4299e1;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background: #3182ce;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #4299e1;
+            border: 2px solid #4299e1;
+        }
+
+        .btn-outline:hover {
+            background: #4299e1;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .student-header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .subjects-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-row {
+                flex-direction: column;
+            }
+
+            .filter-group {
+                min-width: auto;
+            }
+        }
+
+        .search-results {
+            color: #718096;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Alla elevers betyg</h1>
+        <div class="nav-links">
+            <a href="{{ url_for('school_admin_index') }}">← Tillbaka till översikt</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Sökfilter -->
+        <div class="filters">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="student-search">Sök elev:</label>
+                    <input type="text" id="student-search" placeholder="Sök på namn..." onkeyup="filterStudents()">
+                </div>
+                <div class="filter-group">
+                    <label for="subject-filter">Filtrera ämne:</label>
+                    <select id="subject-filter" onchange="filterBySubject()">
+                        <option value="">Alla ämnen</option>
+                        {% for subject in subjects %}
+                            <option value="{{ subject.name }}">{{ subject.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="grade-filter">Betygsintervall:</label>
+                    <select id="grade-filter" onchange="filterByGrade()">
+                        <option value="">Alla betyg</option>
+                        <option value="high">8-10 (Höga betyg)</option>
+                        <option value="medium">5-7 (Medelbetyg)</option>
+                        <option value="low">1-4 (Låga betyg)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="search-results" id="search-results">
+            Visar {{ grades_data|length }} elever med betyg
+        </div>
+
+        <!-- Elevernas betyg -->
+        <div id="students-container">
+            {% if grades_data %}
+                {% for data in grades_data %}
+                    <div class="student-card" data-student-name="{{ data.student.get_full_name().lower() }}" 
+                         data-overall-grade="{{ data.overall_average }}">
+                        <div class="student-header">
+                            <div class="student-info">
+                                <h3>{{ data.student.get_full_name() }}</h3>
+                                <div class="student-meta">
+                                    {{ data.student.get_class_name() }} • 
+                                    {{ data.grades|length }} ämnen med betyg
+                                </div>
+                            </div>
+                            <div class="overall-grade">
+                                <span class="grade-number">{{ "%.1f"|format(data.overall_average) }}</span>
+                                <div class="grade-label">Genomsnitt</div>
+                            </div>
+                        </div>
+
+                        <div class="subjects-grid">
+                            {% for grade_info in data.grades %}
+                                <div class="subject-card" data-subject="{{ grade_info.subject_name.lower() }}">
+                                    <div class="subject-header">
+                                        <div>
+                                            <div class="subject-name">{{ grade_info.subject_name }}</div>
+                                            <div class="subject-teacher">{{ grade_info.teacher_name }}</div>
+                                        </div>
+                                        <div class="subject-grade">{{ "%.1f"|format(grade_info.average_grade) }}</div>
+                                    </div>
+                                    
+                                    <div class="grade-details">
+                                        <span>{{ grade_info.grade_count }} betyg</span>
+                                        <div class="grade-count">
+                                            Genomsnitt: {{ "%.1f"|format(grade_info.average_grade) }}
+                                        </div>
+                                    </div>
+
+                                    <div class="detailed-grades">
+                                        <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 0.5rem;">
+                                            Individuella betyg:
+                                        </div>
+                                        <div class="grade-chips">
+                                            {% for grade in grade_info.individual_grades %}
+                                                <span class="grade-chip">{{ grade }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div style="margin-top: 1.5rem; text-align: center;">
+                            <a href="{{ url_for('view_student_detailed_grades', student_id=data.student.id) }}" 
+                               class="btn btn-outline">
+                                Visa detaljerade betyg →
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-grades">
+                    <h3>Inga betyg att visa</h3>
+                    <p>Det finns inga betygsatta elever ännu. Betyg visas här när lärare har bedömt elevernas uppgifter.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function filterStudents() {
+            const searchTerm = document.getElementById('student-search').value.toLowerCase();
+            const studentCards = document.querySelectorAll('.student-card');
+            let visibleCount = 0;
+
+            studentCards.forEach(card => {
+                const studentName = card.getAttribute('data-student-name');
+                const isVisible = studentName.includes(searchTerm);
+                card.style.display = isVisible ? 'block' : 'none';
+                if (isVisible) visibleCount++;
+            });
+
+            updateSearchResults(visibleCount);
+        }
+
+        function filterBySubject() {
+            const selectedSubject = document.getElementById('subject-filter').value.toLowerCase();
+            const studentCards = document.querySelectorAll('.student-card');
+            let visibleCount = 0;
+
+            studentCards.forEach(card => {
+                if (!selectedSubject) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                    return;
+                }
+
+                const subjectCards = card.querySelectorAll('.subject-card');
+                let hasSubject = false;
+                
+                subjectCards.forEach(subjectCard => {
+                    const subjectName = subjectCard.getAttribute('data-subject');
+                    if (subjectName.includes(selectedSubject)) {
+                        hasSubject = true;
+                    }
+                });
+
+                card.style.display = hasSubject ? 'block' : 'none';
+                if (hasSubject) visibleCount++;
+            });
+
+            updateSearchResults(visibleCount);
+        }
+
+        function filterByGrade() {
+            const gradeFilter = document.getElementById('grade-filter').value;
+            const studentCards = document.querySelectorAll('.student-card');
+            let visibleCount = 0;
+
+            studentCards.forEach(card => {
+                if (!gradeFilter) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                    return;
+                }
+
+                const overallGrade = parseFloat(card.getAttribute('data-overall-grade'));
+                let shouldShow = false;
+
+                switch (gradeFilter) {
+                    case 'high':
+                        shouldShow = overallGrade >= 8;
+                        break;
+                    case 'medium':
+                        shouldShow = overallGrade >= 5 && overallGrade < 8;
+                        break;
+                    case 'low':
+                        shouldShow = overallGrade < 5;
+                        break;
+                }
+
+                card.style.display = shouldShow ? 'block' : 'none';
+                if (shouldShow) visibleCount++;
+            });
+
+            updateSearchResults(visibleCount);
+        }
+
+        function updateSearchResults(count) {
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.textContent = `Visar ${count} elever${count === 1 ? '' : ''} med betyg`;
+        }
+
+        // Kombinerad filtrering
+        function applyAllFilters() {
+            const searchTerm = document.getElementById('student-search').value.toLowerCase();
+            const selectedSubject = document.getElementById('subject-filter').value.toLowerCase();
+            const gradeFilter = document.getElementById('grade-filter').value;
+            const studentCards = document.querySelectorAll('.student-card');
+            let visibleCount = 0;
+
+            studentCards.forEach(card => {
+                const studentName = card.getAttribute('data-student-name');
+                const overallGrade = parseFloat(card.getAttribute('data-overall-grade'));
+                
+                // Namn filter
+                const matchesName = !searchTerm || studentName.includes(searchTerm);
+                
+                // Ämnes filter
+                let matchesSubject = !selectedSubject;
+                if (selectedSubject) {
+                    const subjectCards = card.querySelectorAll('.subject-card');
+                    subjectCards.forEach(subjectCard => {
+                        const subjectName = subjectCard.getAttribute('data-subject');
+                        if (subjectName.includes(selectedSubject)) {
+                            matchesSubject = true;
+                        }
+                    });
+                }
+                
+                // Betygs filter
+                let matchesGrade = !gradeFilter;
+                if (gradeFilter) {
+                    switch (gradeFilter) {
+                        case 'high':
+                            matchesGrade = overallGrade >= 8;
+                            break;
+                        case 'medium':
+                            matchesGrade = overallGrade >= 5 && overallGrade < 8;
+                            break;
+                        case 'low':
+                            matchesGrade = overallGrade < 5;
+                            break;
+                    }
+                }
+
+                const shouldShow = matchesName && matchesSubject && matchesGrade;
+                card.style.display = shouldShow ? 'block' : 'none';
+                if (shouldShow) visibleCount++;
+            });
+
+            updateSearchResults(visibleCount);
+        }
+
+        // Uppdatera alla filtreringsfunktioner att använda kombinerad logik
+        document.getElementById('student-search').addEventListener('input', applyAllFilters);
+        document.getElementById('subject-filter').addEventListener('change', applyAllFilters);
+        document.getElementById('grade-filter').addEventListener('change', applyAllFilters);
+    </script>
+</body>
+</html>
