@@ -5317,67 +5317,466 @@ def view_all_grades():
                          grades_data=grades_data,
                          subjects=subjects)
 
-@app.route('/school_admin/student/<int:student_id>/grades')
-@login_required  
-def view_student_detailed_grades(student_id):
-    """Visa detaljerade betyg för en specifik elev"""
-    if not current_user.is_school_admin():
-        flash('Endast skolledning kan se elevbetyg.', 'error')
+# I din view_student_detailed_grades funktion, ersätt denna del:
+
+# I din view_student_detailed_grades funktion, lägg till dessa parametrar:
+
+@app.route('/school_admin/student_detailed_grades')
+@login_required
+def view_student_detailed_grades():
+    """Visa detaljerade betyg för alla elever på skolan"""
+    
+    # Kontrollera att användaren är skoladministratör
+    if not current_user.is_school_admin() or not current_user.can_access_school_data():
+        flash('Du har inte behörighet att komma åt denna sida.', 'error')
         return redirect(url_for('index'))
     
-    # Kontrollera att eleven tillhör samma skola
-    student = User.query.filter_by(
-        id=student_id,
-        school_id=current_user.school_id,
-        user_type='student'
-    ).first_or_404()
+    # Hämta sökparametrar från request
+    search_query = request.args.get('search', '').strip()
+    class_filter = request.args.get('class_id', '')
+    subject_filter = request.args.get('subject_filter', '')
     
-    # Hämta alla lärare på skolan
-    teachers = User.query.filter(
-        User.school_id == current_user.school_id,
-        User.user_type == 'teacher'
+    # NYA FILTER-PARAMETRAR:
+    subject_grades_only = request.args.get('subject_grades_only', '') == '1'
+    grade_type_filter = request.args.get('grade_type_filter', '')
+    
+    # Resten av koden för att hämta klasser och ämnen...
+    classes = SchoolClass.query.filter(
+        SchoolClass.school_id == current_user.school_id
+    ).order_by(SchoolClass.year_level.asc(), SchoolClass.name.asc()).all()
+    
+    school_teachers = User.query.filter_by(
+        school_id=current_user.school_id,
+        user_type='teacher',
+        is_active=True
     ).all()
     
-    teacher_ids = [t.id for t in teachers]
-    subjects = Subject.query.filter(Subject.user_id.in_(teacher_ids)).all() if teacher_ids else []
+    teacher_ids = [t.id for t in school_teachers]
+    all_subjects = Subject.query.filter(
+        Subject.user_id.in_(teacher_ids)
+    ).order_by(Subject.name).all() if teacher_ids else []
     
-    detailed_grades = []
+    # Student query...
+    students_query = User.query.filter(
+        User.school_id == current_user.school_id,
+        User.user_type == 'student',
+        User.is_active == True
+    )
     
-    for subject in subjects:
-        # Hämta alla betygsatta inlämningar
-        submissions = db.session.query(AssignmentSubmission, Assignment).join(
-            Assignment
-        ).filter(
-            Assignment.subject_id == subject.id,
-            AssignmentSubmission.student_id == student.id,
-            AssignmentSubmission.grade.isnot(None)
-        ).all()
+    # Applicera sök- och klassfilter (samma som tidigare)...
+    if search_query:
+        students_query = students_query.filter(
+            db.or_(
+                User.username.ilike(f'%{search_query}%'),
+                User.first_name.ilike(f'%{search_query}%'),
+                User.last_name.ilike(f'%{search_query}%'),
+                User.email.ilike(f'%{search_query}%'),
+                db.func.concat(User.first_name, ' ', User.last_name).ilike(f'%{search_query}%')
+            )
+        )
+    
+    if class_filter and class_filter.isdigit():
+        class_id = int(class_filter)
+        valid_class = next((cls for cls in classes if cls.id == class_id), None)
+        if valid_class:
+            students_query = students_query.filter(User.class_id == class_id)
+    
+    students = students_query.order_by(User.last_name, User.first_name).all()
+    
+    if not students:
+        return render_template('student_detailed_grades.html',
+                             students=[],
+                             classes=classes,
+                             all_subjects=all_subjects,
+                             school=current_user.school,
+                             total_grades=0,
+                             average_grade=None,
+                             unique_subjects=0)
+    
+    # UPPDATERAD BETYGSHÄMTNING MED FILTRERING:
+    students_data = []
+    all_grades_for_avg = []
+    unique_subjects_set = set()
+    total_grades_count = 0
+    
+    for student in students:
+        grades_by_subject = {}
+        student_all_grades = []
         
-        # Hämta externa betyg
-        external_grades = ExternalAssignment.query.filter_by(
-            subject_id=subject.id,
-            student_id=student.id
-        ).all()
+        # 1. Hämta ämnesbetyg (slutbetyg) - subject_grades tabellen
+        if grade_type_filter != 'assignments':  # Visa inte om endast uppgifter efterfrågas
+            subject_grades_query = db.session.query(SubjectGrade).join(Subject).filter(
+                SubjectGrade.student_id == student.id
+            )
+            
+            # Applicera ämnesfilter
+            if subject_filter and subject_filter.isdigit():
+                subject_filter_id = int(subject_filter)
+                valid_subject = next((s for s in all_subjects if s.id == subject_filter_id), None)
+                if valid_subject:
+                    subject_grades_query = subject_grades_query.filter(SubjectGrade.subject_id == subject_filter_id)
+            
+            subject_grades = subject_grades_query.all()
+            
+            # Lägg till ämnesbetyg
+            for subject_grade in subject_grades:
+                subject_name = subject_grade.subject.name
+                if subject_name not in grades_by_subject:
+                    grades_by_subject[subject_name] = []
+                
+                teacher = User.query.get(subject_grade.graded_by) if subject_grade.graded_by else None
+                teacher_name = teacher.get_full_name() if teacher else "Okänd lärare"
+                
+                grades_by_subject[subject_name].append({
+                    'grade': subject_grade.grade,
+                    'type': 'Ämnesbetyg',
+                    'teacher_name': teacher_name,
+                    'teacher_comment': subject_grade.teacher_comment,
+                    'updated_at': subject_grade.updated_at,
+                    'subject_name': subject_name
+                })
+                
+                student_all_grades.append(subject_grade.grade)
+                unique_subjects_set.add(subject_name)
+                total_grades_count += 1
         
-        if submissions or external_grades:
-            subject_data = {
-                'subject': subject,
-                'teacher': next((t for t in teachers if t.id == subject.user_id), None),
-                'submissions': submissions,
-                'external_grades': external_grades,
-                'average': 0
-            }
+        # 2. Hämta uppgiftsbetyg (endast om inte "endast ämnesbetyg" är valt)
+        if not subject_grades_only and grade_type_filter != 'subject_final':
+            # Assignment submissions
+            assignment_grades_query = db.session.query(AssignmentSubmission, Assignment, Subject).join(
+                Assignment, AssignmentSubmission.assignment_id == Assignment.id
+            ).join(
+                Subject, Assignment.subject_id == Subject.id
+            ).filter(
+                AssignmentSubmission.student_id == student.id,
+                AssignmentSubmission.grade.isnot(None),
+                Subject.user_id.in_(teacher_ids)
+            )
             
-            # Beräkna genomsnitt
-            all_grades = [s[0].grade for s in submissions] + [e.grade for e in external_grades]
-            if all_grades:
-                subject_data['average'] = round(sum(all_grades) / len(all_grades), 1)
+            if subject_filter and subject_filter.isdigit() and valid_subject:
+                assignment_grades_query = assignment_grades_query.filter(Assignment.subject_id == int(subject_filter))
             
-            detailed_grades.append(subject_data)
+            assignment_grades = assignment_grades_query.all()
+            
+            # Lägg till uppgiftsbetyg
+            for submission, assignment, subject in assignment_grades:
+                subject_name = subject.name
+                if subject_name not in grades_by_subject:
+                    grades_by_subject[subject_name] = []
+                
+                teacher = User.query.get(submission.graded_by) if submission.graded_by else None
+                teacher_name = teacher.get_full_name() if teacher else "Okänd lärare"
+                
+                grades_by_subject[subject_name].append({
+                    'grade': submission.grade,
+                    'type': f'Uppgift: {assignment.title}',
+                    'teacher_name': teacher_name,
+                    'teacher_comment': None,
+                    'updated_at': submission.graded_at,
+                    'subject_name': subject_name
+                })
+                
+                student_all_grades.append(submission.grade)
+                unique_subjects_set.add(subject_name)
+                total_grades_count += 1
+            
+            # Externa uppgifter/prov
+            external_grades_query = db.session.query(ExternalAssignment, Subject).join(
+                Subject, ExternalAssignment.subject_id == Subject.id
+            ).filter(
+                ExternalAssignment.student_id == student.id,
+                Subject.user_id.in_(teacher_ids)
+            )
+            
+            if subject_filter and subject_filter.isdigit() and valid_subject:
+                external_grades_query = external_grades_query.filter(ExternalAssignment.subject_id == int(subject_filter))
+            
+            external_grades = external_grades_query.all()
+            
+            # Lägg till externa betyg
+            for external, subject in external_grades:
+                subject_name = subject.name
+                if subject_name not in grades_by_subject:
+                    grades_by_subject[subject_name] = []
+                
+                teacher = User.query.get(external.created_by) if external.created_by else None
+                teacher_name = teacher.get_full_name() if teacher else "Okänd lärare"
+                
+                grades_by_subject[subject_name].append({
+                    'grade': external.grade,
+                    'type': f'Prov/Test: {external.name}',
+                    'teacher_name': teacher_name,
+                    'teacher_comment': None,
+                    'updated_at': external.created_at,
+                    'subject_name': subject_name
+                })
+                
+                student_all_grades.append(external.grade)
+                unique_subjects_set.add(subject_name)
+                total_grades_count += 1
+        
+        # Skapa lista av betyg för template
+        grades_list = []
+        for subject_name, subject_grades_list in grades_by_subject.items():
+            for grade_info in subject_grades_list:
+                grades_list.append(grade_info)
+        
+        # Sortera betyg efter ämne och typ (ämnesbetyg först)
+        grades_list.sort(key=lambda x: (x['subject_name'], 0 if x['type'] == 'Ämnesbetyg' else 1, x['updated_at'] or datetime.min))
+        
+        # Beräkna genomsnitt för eleven
+        avg_grade = sum(student_all_grades) / len(student_all_grades) if student_all_grades else None
+        
+        # Lägg till alla betyg till total för genomsnittsberäkning
+        all_grades_for_avg.extend(student_all_grades)
+        
+        student_data = {
+            'student': student,
+            'grades': grades_list,
+            'total_grades': len(student_all_grades),
+            'average_grade': avg_grade,
+            'subjects_count': len(grades_by_subject)
+        }
+        
+        students_data.append(student_data)
+    
+    # Beräkna övergripande statistik
+    average_grade = sum(all_grades_for_avg) / len(all_grades_for_avg) if all_grades_for_avg else None
+    unique_subjects_count = len(unique_subjects_set)
+    
+    print(f"[DEBUG] Filter applied - subject_grades_only: {subject_grades_only}, grade_type_filter: {grade_type_filter}")
+    print(f"[DEBUG] Found {total_grades_count} total grades after filtering")
     
     return render_template('student_detailed_grades.html',
-                         student=student,
-                         detailed_grades=detailed_grades)
+                         students=students_data,
+                         classes=classes,
+                         all_subjects=all_subjects,
+                         school=current_user.school,
+                         total_grades=total_grades_count,
+                         average_grade=average_grade,
+                         unique_subjects=unique_subjects_count)
+
+
+
+
+@app.route('/export_grades')
+@login_required 
+def export_grades():
+    """Exportera betygsdata till Excel eller PDF"""
+    
+    if not current_user.is_school_admin() or not current_user.can_access_school_data():
+        flash('Du har inte behörighet att exportera data.', 'error')
+        return redirect(url_for('index'))
+    
+    export_format = request.args.get('format', 'excel')
+    
+    # Hämta samma data som huvudsidan (med filter)
+    search_query = request.args.get('search', '').strip()
+    class_filter = request.args.get('class_id', '')
+    subject_filter = request.args.get('subject_filter', '')
+    
+    # Samma logik som i view_student_detailed_grades för att hämta data
+    students_query = User.query.filter(
+        User.school_id == current_user.school_id,
+        User.user_type == 'student',
+        User.is_active == True
+    )
+    
+    if search_query:
+        students_query = students_query.filter(
+            db.or_(
+                User.username.ilike(f'%{search_query}%'),
+                User.first_name.ilike(f'%{search_query}%'),
+                User.last_name.ilike(f'%{search_query}%'),
+                User.email.ilike(f'%{search_query}%')
+            )
+        )
+    
+    if class_filter and class_filter.isdigit():
+        students_query = students_query.filter(User.class_id == int(class_filter))
+    
+    students = students_query.order_by(User.last_name, User.first_name).all()
+    
+    if export_format == 'excel':
+        return export_to_excel(students, subject_filter)
+    elif export_format == 'pdf':
+        return export_to_pdf(students, subject_filter)
+    else:
+        flash('Ogiltigt exportformat.', 'error')
+        return redirect(url_for('view_student_detailed_grades'))
+
+
+def export_to_excel(students, subject_filter=None):
+    """Exportera till Excel-fil"""
+    try:
+        import pandas as pd
+        from io import BytesIO
+        
+        # Förbered data för Excel
+        excel_data = []
+        
+        for student in students:
+            # Samma logik som i huvudfunktionen för att hämta betyg
+            subject_grades_query = db.session.query(SubjectGrade).join(Subject).filter(
+                SubjectGrade.student_id == student.id
+            )
+            
+            if subject_filter and subject_filter.isdigit():
+                subject_grades_query = subject_grades_query.filter(SubjectGrade.subject_id == int(subject_filter))
+            
+            subject_grades = subject_grades_query.all()
+            
+            # Om inga betyg finns, lägg till en rad ändå
+            if not subject_grades:
+                excel_data.append({
+                    'Elev ID': student.id,
+                    'Namn': student.get_full_name(),
+                    'Användarnamn': student.username,
+                    'Email': student.email,
+                    'Klass': student.get_class_name(),
+                    'Ämne': 'Inga betyg',
+                    'Betyg': '',
+                    'Lärarkommentar': '',
+                    'Uppdaterat': '',
+                    'Lärare': ''
+                })
+            else:
+                for grade in subject_grades:
+                    teacher = User.query.get(grade.graded_by) if grade.graded_by else None
+                    excel_data.append({
+                        'Elev ID': student.id,
+                        'Namn': student.get_full_name(),
+                        'Användarnamn': student.username,
+                        'Email': student.email,
+                        'Klass': student.get_class_name(),
+                        'Ämne': grade.subject.name,
+                        'Betyg': grade.grade,
+                        'Lärarkommentar': grade.teacher_comment or '',
+                        'Uppdaterat': grade.updated_at.strftime('%Y-%m-%d %H:%M') if grade.updated_at else '',
+                        'Lärare': teacher.get_full_name() if teacher else 'Okänd'
+                    })
+        
+        # Skapa DataFrame och Excel-fil
+        df = pd.DataFrame(excel_data)
+        
+        # Skapa BytesIO buffer
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='Elevbetyg', index=False)
+            
+            # Formatera kolumner
+            workbook = writer.book
+            worksheet = writer.sheets['Elevbetyg']
+            
+            # Autofit kolumnbredd
+            for i, col in enumerate(df.columns):
+                max_length = max(df[col].astype(str).apply(len).max(), len(col))
+                worksheet.set_column(i, i, min(max_length + 2, 50))
+        
+        excel_buffer.seek(0)
+        
+        # Skapa filnamn med datum
+        filename = f"elevbetyg_{current_user.school.name}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        
+        return send_file(
+            excel_buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except ImportError:
+        flash('Excel-export kräver pandas. Kontakta administratören.', 'error')
+        return redirect(url_for('view_student_detailed_grades'))
+    except Exception as e:
+        flash(f'Fel vid Excel-export: {str(e)}', 'error')
+        return redirect(url_for('view_student_detailed_grades'))
+
+
+def export_to_pdf(students, subject_filter=None):
+    """Exportera till PDF-fil - enkel implementering"""
+    try:
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        from io import BytesIO
+        
+        # Skapa PDF buffer
+        pdf_buffer = BytesIO()
+        
+        # Skapa dokument
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=A4)
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Titel
+        title = Paragraph(f"Elevbetyg - {current_user.school.name}", styles['Title'])
+        elements.append(title)
+        elements.append(Spacer(1, 20))
+        
+        # Skapa tabelldata
+        table_data = [['Namn', 'Klass', 'Ämne', 'Betyg', 'Uppdaterat']]
+        
+        for student in students:
+            subject_grades = db.session.query(SubjectGrade).join(Subject).filter(
+                SubjectGrade.student_id == student.id
+            ).all()
+            
+            if not subject_grades:
+                table_data.append([
+                    student.get_full_name(),
+                    student.get_class_name(),
+                    'Inga betyg',
+                    '-',
+                    '-'
+                ])
+            else:
+                for grade in subject_grades:
+                    table_data.append([
+                        student.get_full_name(),
+                        student.get_class_name(),
+                        grade.subject.name,
+                        str(grade.grade),
+                        grade.updated_at.strftime('%Y-%m-%d') if grade.updated_at else '-'
+                    ])
+        
+        # Skapa tabell
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        elements.append(table)
+        
+        # Bygg PDF
+        doc.build(elements)
+        pdf_buffer.seek(0)
+        
+        # Skapa filnamn
+        filename = f"elevbetyg_{current_user.school.name}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except ImportError:
+        flash('PDF-export kräver reportlab. Kontakta administratören.', 'error')
+        return redirect(url_for('view_student_detailed_grades'))
+    except Exception as e:
+        flash(f'Fel vid PDF-export: {str(e)}', 'error')
+        return redirect(url_for('view_student_detailed_grades'))
+
 
 @app.route('/api/school_admin/stats')
 @login_required
