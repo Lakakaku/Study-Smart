@@ -415,16 +415,28 @@
                 
                 <form id="scheduleForm">
                     <!-- Klassval -->
+                    <!-- Replace the static class selection with this dynamic version -->
                     <div class="form-group">
                         <label for="class_id">Välj klass:</label>
                         <select id="class_id" name="class_id" required>
                             <option value="">Välj en klass...</option>
-                            <option value="1">8A (0 elever)</option>
-                            <option value="2">8B (0 elever)</option>
-                            <option value="3">9A (2 elever)</option>
-                            <option value="4">9B (1 elever)</option>
-                            <option value="5">9C (1 elever)</option>
+                            {% if classes %}
+                                {% for class in classes %}
+                                    <option value="{{ class.id }}">
+                                        {{ class.name }} 
+                                        ({{ class.users|length if class.users else 0 }} elever)
+                                        {% if class.year_level %} - Årskurs {{ class.year_level }}{% endif %}
+                                    </option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="" disabled>Inga klasser tillgängliga</option>
+                            {% endif %}
                         </select>
+                        {% if not classes or classes|length == 0 %}
+                            <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
+                                💡 Inga klasser har skapats ännu. <a href="{{ url_for('school_admin_index') }}">Skapa klasser här</a>.
+                            </p>
+                        {% endif %}
                     </div>
 
                     <!-- Ämnen och timmar -->
