@@ -1173,21 +1173,27 @@ class School(db.Model):
 
 
 class ClassSchedule(db.Model):
+    """Enhanced ClassSchedule model with teacher support"""
     __tablename__ = 'class_schedule'
-
-    id         = db.Column(db.Integer, primary_key=True)
-    class_id   = db.Column(db.Integer, db.ForeignKey('school_classes.id', ondelete='CASCADE'), nullable=False)
-    weekday    = db.Column(db.String(20),  nullable=False)   # 'måndag', 'tisdag' …
-    start_time = db.Column(db.String(5),   nullable=False)   # '08:00'
-    end_time   = db.Column(db.String(5),   nullable=False)   # '09:00'
-    subject_id = db.Column(db.Integer,     db.ForeignKey('subject.id'), nullable=True)
-    room       = db.Column(db.String(50),  nullable=True)
-    created_at = db.Column(db.DateTime,    default=datetime.utcnow)
-
-    # Relationer (valfritt)
+    
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id', ondelete='CASCADE'), nullable=False)
+    weekday = db.Column(db.String(20), nullable=False)  # 'måndag', 'tisdag' …
+    start_time = db.Column(db.String(5), nullable=False)  # '08:00'
+    end_time = db.Column(db.String(5), nullable=False)  # '09:00'
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # NEW
+    room = db.Column(db.String(50), nullable=True)
+    notes = db.Column(db.Text, nullable=True)  # NEW
+    is_active = db.Column(db.Boolean, default=True, nullable=False)  # NEW
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # NEW
+    
+    # Relationer
     school_class = db.relationship('SchoolClass', backref='schedule')
-    subject      = db.relationship('Subject')
-
+    subject = db.relationship('Subject')
+    teacher = db.relationship('User', foreign_keys=[teacher_id], backref='taught_schedule_items')  # NEW
+    
     def get_students_for_lesson(self):
         """Hämta alla elever som ska gå på denna lektion (baserat på class_id)"""
         return User.query.filter(
@@ -1195,17 +1201,170 @@ class ClassSchedule(db.Model):
             User.user_type == 'student',
             User.is_active == True
         ).order_by(User.last_name, User.first_name).all()
-
+    
     def get_attendance_for_date(self, date):
         """Hämta närvarorapport för denna lektion på ett specifikt datum"""
         return Attendance.query.filter_by(
             schedule_id=self.id,
             date=date
         ).first()
-
+    
     def has_attendance_for_date(self, date):
         """Kontrollera om närvaro redan är rapporterad för detta datum"""
         return self.get_attendance_for_date(date) is not None
+    
+    def get_teacher_name(self):
+        """Hämta lärarens namn"""
+        if self.teacher:
+            return self.teacher.get_full_name()
+        return 'Ingen lärare tilldelad'
+    
+    def get_subject_name(self):
+        """Hämta ämnesnamn"""
+        if self.subject:
+            return self.subject.name
+        return 'Inget ämne'
+    
+    def to_dict(self):
+        """Konvertera till dictionary för JSON serialisering"""
+        return {
+            'id': self.id,
+            'class_id': self.class_id,
+            'class_name': self.school_class.name if self.school_class else None,
+            'weekday': self.weekday,
+            'start_time': self.start_time,
+            'end_time': self.end_time,
+            'time_range': f"{self.start_time}-{self.end_time}",
+            'subject_id': self.subject_id,
+            'subject_name': self.get_subject_name(),
+            'teacher_id': self.teacher_id,
+            'teacher_name': self.get_teacher_name(),
+            'room': self.room,
+            'notes': self.notes,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def __repr__(self):
+        return f"<ClassSchedule(class={self.class_id}, {self.weekday} {self.start_time}-{self.end_time})>"
+
+
+# Add these utility functions to your app
+
+def get_schedule_conflicts(class_ids, start_date=None, end_date=None):
+    """
+    Check for scheduling conflicts across multiple classes
+    """
+    query = db.session.query(ClassSchedule).filter(
+        ClassSchedule.class_id.in_(class_ids),
+        ClassSchedule.is_active == True
+    )
+    
+    lessons = query.all()
+    
+    conflicts = []
+    
+    # Group lessons by day and time
+    lessons_by_day_time = {}
+    for lesson in lessons:
+        key = f"{lesson.weekday}_{lesson.start_time}_{lesson.end_time}"
+        if key not in lessons_by_day_time:
+            lessons_by_day_time[key] = []
+        lessons_by_day_time[key].append(lesson)
+    
+    # Check for conflicts
+    for time_slot, slot_lessons in lessons_by_day_time.items():
+        if len(slot_lessons) > 1:
+            # Check room conflicts
+            rooms_used = {}
+            teachers_used = {}
+            
+            for lesson in slot_lessons:
+                # Room conflict
+                if lesson.room and lesson.room in rooms_used:
+                    conflicts.append({
+                        'type': 'room',
+                        'resource': lesson.room,
+                        'time': f"{lesson.weekday} {lesson.start_time}-{lesson.end_time}",
+                        'classes': [rooms_used[lesson.room].school_class.name, lesson.school_class.name]
+                    })
+                elif lesson.room:
+                    rooms_used[lesson.room] = lesson
+                
+                # Teacher conflict
+                if lesson.teacher_id and lesson.teacher_id in teachers_used:
+                    conflicts.append({
+                        'type': 'teacher',
+                        'resource': lesson.get_teacher_name(),
+                        'time': f"{lesson.weekday} {lesson.start_time}-{lesson.end_time}",
+                        'classes': [teachers_used[lesson.teacher_id].school_class.name, lesson.school_class.name]
+                    })
+                elif lesson.teacher_id:
+                    teachers_used[lesson.teacher_id] = lesson
+    
+    return conflicts
+
+
+def validate_schedule_integrity(class_id):
+    """
+    Validate schedule integrity for a specific class
+    """
+    issues = []
+    
+    # Get all lessons for the class
+    lessons = ClassSchedule.query.filter_by(
+        class_id=class_id,
+        is_active=True
+    ).order_by(ClassSchedule.weekday, ClassSchedule.start_time).all()
+    
+    # Group by day
+    lessons_by_day = {}
+    for lesson in lessons:
+        if lesson.weekday not in lessons_by_day:
+            lessons_by_day[lesson.weekday] = []
+        lessons_by_day[lesson.weekday].append(lesson)
+    
+    # Check each day
+    for day, day_lessons in lessons_by_day.items():
+        # Sort by start time
+        day_lessons.sort(key=lambda x: x.start_time)
+        
+        # Check for overlapping lessons
+        for i in range(len(day_lessons) - 1):
+            current = day_lessons[i]
+            next_lesson = day_lessons[i + 1]
+            
+            current_end = datetime.strptime(current.end_time, '%H:%M').time()
+            next_start = datetime.strptime(next_lesson.start_time, '%H:%M').time()
+            
+            if current_end > next_start:
+                issues.append({
+                    'type': 'overlap',
+                    'day': day,
+                    'lesson1': f"{current.get_subject_name()} ({current.start_time}-{current.end_time})",
+                    'lesson2': f"{next_lesson.get_subject_name()} ({next_lesson.start_time}-{next_lesson.end_time})"
+                })
+        
+        # Check for same subject multiple times per day
+        subjects_count = {}
+        for lesson in day_lessons:
+            subject_name = lesson.get_subject_name()
+            subjects_count[subject_name] = subjects_count.get(subject_name, 0) + 1
+        
+        for subject, count in subjects_count.items():
+            if count > 1:
+                issues.append({
+                    'type': 'duplicate_subject',
+                    'day': day,
+                    'subject': subject,
+                    'count': count
+                })
+    
+    return issues
+
+
+
 
 
 class SchoolNews(db.Model):
@@ -2399,6 +2558,85 @@ def ensure_upload_directories():
     os.makedirs(shared_files_dir, exist_ok=True)
     print(f"✅ Upload directories created: {shared_files_dir}")
 
+def migrate_schedule_tables():
+    """
+    Migrate database to support enhanced schedule management
+    """
+    with app.app_context():
+        try:
+            # Check if we need to add any missing columns to ClassSchedule
+            # Add teacher_id column if it doesn't exist
+            try:
+                db.engine.execute('SELECT teacher_id FROM class_schedule LIMIT 1')
+                print("teacher_id column already exists in class_schedule")
+            except:
+                print("Adding teacher_id column to class_schedule...")
+                db.engine.execute('''
+                    ALTER TABLE class_schedule 
+                    ADD COLUMN teacher_id INTEGER REFERENCES user(id)
+                ''')
+                print("✅ teacher_id column added to class_schedule")
+            
+            # Add notes column if it doesn't exist
+            try:
+                db.engine.execute('SELECT notes FROM class_schedule LIMIT 1')
+                print("notes column already exists in class_schedule")
+            except:
+                print("Adding notes column to class_schedule...")
+                db.engine.execute('''
+                    ALTER TABLE class_schedule 
+                    ADD COLUMN notes TEXT
+                ''')
+                print("✅ notes column added to class_schedule")
+            
+            # Add is_active column if it doesn't exist
+            try:
+                db.engine.execute('SELECT is_active FROM class_schedule LIMIT 1')
+                print("is_active column already exists in class_schedule")
+            except:
+                print("Adding is_active column to class_schedule...")
+                db.engine.execute('''
+                    ALTER TABLE class_schedule 
+                    ADD COLUMN is_active BOOLEAN DEFAULT 1
+                ''')
+                print("✅ is_active column added to class_schedule")
+            
+            # Create index for better performance if it doesn't exist
+            try:
+                db.engine.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_class_schedule_class_weekday 
+                    ON class_schedule(class_id, weekday)
+                ''')
+                print("✅ Performance index created for class_schedule")
+            except Exception as e:
+                print(f"Index creation failed (might already exist): {e}")
+            
+            # Create index for teacher queries
+            try:
+                db.engine.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_class_schedule_teacher 
+                    ON class_schedule(teacher_id)
+                ''')
+                print("✅ Teacher index created for class_schedule")
+            except Exception as e:
+                print(f"Teacher index creation failed (might already exist): {e}")
+            
+            db.session.commit()
+            print("🎉 Schedule database migration completed successfully")
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"❌ Migration failed: {e}")
+            raise
+
+
+def initialize_enhanced_schedules():
+    """Initialize enhanced schedule management"""
+    try:
+        migrate_schedule_tables()
+        print("Enhanced schedule management initialized successfully")
+    except Exception as e:
+        print(f"Failed to initialize enhanced schedules: {e}")
 
 
 
@@ -3002,6 +3240,308 @@ def manage_teacher_qualifications(subject_id):
             db.session.rollback()
             return jsonify({'success': False, 'error': 'Fel vid borttagning'}), 500
 
+
+
+# Add these routes to your Flask app
+
+@app.route('/api/multi_class_schedule/save', methods=['POST'])
+@login_required
+def save_multi_class_schedule():
+    """Spara multi-klass schema till databasen"""
+    try:
+        if not current_user.is_school_admin() or not current_user.school_id:
+            return jsonify({
+                'success': False, 
+                'error': 'Du har inte behörighet att spara scheman'
+            }), 403
+
+        data = request.get_json()
+        if not data or 'schedule' not in data or 'class_ids' not in data:
+            return jsonify({
+                'success': False, 
+                'error': 'Ogiltig data struktur'
+            }), 400
+
+        schedule = data['schedule']
+        class_ids = data['class_ids']
+
+        if not schedule.get('lessons') or not class_ids:
+            return jsonify({
+                'success': False, 
+                'error': 'Ingen schema data att spara'
+            }), 400
+
+        # Validera att alla klasser tillhör användaren skola
+        valid_classes = SchoolClass.query.filter(
+            SchoolClass.id.in_(class_ids),
+            SchoolClass.school_id == current_user.school_id
+        ).all()
+
+        if len(valid_classes) != len(class_ids):
+            return jsonify({
+                'success': False, 
+                'error': 'En eller flera klasser är inte giltiga'
+            }), 400
+
+        # Starta databastransaktion
+        stats = {
+            'lessons_saved': 0,
+            'classes_updated': len(class_ids),
+            'classes_deleted_lessons': 0
+        }
+
+        # Ta bort befintliga scheman för de valda klasserna
+        for class_id in class_ids:
+            deleted_count = ClassSchedule.query.filter_by(
+                class_id=class_id
+            ).delete()
+            stats['classes_deleted_lessons'] += deleted_count
+
+        db.session.flush()  # Flush för att få bort gamla poster innan vi skapar nya
+
+        # Spara nya lektioner
+        for lesson in schedule['lessons']:
+            # Validera lesson data
+            if not all(key in lesson for key in ['day', 'time', 'class_id', 'subject_id']):
+                continue
+
+            # Parsa tid
+            time_parts = lesson['time'].split('-')
+            if len(time_parts) != 2:
+                continue
+
+            start_time = time_parts[0].strip()
+            end_time = time_parts[1].strip()
+
+            # Hitta teacher_id baserat på teacher_name eller teacher_id från lesson
+            teacher_id = None
+            if 'teacher_id' in lesson and lesson['teacher_id']:
+                # Om teacher_id redan finns
+                teacher_id = lesson['teacher_id']
+                # Kontrollera att läraren tillhör skolan
+                teacher = User.query.filter_by(
+                    id=teacher_id,
+                    school_id=current_user.school_id,
+                    user_type='teacher'
+                ).first()
+                if not teacher:
+                    teacher_id = None
+            elif 'teacher_name' in lesson and lesson['teacher_name']:
+                # Försök hitta läraren baserat på namn
+                teacher_name = lesson['teacher_name']
+                teacher = User.query.filter_by(
+                    school_id=current_user.school_id,
+                    user_type='teacher'
+                ).filter(
+                    db.or_(
+                        db.func.lower(db.func.concat(User.first_name, ' ', User.last_name)) == teacher_name.lower(),
+                        db.func.lower(User.username) == teacher_name.lower()
+                    )
+                ).first()
+                if teacher:
+                    teacher_id = teacher.id
+
+            # Skapa notes med information om schemat
+            notes_parts = ['Auto-genererat schema']
+            if 'teacher_name' in lesson and lesson['teacher_name']:
+                notes_parts.append(f"Lärare: {lesson['teacher_name']}")
+            notes = '. '.join(notes_parts)
+
+            # Skapa ny schedule post
+            new_lesson = ClassSchedule(
+                class_id=lesson['class_id'],
+                weekday=lesson['day'],
+                start_time=start_time,
+                end_time=end_time,
+                subject_id=lesson['subject_id'],
+                teacher_id=teacher_id,
+                room=lesson.get('room', 'Ej tilldelat'),
+                notes=notes,
+                is_active=True,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+
+            db.session.add(new_lesson)
+            stats['lessons_saved'] += 1
+
+        # Commit alla ändringar
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Schema sparat framgångsrikt',
+            'lessons_saved': stats['lessons_saved'],
+            'classes_updated': stats['classes_updated'],
+            'classes_deleted_lessons': stats['classes_deleted_lessons']
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error saving multi-class schedule: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Serverfel vid sparning: {str(e)}'
+        }), 500
+
+
+
+@app.route('/api/class_schedule/reset/<int:class_id>', methods=['DELETE'])
+@login_required
+def reset_class_schedule(class_id):
+    """Ta bort schema för en specifik klass"""
+    if not current_user.is_school_admin() or not current_user.school_id:
+        return jsonify({'success': False, 'error': 'Ingen behörighet'}), 403
+    
+    try:
+        # Kontrollera att klassen tillhör skolan
+        school_class = SchoolClass.query.filter_by(
+            id=class_id,
+            school_id=current_user.school_id
+        ).first()
+        
+        if not school_class:
+            return jsonify({'success': False, 'error': 'Klassen hittades inte eller tillhör inte din skola'}), 404
+        
+        # Ta bort alla schemalektioner för klassen
+        deleted_count = ClassSchedule.query.filter_by(class_id=class_id).delete()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Schema för {school_class.name} har rensats. {deleted_count} lektioner togs bort.',
+            'deleted_lessons': deleted_count,
+            'class_name': school_class.name
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error resetting class schedule: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Fel vid rensning av schema: {str(e)}'
+        }), 500
+
+
+@app.route('/api/class_schedule/status/<int:class_id>')
+@login_required
+def get_class_schedule_status(class_id):
+    """Hämta status för en klass schema (antal lektioner, etc.)"""
+    if not current_user.is_school_admin() or not current_user.school_id:
+        return jsonify({'success': False, 'error': 'Ingen behörighet'}), 403
+    
+    try:
+        # Kontrollera att klassen tillhör skolan
+        school_class = SchoolClass.query.filter_by(
+            id=class_id,
+            school_id=current_user.school_id
+        ).first()
+        
+        if not school_class:
+            return jsonify({'success': False, 'error': 'Klassen hittades inte'}), 404
+        
+        # Räkna befintliga schemalektioner
+        lesson_count = ClassSchedule.query.filter_by(class_id=class_id).count()
+        
+        # Hämta schema-detaljer om de finns
+        lessons_by_day = {}
+        if lesson_count > 0:
+            lessons = ClassSchedule.query.filter_by(class_id=class_id).order_by(
+                ClassSchedule.weekday, ClassSchedule.start_time
+            ).all()
+            
+            for lesson in lessons:
+                day = lesson.weekday
+                if day not in lessons_by_day:
+                    lessons_by_day[day] = []
+                
+                subject_name = 'Okänt ämne'
+                if lesson.subject_id:
+                    subject = Subject.query.get(lesson.subject_id)
+                    if subject:
+                        subject_name = subject.name
+                
+                lessons_by_day[day].append({
+                    'time': f"{lesson.start_time}-{lesson.end_time}",
+                    'subject': subject_name,
+                    'room': lesson.room or 'Inget rum'
+                })
+        
+        return jsonify({
+            'success': True,
+            'class_id': class_id,
+            'class_name': school_class.name,
+            'has_schedule': lesson_count > 0,
+            'lesson_count': lesson_count,
+            'lessons_by_day': lessons_by_day,
+            'last_updated': school_class.updated_at.isoformat() if school_class.updated_at else None
+        })
+        
+    except Exception as e:
+        print(f"Error getting class schedule status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Fel vid hämtning av schemastatus: {str(e)}'
+        }), 500
+
+
+
+@app.route('/api/multi_class_schedule/status', methods=['POST'])
+@login_required
+def get_multi_class_schedule_status():
+    """Hämta status för flera klassers scheman"""
+    if not current_user.is_school_admin() or not current_user.school_id:
+        return jsonify({'success': False, 'error': 'Ingen behörighet'}), 403
+    
+    try:
+        data = request.json
+        class_ids = data.get('class_ids', [])
+        
+        if not class_ids:
+            return jsonify({'success': False, 'error': 'Inga klass-ID:n angivna'}), 400
+        
+        # Hämta klasser och deras schemastatus
+        classes_status = []
+        
+        for class_id in class_ids:
+            school_class = SchoolClass.query.filter_by(
+                id=class_id,
+                school_id=current_user.school_id
+            ).first()
+            
+            if school_class:
+                lesson_count = ClassSchedule.query.filter_by(class_id=class_id).count()
+                classes_status.append({
+                    'class_id': class_id,
+                    'class_name': school_class.name,
+                    'has_schedule': lesson_count > 0,
+                    'lesson_count': lesson_count
+                })
+        
+        total_lessons = sum(cls['lesson_count'] for cls in classes_status)
+        classes_with_schedule = sum(1 for cls in classes_status if cls['has_schedule'])
+        
+        return jsonify({
+            'success': True,
+            'classes_status': classes_status,
+            'summary': {
+                'total_classes': len(classes_status),
+                'classes_with_schedule': classes_with_schedule,
+                'total_lessons': total_lessons,
+                'all_classes_have_schedule': classes_with_schedule == len(classes_status)
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error getting multi-class schedule status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Fel vid hämtning av multi-klass schemastatus: {str(e)}'
+        }), 500
+
+
+
 @app.route('/school_admin/schedule_generator')
 @login_required
 def schedule_generator():
@@ -3080,6 +3620,9 @@ def schedule_generator():
                          available_teachers=available_teachers,
                          school=school,
                          classrooms=classrooms)
+
+
+
 
 # NYTT: API-endpoint för att hantera skolans ämnen
 @app.route('/api/school_subjects', methods=['GET', 'POST'])
@@ -13454,6 +13997,7 @@ if __name__ == '__main__':
         create_shared_files_table()
         ensure_upload_directories()
         setup_lunch_menu_data()  
+        initialize_enhanced_schedules()
 
     cleanup_on_startup()   # om den inte behöver context
     
