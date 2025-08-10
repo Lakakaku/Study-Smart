@@ -276,6 +276,101 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             min-width: 800px;
         }
+
+
+
+
+        .schedule-status-indicator {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .class-item {
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .class-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .generation-controls {
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .reset-schedule-btn:hover {
+            background: #e53e3e !important;
+            transform: scale(1.02);
+        }
+
+        .save-status {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.85rem;
+            margin: 0.5rem 0;
+        }
+
+        .save-status.unsaved {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #feb2b2;
+        }
+
+        .save-status.saved {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .schedule-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .schedule-actions .btn {
+            min-width: 120px;
+            transition: all 0.2s ease;
+        }
+
+        .schedule-actions .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .loading-save {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        /* Enhanced schedule table styles */
+        .schedule-table {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .lesson-cell {
+            vertical-align: top !important;
+        }
+
+        .lesson-subject {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            color: #2d3748;
+        }
+
+        .lesson-class {
+            font-size: 0.8rem;
+            color: #4a5568;
+            margin-bottom: 0.25rem;
+        }
         .schedule-table th {
             background: #4299e1;
             color: white;
@@ -483,6 +578,34 @@
             </ul>
         </div>
 
+
+
+
+
+        <!-- Add a schedule management section before the main generator -->
+        <div class="card" style="margin-bottom: 2rem;" id="scheduleManagement">
+            <h3>📅 Schemahantering</h3>
+            
+            <div class="form-group">
+                <label>Snabbåtgärder:</label>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                    <button type="button" class="btn" onclick="viewAllClassSchedules()" style="background: #4299e1;">
+                        👁️ Visa alla klassers scheman
+                    </button>
+                    <button type="button" class="btn" onclick="exportSchedulesToCSV()" style="background: #38b2ac;">
+                        📊 Exportera scheman
+                    </button>
+                    <button type="button" class="btn" onclick="showScheduleStatistics()" style="background: #9f7aea;">
+                        📈 Schemastatistik
+                    </button>
+                </div>
+            </div>
+            
+            <div id="scheduleOverview" style="margin-top: 1rem; display: none;">
+                <!-- Schedule overview will be populated by JavaScript -->
+            </div>
+        </div>
+
         <div class="generator-layout">
             <!-- Vänster sida - Inställningar -->
             <div class="card">
@@ -647,8 +770,30 @@
                 </div>
 
                 <div class="generation-controls" id="generationControls" style="display: none;">
-                    <button type="button" class="btn" onclick="generateMultiClassSchedule()">🔄 Generera nytt</button>
-                    <button type="button" class="btn" style="background: #48bb78;" onclick="saveMultiClassSchedule()">💾 Spara schema</button>
+                    <div class="schedule-actions">
+                        <button type="button" class="btn" onclick="generateMultiClassSchedule()">
+                            🔄 Generera nytt
+                        </button>
+                        <button type="button" class="btn" style="background: #48bb78;" onclick="saveMultiClassSchedule()">
+                            💾 Spara schema
+                        </button>
+                        <button type="button" class="btn reset-schedule-btn" style="background: #f56565;" onclick="resetClassSchedules()">
+                            🗑️ Rensa scheman
+                        </button>
+                    </div>
+                    
+                    <div id="saveStatus" class="save-status" style="display: none;">
+                        <!-- Status information will be populated by JavaScript -->
+                    </div>
+                    
+                    <div class="alert alert-info" style="margin-top: 1rem; font-size: 0.85rem;">
+                        <strong>💡 Tips:</strong>
+                        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                            <li><strong>Spara schema:</strong> Sparar schemat permanent till databasen</li>
+                            <li><strong>Rensa scheman:</strong> Tar bort befintliga scheman för valda klasser</li>
+                            <li><strong>Generera nytt:</strong> Skapar ett nytt schema (ersätter inte sparat schema)</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -770,6 +915,89 @@
                 updateSubjectDropdowns();
             }
 
+
+            function updateClassStatusIndicators(statusData) {
+                // Update class checkboxes with status indicators
+                selectedClasses.forEach(cls => {
+                    const checkbox = document.getElementById(`class_${cls.id}`);
+                    if (!checkbox) return;
+
+                    const classItem = checkbox.closest('.class-item');
+                    if (!classItem) return;
+
+                    // Remove existing status indicators
+                    const existingIndicator = classItem.querySelector('.schedule-status-indicator');
+                    if (existingIndicator) existingIndicator.remove();
+
+                    // Find class status
+                    const status = statusData.classes_status.find(s => s.class_id == cls.id);
+                    
+                    if (status) {
+                        const indicator = document.createElement('div');
+                        indicator.className = 'schedule-status-indicator';
+                        indicator.style.cssText = `
+                            font-size: 0.75rem; 
+                            margin-top: 0.25rem;
+                            padding: 0.125rem 0.375rem;
+                            border-radius: 0.25rem;
+                            ${status.has_schedule ? 
+                                'background: #c6f6d5; color: #22543d; border: 1px solid #9ae6b4;' : 
+                                'background: #fed7d7; color: #742a2a; border: 1px solid #feb2b2;'
+                            }
+                        `;
+                        
+                        if (status.has_schedule) {
+                            indicator.innerHTML = `✅ Schema sparat (${status.lesson_count} lektioner)`;
+                        } else {
+                            indicator.innerHTML = `📝 Inget sparat schema`;
+                        }
+
+                        const classDetails = classItem.querySelector('.class-details');
+                        if (classDetails) {
+                            classDetails.appendChild(indicator);
+                        }
+                    }
+                });
+
+                // Update summary info
+                updateScheduleSummary(statusData.summary);
+            }
+
+
+            async function updateClassScheduleStatus() {
+                if (selectedClasses.length === 0) return;
+
+                try {
+                    const response = await fetch('/api/multi_class_schedule/status', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            class_ids: selectedClasses.map(c => parseInt(c.id))
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        // Update status cache
+                        result.classes_status.forEach(cls => {
+                            scheduleSaveState.classScheduleStatus[cls.class_id] = cls;
+                        });
+
+                        // Update UI indicators
+                        updateClassStatusIndicators(result);
+                        debugLog('Class schedule status updated:', result);
+                    }
+
+                } catch (error) {
+                    console.error('Error updating class schedule status:', error);
+                    debugLog('Status update failed:', error);
+                }
+            }
+
+
             async function addNewSubject() {
                 const input = document.getElementById('newSubjectName');
                 const subjectName = input.value.trim();
@@ -831,6 +1059,77 @@
                 }
             }
 
+
+
+            function updateScheduleSummary(summary) {
+                const infoDiv = document.getElementById('selectedClassesInfo');
+                if (!infoDiv) return;
+
+                // Add summary after class list
+                let existingSummary = infoDiv.querySelector('.schedule-summary');
+                if (existingSummary) existingSummary.remove();
+
+                if (summary.total_classes > 0) {
+                    const summaryDiv = document.createElement('div');
+                    summaryDiv.className = 'schedule-summary';
+                    summaryDiv.style.cssText = `
+                        margin-top: 0.5rem; 
+                        padding: 0.5rem; 
+                        background: #f7fafc; 
+                        border-radius: 0.375rem; 
+                        font-size: 0.85rem;
+                        border-left: 3px solid #4299e1;
+                    `;
+
+                    summaryDiv.innerHTML = `
+                        <strong>📊 Schemastatus:</strong><br>
+                        ${summary.classes_with_schedule}/${summary.total_classes} klasser har scheman (${summary.total_lessons} totalt lektioner)<br>
+                        ${summary.all_classes_have_schedule ? 
+                            '<span style="color: #38a169;">✅ Alla klasser har scheman</span>' : 
+                            '<span style="color: #d69e2e;">⚠️ Vissa klasser saknar scheman</span>'
+                        }
+                    `;
+
+                    infoDiv.appendChild(summaryDiv);
+                }
+            }
+
+            /**
+             * Update the overall schedule UI based on current state
+             */
+            function updateScheduleUI() {
+                const controls = document.getElementById('generationControls');
+                if (!controls) return;
+
+                // Check if we have unsaved changes
+                const hasUnsaved = scheduleSaveState.hasUnsavedChanges;
+                
+                // Update save button
+                const saveButton = controls.querySelector('button[onclick="saveMultiClassSchedule()"]');
+                if (saveButton) {
+                    if (hasUnsaved) {
+                        saveButton.style.background = '#ed8936';
+                        saveButton.innerHTML = '💾 Spara (osparade ändringar)';
+                    } else {
+                        saveButton.style.background = '#48bb78';
+                        saveButton.innerHTML = '💾 Sparat';
+                    }
+                }
+
+                // Add reset button if it doesn't exist
+                let resetButton = controls.querySelector('.reset-schedule-btn');
+                if (!resetButton) {
+                    resetButton = document.createElement('button');
+                    resetButton.type = 'button';
+                    resetButton.className = 'btn reset-schedule-btn';
+                    resetButton.style.cssText = 'background: #f56565; margin-left: 0.5rem;';
+                    resetButton.onclick = resetClassSchedules;
+                    resetButton.innerHTML = '🗑️ Rensa scheman';
+                    controls.appendChild(resetButton);
+                }
+            }
+
+
             function updateSubjectDropdowns() {
                 // Uppdatera alla ämnesdropdowns i formuläret
                 const subjectSelects = document.querySelectorAll('select[name^="subjects_"]');
@@ -846,6 +1145,14 @@
                     select.value = currentValue; // Behåll vald värde om möjligt
                 });
             }
+
+
+
+            let scheduleSaveState = {
+                hasUnsavedChanges: false,
+                lastSavedSchedule: null,
+                classScheduleStatus: {}
+            };
 
             // Uppdatera createSubjectItem funktionen för att använda schoolSubjects
             function createSubjectItem(classId) {
@@ -1094,6 +1401,12 @@
                         countSpan.style.color = '#e53e3e';
                     }
                 }
+            }
+
+
+            function markScheduleAsUnsaved() {
+                scheduleSaveState.hasUnsavedChanges = true;
+                updateScheduleUI();
             }
 
             // Hantera lärare för ett ämne
@@ -2151,25 +2464,1085 @@
                 return slots;
             }
 
+
+
+
+
+
+
+
+
+            function hideScheduleOverview() {
+                document.getElementById('scheduleOverview').style.display = 'none';
+            }
+
+            /**
+             * View detailed schedule for a specific class
+             */
+            async function viewClassScheduleDetails(classId, className) {
+                try {
+                    debugLog(`Loading schedule details for class ${className} (${classId})`);
+                    
+                    const response = await fetch(`/api/class_schedule/status/${classId}`);
+                    const result = await response.json();
+
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || 'Kunde inte hämta schemadetaljer');
+                    }
+
+                    // Create modal to show schedule details
+                    showClassScheduleModal(result);
+                    
+                } catch (error) {
+                    console.error('Error loading class schedule details:', error);
+                    alert(`Fel vid laddning av schemadetaljer: ${error.message}`);
+                }
+            }
+
+            /**
+             * Show class schedule in modal
+             */
+            function showClassScheduleModal(scheduleData) {
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.5); z-index: 10000;
+                    display: flex; align-items: center; justify-content: center;
+                    overflow-y: auto; padding: 1rem;
+                `;
+
+                const content = document.createElement('div');
+                content.style.cssText = `
+                    background: white; border-radius: 0.5rem; max-width: 800px; width: 100%;
+                    max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                `;
+
+                const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+                
+                let scheduleHtml = `
+                    <div style="padding: 1.5rem; border-bottom: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0; display: flex; justify-content: space-between; align-items: center;">
+                            📅 Schema för ${scheduleData.class_name}
+                            <button onclick="this.closest('[style*=position]').remove()" 
+                                    style="background: #f56565; color: white; border: none; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer;">
+                                ✕
+                            </button>
+                        </h3>
+                        <p style="margin: 0.5rem 0 0 0; color: #666;">
+                            Totalt ${scheduleData.lesson_count} lektioner per vecka
+                        </p>
+                    </div>
+                    
+                    <div style="padding: 1.5rem;">
+                `;
+
+                if (scheduleData.has_schedule) {
+                    scheduleHtml += `<div style="overflow-x: auto;"><table class="schedule-table" style="width: 100%; border-collapse: collapse;">`;
+                    scheduleHtml += `<thead><tr style="background: #f7fafc;"><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Dag</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Tid</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Ämne</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Rum</th></tr></thead><tbody>`;
+
+                    weekdays.forEach(day => {
+                        const dayLessons = scheduleData.lessons_by_day[day] || [];
+                        
+                        if (dayLessons.length === 0) {
+                            scheduleHtml += `
+                                <tr>
+                                    <td style="padding: 0.75rem; border: 1px solid #e2e8f0; font-weight: 600; text-transform: capitalize;">${day}</td>
+                                    <td colspan="3" style="padding: 0.75rem; border: 1px solid #e2e8f0; color: #999; font-style: italic;">Inga lektioner</td>
+                                </tr>
+                            `;
+                        } else {
+                            dayLessons.forEach((lesson, index) => {
+                                scheduleHtml += `
+                                    <tr>
+                                        ${index === 0 ? `<td rowspan="${dayLessons.length}" style="padding: 0.75rem; border: 1px solid #e2e8f0; font-weight: 600; text-transform: capitalize; vertical-align: top;">${day}</td>` : ''}
+                                        <td style="padding: 0.75rem; border: 1px solid #e2e8f0; font-family: monospace;">${lesson.time}</td>
+                                        <td style="padding: 0.75rem; border: 1px solid #e2e8f0;">${lesson.subject}</td>
+                                        <td style="padding: 0.75rem; border: 1px solid #e2e8f0;">${lesson.room}</td>
+                                    </tr>
+                                `;
+                            });
+                        }
+                    });
+
+                    scheduleHtml += `</tbody></table></div>`;
+                } else {
+                    scheduleHtml += `<div style="text-align: center; color: #666; font-style: italic;">Inget schema har skapats för denna klass.</div>`;
+                }
+
+                scheduleHtml += `
+                    </div>
+                `;
+
+                content.innerHTML = scheduleHtml;
+                modal.appendChild(content);
+                document.body.appendChild(modal);
+
+                // Close on background click
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        modal.remove();
+                    }
+                });
+            }
+
+            /**
+             * Edit schedule for a specific class
+             */
+            function editClassSchedule(classId, className) {
+                // Select the class and scroll to form
+                const checkbox = document.getElementById(`class_${classId}`);
+                if (checkbox) {
+                    // Uncheck all other classes
+                    document.querySelectorAll('input[name="class_ids[]"]').forEach(cb => {
+                        cb.checked = cb.id === `class_${classId}`;
+                    });
+                    
+                    // Update selected classes
+                    updateSelectedClasses();
+                    
+                    // Scroll to form
+                    document.getElementById('scheduleForm').scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+
+                    // Hide overview
+                    hideScheduleOverview();
+
+                    // Show message
+                    setTimeout(() => {
+                        alert(`Klass "${className}" har valts för redigering. Konfigurera ämnen och generera ett nytt schema.`);
+                    }, 500);
+                }
+            }
+
+            /**
+             * Create schedule for a specific class
+             */
+            function createScheduleForClass(classId, className) {
+                editClassSchedule(classId, className);
+            }
+
+            /**
+             * Reset schedule for a single class
+             */
+            async function resetSingleClassSchedule(classId, className) {
+                if (!confirm(`Är du säker på att du vill ta bort schemat för "${className}"?\n\nDetta kan inte ångras.`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/class_schedule/reset/${classId}`, {
+                        method: 'DELETE'
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        alert(`✅ Schema för "${className}" har rensats.\n${result.deleted_lessons} lektioner togs bort.`);
+                        
+                        // Refresh overview
+                        viewAllClassSchedules();
+                    } else {
+                        throw new Error(result.error || 'Okänt fel');
+                    }
+
+                } catch (error) {
+                    console.error('Error resetting single class schedule:', error);
+                    alert(`❌ Fel vid rensning av schema: ${error.message}`);
+                }
+            }
+
+            /**
+             * Export schedules to CSV
+             */
+            async function exportSchedulesToCSV() {
+                try {
+                    debugLog('Exporting schedules to CSV...');
+                    
+                    // Get all class schedules
+                    const allClassIds = availableClasses.map(c => c.id);
+                    const response = await fetch('/api/multi_class_schedule/status', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            class_ids: allClassIds
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || 'Kunde inte hämta scheman');
+                    }
+
+                    // Get detailed schedule data for classes with schedules
+                    const classesWithSchedule = result.classes_status.filter(cls => cls.has_schedule);
+                    
+                    if (classesWithSchedule.length === 0) {
+                        alert('Inga scheman att exportera');
+                        return;
+                    }
+
+                    // Prepare CSV data
+                    const csvRows = [];
+                    csvRows.push(['Klass', 'Dag', 'Starttid', 'Sluttid', 'Ämne', 'Rum', 'Antal lektioner']);
+
+                    // Get detailed data for each class
+                    for (const cls of classesWithSchedule) {
+                        const detailResponse = await fetch(`/api/class_schedule/status/${cls.class_id}`);
+                        const detailResult = await detailResponse.json();
+                        
+                        if (detailResult.success && detailResult.lessons_by_day) {
+                            Object.entries(detailResult.lessons_by_day).forEach(([day, lessons]) => {
+                                lessons.forEach(lesson => {
+                                    const [startTime, endTime] = lesson.time.split('-');
+                                    csvRows.push([
+                                        cls.class_name,
+                                        day,
+                                        startTime,
+                                        endTime,
+                                        lesson.subject,
+                                        lesson.room,
+                                        '1'
+                                    ]);
+                                });
+                            });
+                        }
+                    }
+
+                    // Generate CSV
+                    const csvContent = csvRows.map(row => 
+                        row.map(field => `"${field}"`).join(',')
+                    ).join('\n');
+
+                    // Download CSV
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `scheman_${new Date().toISOString().split('T')[0]}.csv`;
+                    link.click();
+
+                    debugLog('CSV export completed');
+                    alert(`✅ Scheman exporterade!\n${csvRows.length - 1} lektioner från ${classesWithSchedule.length} klasser.`);
+
+                } catch (error) {
+                    console.error('Error exporting schedules:', error);
+                    alert(`❌ Fel vid export: ${error.message}`);
+                }
+            }
+
+            /**
+             * Show schedule statistics
+             */
+            async function showScheduleStatistics() {
+                try {
+                    debugLog('Loading schedule statistics...');
+                    
+                    const allClassIds = availableClasses.map(c => c.id);
+                    const response = await fetch('/api/multi_class_schedule/status', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            class_ids: allClassIds
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || 'Kunde inte hämta statistik');
+                    }
+
+                    // Calculate statistics
+                    const stats = calculateScheduleStatistics(result);
+                    
+                    // Show statistics modal
+                    showStatisticsModal(stats);
+                    
+                } catch (error) {
+                    console.error('Error loading statistics:', error);
+                    alert(`❌ Fel vid laddning av statistik: ${error.message}`);
+                }
+            }
+
+            /**
+             * Calculate schedule statistics
+             */
+            function calculateScheduleStatistics(statusData) {
+                const { classes_status, summary } = statusData;
+                
+                const stats = {
+                    total_classes: summary.total_classes,
+                    classes_with_schedule: summary.classes_with_schedule,
+                    total_lessons: summary.total_lessons,
+                    avg_lessons_per_class: summary.classes_with_schedule > 0 ? 
+                        (summary.total_lessons / summary.classes_with_schedule).toFixed(1) : 0,
+                    schedule_coverage: summary.total_classes > 0 ? 
+                        ((summary.classes_with_schedule / summary.total_classes) * 100).toFixed(1) : 0,
+                    
+                    lessons_by_class: {},
+                    most_lessons: { class: null, count: 0 },
+                    least_lessons: { class: null, count: Infinity },
+                    
+                    completion_rate: summary.all_classes_have_schedule ? 100 : 
+                        (summary.classes_with_schedule / summary.total_classes * 100).toFixed(1)
+                };
+                
+                // Analyze per class
+                classes_status.forEach(cls => {
+                    if (cls.has_schedule) {
+                        stats.lessons_by_class[cls.class_name] = cls.lesson_count;
+                        
+                        if (cls.lesson_count > stats.most_lessons.count) {
+                            stats.most_lessons = { class: cls.class_name, count: cls.lesson_count };
+                        }
+                        
+                        if (cls.lesson_count < stats.least_lessons.count) {
+                            stats.least_lessons = { class: cls.class_name, count: cls.lesson_count };
+                        }
+                    }
+                });
+                
+                // Reset least if no classes have schedules
+                if (stats.least_lessons.count === Infinity) {
+                    stats.least_lessons = { class: null, count: 0 };
+                }
+                
+                return stats;
+            }
+
+            /**
+             * Show statistics modal
+             */
+            function showStatisticsModal(stats) {
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.5); z-index: 10000;
+                    display: flex; align-items: center; justify-content: center;
+                    overflow-y: auto; padding: 1rem;
+                `;
+
+                const content = document.createElement('div');
+                content.style.cssText = `
+                    background: white; border-radius: 0.5rem; max-width: 600px; width: 100%;
+                    max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                `;
+
+                let html = `
+                    <div style="padding: 1.5rem; border-bottom: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0; display: flex; justify-content: space-between; align-items: center;">
+                            📈 Schemastatistik
+                            <button onclick="this.closest('[style*=position]').remove()" 
+                                    style="background: #f56565; color: white; border: none; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer;">
+                                ✕
+                            </button>
+                        </h3>
+                    </div>
+                    
+                    <div style="padding: 1.5rem;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div style="text-align: center; padding: 1rem; background: #f0fff4; border-radius: 0.5rem; border: 1px solid #9ae6b4;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #22543d;">${stats.total_classes}</div>
+                                <div style="color: #4a5568;">Totalt klasser</div>
+                            </div>
+                            
+                            <div style="text-align: center; padding: 1rem; background: #ebf8ff; border-radius: 0.5rem; border: 1px solid #90cdf4;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #2a4365;">${stats.classes_with_schedule}</div>
+                                <div style="color: #4a5568;">Med scheman</div>
+                            </div>
+                            
+                            <div style="text-align: center; padding: 1rem; background: #fef5e7; border-radius: 0.5rem; border: 1px solid #f6ad55;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #744210;">${stats.total_lessons}</div>
+                                <div style="color: #4a5568;">Totalt lektioner</div>
+                            </div>
+                            
+                            <div style="text-align: center; padding: 1rem; background: #f7fafc; border-radius: 0.5rem; border: 1px solid #cbd5e0;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #2d3748;">${stats.avg_lessons_per_class}</div>
+                                <div style="color: #4a5568;">⌀ per klass</div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1.5rem;">
+                            <h4 style="margin-bottom: 0.75rem; color: #2d3748;">🎯 Schemaläggningsstatus</h4>
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #4299e1;">
+                                <div style="margin-bottom: 0.5rem;">
+                                    <strong>Täckningsgrad:</strong> ${stats.schedule_coverage}% 
+                                    (${stats.classes_with_schedule}/${stats.total_classes} klasser)
+                                </div>
+                                <div style="background: #e2e8f0; height: 0.5rem; border-radius: 0.25rem; overflow: hidden;">
+                                    <div style="background: ${stats.completion_rate == 100 ? '#38a169' : stats.completion_rate > 50 ? '#ed8936' : '#f56565'}; 
+                                                height: 100%; width: ${stats.completion_rate}%; transition: width 0.3s ease;"></div>
+                                </div>
+                            </div>
+                        </div>
+                `;
+
+                if (Object.keys(stats.lessons_by_class).length > 0) {
+                    html += `
+                        <div style="margin-bottom: 1.5rem;">
+                            <h4 style="margin-bottom: 0.75rem; color: #2d3748;">📊 Lektioner per klass</h4>
+                            <div style="max-height: 200px; overflow-y: auto; background: #f7fafc; padding: 1rem; border-radius: 0.5rem;">
+                    `;
+
+                    Object.entries(stats.lessons_by_class)
+                        .sort((a, b) => b[1] - a[1])
+                        .forEach(([className, lessonCount]) => {
+                            const percentage = (lessonCount / Math.max(...Object.values(stats.lessons_by_class))) * 100;
+                            html += `
+                                <div style="margin-bottom: 0.75rem;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                        <span>${className}</span>
+                                        <strong>${lessonCount} lektioner</strong>
+                                    </div>
+                                    <div style="background: #e2e8f0; height: 0.25rem; border-radius: 0.125rem; overflow: hidden;">
+                                        <div style="background: #4299e1; height: 100%; width: ${percentage}%; transition: width 0.3s ease;"></div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                    html += `</div></div>`;
+
+                    if (stats.most_lessons.class && stats.least_lessons.class) {
+                        html += `
+                            <div>
+                                <h4 style="margin-bottom: 0.75rem; color: #2d3748;">🏆 Extremvärden</h4>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div style="background: #c6f6d5; padding: 1rem; border-radius: 0.5rem; border: 1px solid #9ae6b4;">
+                                        <div style="font-weight: bold; color: #22543d;">Mest lektioner</div>
+                                        <div>${stats.most_lessons.class}</div>
+                                        <div style="font-size: 1.2rem; font-weight: bold; color: #22543d;">${stats.most_lessons.count} lektioner</div>
+                                    </div>
+                                    <div style="background: #fed7d7; padding: 1rem; border-radius: 0.5rem; border: 1px solid #feb2b2;">
+                                        <div style="font-weight: bold; color: #742a2a;">Minst lektioner</div>
+                                        <div>${stats.least_lessons.class}</div>
+                                        <div style="font-size: 1.2rem; font-weight: bold; color: #742a2a;">${stats.least_lessons.count} lektioner</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+
+                html += `
+                        <div style="text-align: center; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0;">
+                            <div style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">
+                                Statistik genererad: ${new Date().toLocaleString('sv-SE')}
+                            </div>
+                            <button type="button" class="btn" onclick="exportStatisticsReport()" style="background: #48bb78; margin-right: 0.5rem;">
+                                📊 Exportera rapport
+                            </button>
+                            <button type="button" class="btn" onclick="this.closest('[style*=position]').remove()" style="background: #718096;">
+                                Stäng
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                content.innerHTML = html;
+                modal.appendChild(content);
+                document.body.appendChild(modal);
+
+                // Close on background click
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        modal.remove();
+                    }
+                });
+
+                // Store stats globally for export
+                window.currentScheduleStats = stats;
+            }
+
+            /**
+             * Export statistics report
+             */
+            function exportStatisticsReport() {
+                if (!window.currentScheduleStats) {
+                    alert('Ingen statistik att exportera');
+                    return;
+                }
+
+                const stats = window.currentScheduleStats;
+                const timestamp = new Date().toLocaleString('sv-SE');
+                
+                let report = `SCHEMASTATISTIK RAPPORT\n`;
+                report += `Genererad: ${timestamp}\n`;
+                report += `${'='.repeat(50)}\n\n`;
+                
+                report += `ÖVERSIKT:\n`;
+                report += `- Totalt klasser: ${stats.total_classes}\n`;
+                report += `- Klasser med scheman: ${stats.classes_with_schedule}\n`;
+                report += `- Totalt lektioner: ${stats.total_lessons}\n`;
+                report += `- Genomsnitt lektioner per klass: ${stats.avg_lessons_per_class}\n`;
+                report += `- Schematäckningsgrad: ${stats.schedule_coverage}%\n\n`;
+                
+                if (Object.keys(stats.lessons_by_class).length > 0) {
+                    report += `LEKTIONER PER KLASS:\n`;
+                    Object.entries(stats.lessons_by_class)
+                        .sort((a, b) => b[1] - a[1])
+                        .forEach(([className, lessonCount]) => {
+                            report += `- ${className}: ${lessonCount} lektioner\n`;
+                        });
+                    report += `\n`;
+                    
+                    if (stats.most_lessons.class && stats.least_lessons.class) {
+                        report += `EXTREMVÄRDEN:\n`;
+                        report += `- Mest lektioner: ${stats.most_lessons.class} (${stats.most_lessons.count} lektioner)\n`;
+                        report += `- Minst lektioner: ${stats.least_lessons.class} (${stats.least_lessons.count} lektioner)\n\n`;
+                    }
+                }
+                
+                report += `REKOMMENDATIONER:\n`;
+                if (stats.completion_rate < 100) {
+                    report += `- ${stats.total_classes - stats.classes_with_schedule} klasser saknar scheman\n`;
+                }
+                if (stats.most_lessons.count > stats.least_lessons.count + 5) {
+                    report += `- Överväg att balansera lektioner mellan klasser\n`;
+                }
+                if (stats.completion_rate == 100) {
+                    report += `- Alla klasser har scheman - bra jobbat!\n`;
+                }
+
+                // Create and download report
+                const blob = new Blob([report], { type: 'text/plain;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `schemastatistik_${new Date().toISOString().split('T')[0]}.txt`;
+                link.click();
+
+                debugLog('Statistics report exported');
+            }
+
+            /**
+             * Enhanced initialization function
+             */
+            function initializeScheduleManagement() {
+                // Initialize data
+                initializeData();
+                
+                // Setup auto-save detection
+                let scheduleChangeDetected = false;
+                
+                // Monitor for schedule changes
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.target.id === 'schedulePreview' && currentSchedule) {
+                            if (!scheduleChangeDetected) {
+                                scheduleChangeDetected = true;
+                                markScheduleAsUnsaved();
+                            }
+                        }
+                    });
+                });
+                
+                const previewElement = document.getElementById('schedulePreview');
+                if (previewElement) {
+                    observer.observe(previewElement, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+                
+                // Auto-update status periodically
+                setInterval(() => {
+                    if (selectedClasses.length > 0) {
+                        updateClassScheduleStatus();
+                    }
+                }, 30000); // Every 30 seconds
+                
+                debugLog('Schedule management initialized');
+            }
+
+            /**
+             * Enhanced error handling for API calls
+             */
+            function handleApiError(error, context = '') {
+                console.error(`API Error ${context}:`, error);
+                
+                let userMessage = 'Ett fel uppstod';
+                if (context) userMessage += ` vid ${context}`;
+                
+                if (error.message.includes('Unauthorized') || error.message.includes('403')) {
+                    userMessage += '.\n\nDu har inte behörighet för denna åtgärd.';
+                } else if (error.message.includes('Not Found') || error.message.includes('404')) {
+                    userMessage += '.\n\nData hittades inte. Sidan kan behöva laddas om.';
+                } else if (error.message.includes('500')) {
+                    userMessage += '.\n\nServerfel. Försök igen senare.';
+                } else {
+                    userMessage += `.\n\nDetaljer: ${error.message}`;
+                }
+                
+                alert(`❌ ${userMessage}`);
+                debugLog(`Error handled for ${context}:`, error);
+            }
+
+            /**
+             * Utility function to format time strings
+             */
+            function formatTimeRange(timeRange) {
+                if (!timeRange || !timeRange.includes('-')) return timeRange;
+                
+                const [start, end] = timeRange.split('-');
+                return `${start}–${end}`;
+            }
+
+            /**
+             * Utility function to get class color by ID
+             */
+            function getClassColorById(classId) {
+                const classIndex = availableClasses.findIndex(c => c.id == classId);
+                return classIndex >= 0 ? classColors[classIndex % classColors.length] : '#718096';
+            }
+
+            /**
+             * Debounce function for API calls
+             */
+            function debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+
+            // Debounced version of updateClassScheduleStatus
+            const debouncedUpdateStatus = debounce(updateClassScheduleStatus, 500);
+
+            // Override the existing DOMContentLoaded handler
+            document.addEventListener('DOMContentLoaded', function() {
+                // Call original initialization
+                initializeData();
+                debugLog('Multi-class schedule generator loaded');
+                validateSubjectHours();
+                populateClassFilter();
+                populateTeacherFilter();
+                renderSubjects();
+                
+                // Initialize schedule management
+                initializeScheduleManagement();
+                
+                // Add keyboard shortcuts
+                document.addEventListener('keydown', function(e) {
+                    // Ctrl+S to save
+                    if (e.ctrlKey && e.key === 's') {
+                        e.preventDefault();
+                        if (currentSchedule) {
+                            saveMultiClassSchedule();
+                        }
+                    }
+                    
+                    // Ctrl+R to reset (with confirmation)
+                    if (e.ctrlKey && e.key === 'r' && selectedClasses.length > 0) {
+                        e.preventDefault();
+                        resetClassSchedules();
+                    }
+                    
+                    // Ctrl+G to generate
+                    if (e.ctrlKey && e.key === 'g') {
+                        e.preventDefault();
+                        generateMultiClassSchedule();
+                    }
+                });
+                
+                debugLog('Enhanced schedule management loaded with keyboard shortcuts');
+            });
+    
+
+
+
+            function displayAllClassSchedules(statusData) {
+                const overviewDiv = document.getElementById('scheduleOverview');
+                const { classes_status, summary } = statusData;
+
+                let html = `
+                    <div class="schedule-overview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding: 1rem; background: #f7fafc; border-radius: 0.5rem;">
+                        <h4 style="margin: 0;">📊 Översikt - Alla klasser</h4>
+                        <div style="text-align: right; font-size: 0.9rem;">
+                            <div><strong>${summary.classes_with_schedule}/${summary.total_classes}</strong> klasser har scheman</div>
+                            <div style="color: #666;"><strong>${summary.total_lessons}</strong> totalt lektioner</div>
+                        </div>
+                    </div>
+
+                    <div class="classes-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+                `;
+
+                classes_status.forEach((cls, index) => {
+                    const classColor = classColors[index % classColors.length];
+                    const statusColor = cls.has_schedule ? '#38a169' : '#e53e3e';
+                    const statusIcon = cls.has_schedule ? '✅' : '❌';
+                    const statusText = cls.has_schedule ? 'Schema sparat' : 'Inget schema';
+
+                    html += `
+                        <div class="class-schedule-card" style="border: 2px solid ${classColor}; border-radius: 0.5rem; padding: 1rem; background: white;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <h5 style="margin: 0; color: ${classColor};">${cls.class_name}</h5>
+                                <span style="color: ${statusColor}; font-weight: 600;">${statusIcon} ${statusText}</span>
+                            </div>
+                            
+                            ${cls.has_schedule ? `
+                                <div style="margin-bottom: 0.75rem;">
+                                    <div style="font-size: 0.9rem; color: #4a5568;">
+                                        📚 <strong>${cls.lesson_count}</strong> lektioner per vecka
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                    <button type="button" class="btn" onclick="viewClassScheduleDetails(${cls.class_id}, '${cls.class_name}')" 
+                                            style="background: #4299e1; font-size: 0.8rem; padding: 0.25rem 0.5rem;">
+                                        👁️ Visa
+                                    </button>
+                                    <button type="button" class="btn" onclick="editClassSchedule(${cls.class_id}, '${cls.class_name}')" 
+                                            style="background: #ed8936; font-size: 0.8rem; padding: 0.25rem 0.5rem;">
+                                        ✏️ Redigera
+                                    </button>
+                                    <button type="button" class="btn" onclick="resetSingleClassSchedule(${cls.class_id}, '${cls.class_name}')" 
+                                            style="background: #f56565; font-size: 0.8rem; padding: 0.25rem 0.5rem;">
+                                        🗑️ Rensa
+                                    </button>
+                                </div>
+                            ` : `
+                                <div style="color: #666; font-style: italic; margin-bottom: 0.75rem;">
+                                    Inget schema har skapats för denna klass än.
+                                </div>
+                                <button type="button" class="btn" onclick="createScheduleForClass(${cls.class_id}, '${cls.class_name}')" 
+                                        style="background: #48bb78; font-size: 0.8rem; padding: 0.25rem 0.5rem;">
+                                    ➕ Skapa schema
+                                </button>
+                            `}
+                        </div>
+                    `;
+                });
+
+                html += `
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 1.5rem;">
+                        <button type="button" class="btn" onclick="hideScheduleOverview()" style="background: #718096;">
+                            ⬆️ Dölj översikt
+                        </button>
+                    </div>
+                `;
+
+                overviewDiv.innerHTML = html;
+                debugLog('All class schedules displayed');
+            }
+
+
+
+
+            async function viewAllClassSchedules() {
+                try {
+                    debugLog('Loading all class schedules...');
+                    
+                    // Show loading state
+                    const overviewDiv = document.getElementById('scheduleOverview');
+                    overviewDiv.style.display = 'block';
+                    overviewDiv.innerHTML = '<div style="text-align: center;"><div class="loading-spinner"></div><p>Laddar scheman...</p></div>';
+
+                    // Get status for all classes in school
+                    const allClassIds = availableClasses.map(c => c.id);
+                    const response = await fetch('/api/multi_class_schedule/status', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            class_ids: allClassIds
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || 'Kunde inte hämta scheman');
+                    }
+
+                    // Display overview
+                    displayAllClassSchedules(result);
+                    
+                } catch (error) {
+                    console.error('Error loading all schedules:', error);
+                    const overviewDiv = document.getElementById('scheduleOverview');
+                    overviewDiv.innerHTML = `<div style="color: #e53e3e; text-align: center;">Fel vid laddning: ${error.message}</div>`;
+                }
+            }
+
+
+
+
+            async function resetClassSchedules() {
+                if (selectedClasses.length === 0) {
+                    alert('Inga klasser valda för rensning');
+                    return;
+                }
+
+                // Check which classes have existing schedules
+                const classesWithSchedule = [];
+                const classesWithoutSchedule = [];
+                
+                for (const cls of selectedClasses) {
+                    const status = scheduleSaveState.classScheduleStatus[cls.id];
+                    if (status && status.has_schedule) {
+                        classesWithSchedule.push(cls);
+                    } else {
+                        classesWithoutSchedule.push(cls);
+                    }
+                }
+
+                if (classesWithSchedule.length === 0) {
+                    alert('Inga av de valda klasserna har befintliga scheman att rensa');
+                    return;
+                }
+
+                // Confirm reset
+                let confirmMessage = `⚠️ VARNING: Detta kommer att permanent ta bort scheman för:\n\n`;
+                classesWithSchedule.forEach(cls => {
+                    const status = scheduleSaveState.classScheduleStatus[cls.id];
+                    confirmMessage += `• ${cls.name} (${status ? status.lesson_count : '?'} lektioner)\n`;
+                });
+                
+                if (classesWithoutSchedule.length > 0) {
+                    confirmMessage += `\nFöljande klasser har inga befintliga scheman:\n`;
+                    classesWithoutSchedule.forEach(cls => confirmMessage += `• ${cls.name}\n`);
+                }
+                
+                confirmMessage += `\nÄr du säker på att du vill fortsätta?`;
+
+                if (!confirm(confirmMessage)) {
+                    debugLog('Reset cancelled by user');
+                    return;
+                }
+
+                try {
+                    debugLog('Resetting class schedules...', {classes: classesWithSchedule.map(c => c.name)});
+
+                    let totalDeleted = 0;
+                    let resetResults = [];
+
+                    // Reset each class individually
+                    for (const cls of classesWithSchedule) {
+                        const response = await fetch(`/api/class_schedule/reset/${cls.id}`, {
+                            method: 'DELETE'
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok && result.success) {
+                            totalDeleted += result.deleted_lessons;
+                            resetResults.push(`${cls.name}: ${result.deleted_lessons} lektioner`);
+                            debugLog(`Reset successful for class ${cls.name}:`, result);
+                        } else {
+                            throw new Error(`Fel för ${cls.name}: ${result.error}`);
+                        }
+                    }
+
+                    // Clear current schedule if it was for the reset classes
+                    currentSchedule = null;
+                    const preview = document.getElementById('schedulePreview');
+                    preview.innerHTML = `
+                        <div style="text-align: center; color: #38a169;">
+                            <h3>✅ Scheman rensade framgångsrikt</h3>
+                            <p><strong>Totalt ${totalDeleted} lektioner borttagna</strong></p>
+                            <div style="margin-top: 1rem; text-align: left; display: inline-block;">
+                                ${resetResults.map(r => `<div>📚 ${r}</div>`).join('')}
+                            </div>
+                            <p style="margin-top: 1.5rem;">Generera ett nytt schema för att fortsätta.</p>
+                        </div>
+                    `;
+
+                    // Hide generation controls
+                    const controls = document.getElementById('generationControls');
+                    if (controls) controls.style.display = 'none';
+
+                    // Update status
+                    await updateClassScheduleStatus();
+                    
+                    // Update save state
+                    scheduleSaveState.hasUnsavedChanges = false;
+                    scheduleSaveState.lastSavedSchedule = null;
+
+                    showSuccessMessage(`✅ Scheman rensade framgångsrikt!\n\n${totalDeleted} lektioner borttagna från ${classesWithSchedule.length} klass${classesWithSchedule.length !== 1 ? 'er' : ''}.`);
+
+                } catch (error) {
+                    console.error('Error resetting schedules:', error);
+                    alert(`❌ Fel vid rensning av scheman:\n${error.message}`);
+                    debugLog('Reset failed:', error);
+                }
+            }
+
+
+            function showSuccessMessage(message) {
+                // Create simple success modal
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                    background: rgba(0,0,0,0.5); z-index: 10000; 
+                    display: flex; align-items: center; justify-content: center;
+                `;
+
+                const content = document.createElement('div');
+                content.style.cssText = `
+                    background: white; padding: 2rem; border-radius: 0.5rem; 
+                    max-width: 500px; margin: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                `;
+
+                content.innerHTML = `
+                    <div style="text-align: center;">
+                        <div style="white-space: pre-line; margin-bottom: 1.5rem;">${message}</div>
+                        <button onclick="this.closest('[style*=position]').remove()" 
+                                style="background: #48bb78; color: white; padding: 0.5rem 1.5rem; 
+                                    border: none; border-radius: 0.375rem; cursor: pointer;">
+                            OK
+                        </button>
+                    </div>
+                `;
+
+                modal.appendChild(content);
+                document.body.appendChild(modal);
+
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    if (modal.parentNode) modal.remove();
+                }, 5000);
+            }
+
+
+            document.addEventListener('DOMContentLoaded', function() {
+                // Add event listener for page unload to warn about unsaved changes
+                window.addEventListener('beforeunload', function(e) {
+                    if (scheduleSaveState.hasUnsavedChanges) {
+                        const message = 'Du har osparade ändringar i schemat. Är du säker på att du vill lämna sidan?';
+                        e.returnValue = message;
+                        return message;
+                    }
+                });
+                
+                // Update status after initial load
+                setTimeout(() => {
+                    if (selectedClasses.length > 0) {
+                        updateClassScheduleStatus();
+                    }
+                }, 500);
+            });
+
+
+            const originalUpdateSelectedClasses = updateSelectedClasses;
+            updateSelectedClasses = function() {
+                // Call original function
+                originalUpdateSelectedClasses();
+                
+                // Update status for newly selected classes
+                setTimeout(() => {
+                    updateClassScheduleStatus();
+                }, 100);
+            };
+
+
+
+            const originalGenerateMultiClassSchedule = generateMultiClassSchedule;
+            generateMultiClassSchedule = async function() {
+                // Call original function
+                await originalGenerateMultiClassSchedule();
+                
+                // Mark as having unsaved changes if generation was successful
+                if (currentSchedule) {
+                    markScheduleAsUnsaved();
+                    await updateClassScheduleStatus();
+                }
+            };
+
             async function saveMultiClassSchedule() {
-                if (!currentSchedule) {
+                if (!currentSchedule || !currentSchedule.lessons) {
                     alert('Inget schema att spara');
+                    debugLog('Save attempted with no schedule');
                     return;
                 }
 
                 if (selectedClasses.length === 0) {
                     alert('Inga klasser valda');
+                    debugLog('Save attempted with no classes selected');
                     return;
                 }
 
-                debugLog('Saving multi-class schedule for classes:', selectedClasses.map(c => c.name));
+                // Confirm save action
+                const confirmMessage = `Spara schema för ${selectedClasses.length} klass${selectedClasses.length !== 1 ? 'er' : ''}?\n\n` +
+                    `Detta kommer att ersätta eventuella befintliga scheman för:\n${selectedClasses.map(c => `• ${c.name}`).join('\n')}`;
+                
+                if (!confirm(confirmMessage)) {
+                    debugLog('Save cancelled by user');
+                    return;
+                }
 
-                // Simulera sparning
-                setTimeout(() => {
-                    alert(`✅ Multi-klass schema sparat framgångsrikt för ${selectedClasses.length} klasser!`);
-                    debugLog('Multi-class schedule saved successfully');
-                }, 500);
+
+
+
+                // Show saving indicator
+                const saveButton = document.querySelector('button[onclick="saveMultiClassSchedule()"]');
+                const originalText = saveButton.textContent;
+                saveButton.disabled = true;
+                saveButton.textContent = '💾 Sparar...';
+
+                try {
+                    debugLog('Saving multi-class schedule...', {
+                        classes: selectedClasses.length,
+                        lessons: currentSchedule.lessons.length
+                    });
+
+                    const response = await fetch('/api/multi_class_schedule/save', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            schedule: currentSchedule,
+                            class_ids: selectedClasses.map(c => parseInt(c.id))
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        // Update save state
+                        scheduleSaveState.hasUnsavedChanges = false;
+                        scheduleSaveState.lastSavedSchedule = JSON.parse(JSON.stringify(currentSchedule));
+                        
+                        // Update class status
+                        await updateClassScheduleStatus();
+                        
+                        // Show success message
+                        showSuccessMessage(`✅ Schema sparat framgångsrikt!\n\n` +
+                            `📊 ${result.lessons_saved} lektioner sparade\n` +
+                            `🏫 ${result.classes_updated} klasser uppdaterade\n` +
+                            `${result.classes_deleted_lessons > 0 ? `🗑️ ${result.classes_deleted_lessons} gamla lektioner ersatta` : ''}`);
+                        
+                        debugLog('Schedule saved successfully:', result);
+
+                        // Update UI to show saved state
+                        updateScheduleUI();
+
+                    } else {
+                        throw new Error(result.error || 'Okänt fel vid sparning');
+                    }
+
+                } catch (error) {
+                    console.error('Error saving schedule:', error);
+                    alert(`❌ Fel vid sparning av schema:\n${error.message}`);
+                    debugLog('Save failed:', error);
+                } finally {
+                    // Restore button
+                    saveButton.disabled = false;
+                    saveButton.textContent = originalText;
+                }
             }
+
 
             // Initiera när sidan laddas
             document.addEventListener('DOMContentLoaded', function() {
