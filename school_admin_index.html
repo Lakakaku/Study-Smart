@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skolledning - {{ school.name if school else 'Okänd skola' }}</title>
+    <title>Schemagenerator - {{ school.name if school else 'Okänd skola' }}</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -18,7 +18,7 @@
             padding: 1rem 2rem;
             box-shadow: 0 2px 20px rgba(0,0,0,0.1);
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
         }
 
@@ -28,22 +28,32 @@
             font-size: 1.8rem;
         }
 
-        .header .user-info {
-            color: #718096;
-            margin-left: auto;
+        .back-btn {
+            background: #718096;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #4a5568;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 2rem auto;
             padding: 0 2rem;
         }
 
-        .dashboard-grid {
+        .generator-layout {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: 1fr 1fr;
             gap: 2rem;
-            margin-bottom: 3rem;
         }
 
         .card {
@@ -51,11 +61,6 @@
             border-radius: 12px;
             padding: 2rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            transition: transform 0.2s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
         }
 
         .card h3 {
@@ -67,42 +72,8 @@
             gap: 0.5rem;
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            text-align: center;
-        }
-
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            display: block;
-        }
-
-        .stat-label {
-            opacity: 0.9;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-        }
-
-        .news-form {
-            background: #f7fafc;
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin-bottom: 2rem;
-        }
-
         .form-group {
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
         }
 
         .form-group label {
@@ -112,7 +83,7 @@
             color: #4a5568;
         }
 
-        .form-group input, .form-group textarea {
+        .form-group select, .form-group input {
             width: 100%;
             padding: 0.75rem;
             border: 1px solid #e2e8f0;
@@ -121,185 +92,228 @@
             box-sizing: border-box;
         }
 
-        .form-group textarea {
-            min-height: 120px;
-            resize: vertical;
+        .subjects-container {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem;
+            background: #f7fafc;
+        }
+
+        .subject-item {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 1rem;
+            align-items: center;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+
+        .subject-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .subject-item input, .subject-item select {
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .add-subject-btn {
+            background: #48bb78;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .add-subject-btn:hover {
+            background: #38a169;
+        }
+
+        .remove-subject-btn {
+            background: #f56565;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .remove-subject-btn:hover {
+            background: #e53e3e;
+        }
+
+        .rooms-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .room-item {
+            display: flex;
+            align-items: center;
+            background: #f7fafc;
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .room-item input[type="checkbox"] {
+            margin-right: 0.5rem;
+            width: auto;
+        }
+
+        .constraints-section {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem;
+            background: #f7fafc;
+        }
+
+        .constraint-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .constraint-item input[type="checkbox"] {
+            margin-right: 0.5rem;
+            width: auto;
+        }
+
+        .time-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
         }
 
         .btn {
             background: #4299e1;
             color: white;
-            padding: 0.75rem 1.5rem;
+            padding: 1rem 2rem;
             border: none;
-            border-radius: 6px;
-            font-size: 1rem;
+            border-radius: 8px;
+            font-size: 1.1rem;
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
+            font-weight: 600;
         }
 
         .btn:hover {
             background: #3182ce;
+            transform: translateY(-1px);
         }
 
-        .btn-secondary {
-            background: #718096;
+        .btn:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
         }
 
-        .btn-secondary:hover {
-            background: #4a5568;
+        .btn-generate {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 100%;
+            justify-self: center;
         }
 
-        .action-buttons {
+        .btn-generate:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+        }
+
+        .schedule-preview {
+            min-height: 400px;
+            background: #f7fafc;
+            border: 2px dashed #cbd5e0;
+            border-radius: 8px;
             display: flex;
-            gap: 1rem;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            color: #718096;
+            font-size: 1.1rem;
+            position: relative;
         }
 
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
 
+        .schedule-table th {
+            background: #4299e1;
+            color: white;
+            padding: 0.75rem;
+            text-align: center;
+            font-weight: 600;
+        }
 
-        /* Lägg till dessa stilar i <style> sektionen i school_admin_index.html */
+        .schedule-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: center;
+            vertical-align: middle;
+        }
 
-        .file-info {
-            display: block;
+        .schedule-table tr:hover {
+            background: #f7fafc;
+        }
+
+        .lesson-cell {
+            background: #ebf8ff;
+            border-left: 3px solid #4299e1;
+            font-size: 0.9rem;
+            line-height: 1.2;
+        }
+
+        .lesson-subject {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .lesson-room {
             color: #718096;
-            font-size: 0.85rem;
-            margin-top: 0.25rem;
+            font-size: 0.8rem;
+        }
+
+        .empty-cell {
+            color: #a0aec0;
             font-style: italic;
         }
 
-        .file-preview {
-            background: #f0f4f8;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 1rem;
+        .generation-controls {
+            display: flex;
+            gap: 1rem;
             margin-top: 1rem;
         }
 
-        .file-preview h4 {
-            margin: 0 0 0.5rem 0;
-            color: #4a5568;
-            font-size: 0.9rem;
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #4299e1;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
         }
 
-        .file-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 4px;
-            padding: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .file-item-info {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .file-icon {
-            font-size: 1.2rem;
-        }
-
-        .file-details {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .file-name {
-            font-weight: 500;
-            color: #2d3748;
-            font-size: 0.9rem;
-        }
-
-        .file-size {
-            color: #718096;
-            font-size: 0.8rem;
-        }
-
-        .remove-file-btn {
-            background: #fed7d7;
-            color: #c53030;
-            border: none;
-            border-radius: 4px;
-            padding: 0.25rem 0.5rem;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: background-color 0.2s;
-        }
-
-        .remove-file-btn:hover {
-            background: #feb2b2;
-        }
-
-        /* Stilar för dokumentvisning i nyheter */
-        .news-documents {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .news-documents h4 {
-            margin: 0 0 0.5rem 0;
-            color: #4a5568;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .document-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        .document-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 0.5rem 0.75rem;
-            text-decoration: none;
-            color: #4a5568;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-
-        .document-item:hover {
-            background: #edf2f7;
-            border-color: #cbd5e0;
-            transform: translateY(-1px);
-        }
-
-        .document-icon {
-            font-size: 1rem;
-        }
-
-        .action-btn {
-            background: white;
-            border: 2px solid #e2e8f0;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            text-decoration: none;
-            color: #4a5568;
-            text-align: center;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .action-btn:hover {
-            border-color: #4299e1;
-            color: #4299e1;
-            transform: translateY(-1px);
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .alert {
@@ -321,319 +335,457 @@
             border-color: #e53e3e;
         }
 
-        .detailed-stats {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            margin-top: 2rem;
+        .alert-info {
+            background: #ebf8ff;
+            color: #2c5282;
+            border-color: #4299e1;
         }
 
-        .detailed-stats h3 {
-            margin-top: 0;
-            color: #2d3748;
-            font-size: 1.3rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .detailed-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-
-        .detailed-stat-item {
+        .debug-info {
             background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
             padding: 1rem;
-            border-radius: 8px;
-            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #4a5568;
         }
 
-        .detailed-stat-number {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #4299e1;
-        }
-
-        @media (max-width: 768px) {
-            .header {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-
-            .stats-grid {
+        @media (max-width: 1200px) {
+            .generator-layout {
                 grid-template-columns: 1fr;
             }
-
-            .action-buttons {
-                flex-direction: column;
+            
+            .subject-item {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
             }
-
-            .action-btn {
-                width: 100%;
-                justify-content: center;
-            }
-
-            .detailed-stats-grid {
-                grid-template-columns: repeat(2, 1fr);
+            
+            .rooms-container {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
             }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🏫 Skolledning - {{ school.name if school else 'Okänd skola' }}</h1>
-        <div class="user-info">
-            <form method="POST" action="{{ url_for('logout') }}" style="display: inline;">
-                <button type="submit" class="logout-btn">LOGGA UT</button>
-            </form>
-        </div>
+        <h1>📅 Schemagenerator - Testskolan</h1>
+        <a href="#" class="back-btn">← Tillbaka till Dashboard</a>
     </div>
 
     <div class="container">
-        <!-- Flash messages -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'error' if category == 'danger' else category }}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <!-- Statistik översikt -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <span class="stat-number">{{ total_students }}</span>
-                <div class="stat-label">Elever</div>
-            </div>
-            <div class="stat-card">
-                <span class="stat-number">{{ total_teachers }}</span>
-                <div class="stat-label">Lärare</div>
-            </div>
-        </div>
-
-        <!-- Åtgärdsknappar -->
-        <div class="action-buttons">
-            <a href="{{ url_for('view_all_grades') }}" class="action-btn">
-                <span style="font-size: 1.5rem;">📊</span>
-                <strong>Visa alla betyg</strong>
-            </a>
-            <a href="{{ url_for('manage_school_news') }}" class="action-btn">
-                <span style="font-size: 1.5rem;">📝</span>
-                <strong>Hantera alla nyheter</strong>
-            </a>
-        </div>
-
-        <!-- Huvudinnehåll -->
-        <div class="dashboard-grid">
-            
-            <!-- Skapa ny nyhet -->
-            <!-- Ersätt denna sektion i school_admin_index.html (runt rad 160-180) -->
-
-            <!-- Skapa ny nyhet -->
+        <div class="generator-layout">
+            <!-- Vänster sida - Inställningar -->
             <div class="card">
-                <h3>📢 Ny skolnyhet</h3>
-                <form action="{{ url_for('manage_school_news') }}" method="POST" enctype="multipart/form-data" class="news-form">
+                <h3>⚙️ Schemainställningar</h3>
+                
+                <form id="scheduleForm">
+                    <!-- Klassval -->
                     <div class="form-group">
-                        <label for="title">Rubrik:</label>
-                        <input type="text" id="title" name="title" required>
+                        <label for="class_id">Välj klass:</label>
+                        <select id="class_id" name="class_id" required>
+                            <option value="">Välj en klass...</option>
+                            <option value="1">8A (0 elever)</option>
+                            <option value="2">8B (0 elever)</option>
+                            <option value="3">9A (2 elever)</option>
+                            <option value="4">9B (1 elever)</option>
+                            <option value="5">9C (1 elever)</option>
+                        </select>
                     </div>
-                    <div class="form-group">
-                        <label for="content">Innehåll:</label>
-                        <textarea id="content" name="content" placeholder="Skriv din nyhet här..." required></textarea>
-                    </div>
-                    
-                    <!-- NY: Dokumentuppladdning -->
-                    <div class="form-group">
-                        <label for="documents">Bifoga dokument (valfritt):</label>
-                        <input type="file" id="documents" name="documents" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt">
-                        <small class="file-info">Du kan ladda upp flera filer. Tillåtna format: PDF, Word, bilder, textfiler</small>
-                    </div>
-                    
-                    <!-- Förhandsgranskning av valda filer -->
-                    <div id="file-preview" class="file-preview" style="display: none;">
-                        <h4>Valda filer:</h4>
-                        <div id="file-list"></div>
-                    </div>
-                    
-                    <button type="submit" class="btn">Publicera nyhet</button>
-                </form>
-            </div>
-        </div>
 
-        <!-- Detaljerad statistik (alltid synlig) -->
-        <div class="detailed-stats">
-            <h3>📈 Detaljerad statistik</h3>
-            <div class="detailed-stats-grid" id="stats-content">
-                <div class="detailed-stat-item">
-                    <div class="detailed-stat-number">{{ total_students }}</div>
-                    <div>Totalt antal elever</div>
+                    <!-- Ämnen och timmar -->
+                    <div class="form-group">
+                        <label>Ämnen och timmar per vecka:</label>
+                        <div class="subjects-container" id="subjectsContainer">
+                            <div class="subject-item">
+                                <select name="subjects[]" required>
+                                    <option value="">Välj ämne...</option>
+                                    <option value="1">FRANSKA TEST</option>
+                                    <option value="2">SIGMA SUBJEcT</option>
+                                </select>
+                                <input type="number" name="hours[]" min="1" max="10" placeholder="Timmar/vecka" required>
+                                <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
+                            </div>
+                        </div>
+                        <button type="button" class="add-subject-btn" onclick="addSubject()">+ Lägg till ämne</button>
+                    </div>
+
+                    <!-- Tillgängliga salar -->
+                    <div class="form-group">
+                        <label>Tillgängliga klassrum:</label>
+                        <div class="rooms-container">
+                            <div class="room-item">
+                                <input type="checkbox" name="rooms[]" value="A101" id="room_1" checked>
+                                <label for="room_1">A101</label>
+                            </div>
+                            <div class="room-item">
+                                <input type="checkbox" name="rooms[]" value="B202" id="room_2" checked>
+                                <label for="room_2">B202</label>
+                            </div>
+                            <div class="room-item">
+                                <input type="checkbox" name="rooms[]" value="C305" id="room_3" checked>
+                                <label for="room_3">C305</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tidsbegränsningar -->
+                    <div class="form-group">
+                        <label>Schema-begränsningar:</label>
+                        <div class="constraints-section">
+                            <div class="constraint-item">
+                                <input type="checkbox" id="no_double_lessons" name="constraints[]" value="no_double_lessons">
+                                <label for="no_double_lessons">Undvik dubbellektioner</label>
+                            </div>
+                            <div class="constraint-item">
+                                <input type="checkbox" id="balanced_days" name="constraints[]" value="balanced_days" checked>
+                                <label for="balanced_days">Jämn fördelning över veckan</label>
+                            </div>
+                            <div class="constraint-item">
+                                <input type="checkbox" id="morning_priority" name="constraints[]" value="morning_priority">
+                                <label for="morning_priority">Prioritera förmiddagstid</label>
+                            </div>
+                            
+                            <div style="margin-top: 1rem;">
+                                <label>Skoldagens timmar:</label>
+                                <div class="time-range">
+                                    <input type="time" name="start_time" value="08:00">
+                                    <input type="time" name="end_time" value="15:00">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-generate" onclick="generateSchedule()">
+                        🎲 Generera Schema
+                    </button>
+                </form>
+                
+                <!-- Debug info -->
+                <div id="debugInfo" class="debug-info" style="display: none;">
+                    <h4>Debug Information:</h4>
+                    <div id="debugContent"></div>
                 </div>
-                <div class="detailed-stat-item">
-                    <div class="detailed-stat-number" style="color: #48bb78;">{{ total_teachers }}</div>
-                    <div>Totalt antal lärare</div>
+            </div>
+
+            <!-- Höger sida - Schemaförhandsvisning -->
+            <div class="card">
+                <h3>📋 Schemaförhandsvisning</h3>
+                
+                <div class="schedule-preview" id="schedulePreview">
+                    <div style="text-align: center;">
+                        <p>Välj klass och ämnen för att generera ett schema</p>
+                        <p style="color: #a0aec0; font-size: 0.9rem;">Schemat kommer att visas här</p>
+                    </div>
                 </div>
-                <div class="detailed-stat-item">
-                    <div class="detailed-stat-number" style="color: #ed8936;" id="total-classes">-</div>
-                    <div>Antal klasser</div>
-                </div>
-                <div class="detailed-stat-item">
-                    <div class="detailed-stat-number" style="color: #9f7aea;" id="total-subjects">-</div>
-                    <div>Antal ämnen</div>
-                </div>
-                <div class="detailed-stat-item">
-                    <div class="detailed-stat-number" style="color: #38b2ac;" id="recent-grades">-</div>
-                    <div>Betyg senaste månaden</div>
+
+                <div class="generation-controls" id="generationControls" style="display: none;">
+                    <button type="button" class="btn" onclick="generateSchedule()">🔄 Generera nytt</button>
+                    <button type="button" class="btn" style="background: #48bb78;" onclick="saveSchedule()">💾 Spara schema</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Ladda detaljerad statistik vid sidladdning
-        document.addEventListener('DOMContentLoaded', function() {
-            loadSchoolStats();
-            
-            // Auto-resize textarea
-            const textarea = document.getElementById('content');
-            if (textarea) {
-                textarea.addEventListener('input', function() {
-                    this.style.height = 'auto';
-                    this.style.height = this.scrollHeight + 'px';
-                });
-            }
-        });
-        
-        function loadSchoolStats() {
-            fetch('/api/school_admin/stats')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error('Fel vid laddning av statistik:', data.error);
-                        return;
-                    }
-                    
-                    // Uppdatera värden
-                    const totalClasses = document.getElementById('total-classes');
-                    const totalSubjects = document.getElementById('total-subjects');
-                    const recentGrades = document.getElementById('recent-grades');
-                    
-                    if (totalClasses) totalClasses.textContent = data.total_classes || '-';
-                    if (totalSubjects) totalSubjects.textContent = data.total_subjects || '-';
-                    if (recentGrades) recentGrades.textContent = data.recent_grades || '-';
-                })
-                .catch(error => {
-                    console.error('Kunde inte ladda statistik:', error);
-                });
-        }
+        let currentSchedule = null;
+        let availableSubjects = [
+            {id: 1, name: 'FRANSKA TEST'},
+            {id: 2, name: 'SIGMA SUBJEcT'}
+        ];
 
+        // Debug flag
+        const DEBUG = true;
 
-        // Filuppladdning och förhandsgranskning
-        const documentsInput = document.getElementById('documents');
-        const filePreview = document.getElementById('file-preview');
-        const fileList = document.getElementById('file-list');
-        let selectedFiles = [];
-
-        if (documentsInput) {
-            documentsInput.addEventListener('change', function(e) {
-                handleFileSelection(e.target.files);
-            });
-        }
-
-        function handleFileSelection(files) {
-            // Lägg till nya filer till befintlig lista
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
-                    selectedFiles.push(file);
+        function debugLog(message, data = null) {
+            if (DEBUG) {
+                console.log(`[SCHEDULE DEBUG] ${message}`, data);
+                
+                const debugInfo = document.getElementById('debugInfo');
+                const debugContent = document.getElementById('debugContent');
+                
+                debugInfo.style.display = 'block';
+                debugContent.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
+                if (data) {
+                    debugContent.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
                 }
             }
-            
-            updateFilePreview();
         }
 
-        function updateFilePreview() {
-            if (selectedFiles.length === 0) {
-                filePreview.style.display = 'none';
+        function addSubject() {
+            const container = document.getElementById('subjectsContainer');
+            const newSubject = document.createElement('div');
+            newSubject.className = 'subject-item';
+            
+            newSubject.innerHTML = `
+                <select name="subjects[]" required>
+                    <option value="">Välj ämne...</option>
+                    ${availableSubjects.map(subject => 
+                        `<option value="${subject.id}">${subject.name}</option>`
+                    ).join('')}
+                </select>
+                <input type="number" name="hours[]" min="1" max="10" placeholder="Timmar/vecka" required>
+                <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
+            `;
+            
+            container.appendChild(newSubject);
+            debugLog('Added new subject row');
+        }
+
+        function removeSubject(button) {
+            const container = document.getElementById('subjectsContainer');
+            if (container.children.length > 1) {
+                button.parentElement.remove();
+                debugLog('Removed subject row');
+            } else {
+                debugLog('Cannot remove last subject row');
+            }
+        }
+
+        async function generateSchedule() {
+            const form = document.getElementById('scheduleForm');
+            const formData = new FormData(form);
+            const preview = document.getElementById('schedulePreview');
+            const controls = document.getElementById('generationControls');
+
+            // Debug: Visa form data
+            const formDataObj = {};
+            for (let [key, value] of formData.entries()) {
+                if (formDataObj[key]) {
+                    if (Array.isArray(formDataObj[key])) {
+                        formDataObj[key].push(value);
+                    } else {
+                        formDataObj[key] = [formDataObj[key], value];
+                    }
+                } else {
+                    formDataObj[key] = value;
+                }
+            }
+            debugLog('Form data being sent:', formDataObj);
+
+            // Validering
+            if (!formData.get('class_id')) {
+                alert('Välj en klass först!');
+                debugLog('Validation failed: No class selected');
                 return;
             }
 
-            filePreview.style.display = 'block';
-            fileList.innerHTML = '';
+            const subjects = formData.getAll('subjects[]');
+            const hours = formData.getAll('hours[]');
+            const rooms = formData.getAll('rooms[]');
 
-            selectedFiles.forEach((file, index) => {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
+            if (subjects.length === 0 || subjects.every(s => !s)) {
+                alert('Välj minst ett ämne!');
+                debugLog('Validation failed: No subjects selected');
+                return;
+            }
+
+            if (hours.length === 0 || hours.every(h => !h || h <= 0)) {
+                alert('Ange timmar för alla ämnen!');
+                debugLog('Validation failed: No hours specified');
+                return;
+            }
+
+            if (rooms.length === 0) {
+                alert('Välj minst ett klassrum!');
+                debugLog('Validation failed: No rooms selected');
+                return;
+            }
+
+            debugLog('Validation passed, generating schedule...');
+
+            // Visa loading
+            preview.innerHTML = `
+                <div style="text-align: center;">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 1rem;">Genererar schema...</p>
+                </div>
+            `;
+
+            // Simulera API-anrop eftersom vi inte har backend
+            try {
+                // Detta är en mock av backend-logiken
+                const mockSchedule = generateMockSchedule(subjects, hours, rooms);
                 
-                const fileIcon = getFileIcon(file.type, file.name);
-                const fileSize = formatFileSize(file.size);
-                
-                fileItem.innerHTML = `
-                    <div class="file-item-info">
-                        <span class="file-icon">${fileIcon}</span>
-                        <div class="file-details">
-                            <span class="file-name">${file.name}</span>
-                            <span class="file-size">${fileSize}</span>
-                        </div>
+                setTimeout(() => {
+                    debugLog('Schedule generated successfully', mockSchedule);
+                    currentSchedule = mockSchedule;
+                    displaySchedule(mockSchedule);
+                    controls.style.display = 'flex';
+                }, 1500);
+
+            } catch (error) {
+                debugLog('Error generating schedule:', error);
+                console.error('Error generating schedule:', error);
+                preview.innerHTML = `
+                    <div style="text-align: center; color: #e53e3e;">
+                        <p>❌ Fel vid schemagenerering</p>
+                        <p style="font-size: 0.9rem;">Kontrollera konsolen för mer information</p>
                     </div>
-                    <button type="button" class="remove-file-btn" onclick="removeFile(${index})">Ta bort</button>
                 `;
-                
-                fileList.appendChild(fileItem);
-            });
-
-            // Uppdatera input med aktuella filer
-            updateFileInput();
-        }
-
-        function removeFile(index) {
-            selectedFiles.splice(index, 1);
-            updateFilePreview();
-        }
-
-        function updateFileInput() {
-            // Skapa en ny DataTransfer för att uppdatera input
-            const dt = new DataTransfer();
-            selectedFiles.forEach(file => {
-                dt.items.add(file);
-            });
-            documentsInput.files = dt.files;
-        }
-
-        function getFileIcon(fileType, fileName) {
-            const extension = fileName.split('.').pop().toLowerCase();
-            
-            if (fileType.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) {
-                return '🖼️';
-            } else if (fileType === 'application/pdf' || extension === 'pdf') {
-                return '📄';
-            } else if (fileType.includes('word') || ['doc', 'docx'].includes(extension)) {
-                return '📝';
-            } else if (fileType.includes('excel') || ['xls', 'xlsx'].includes(extension)) {
-                return '📊';
-            } else if (fileType.includes('powerpoint') || ['ppt', 'pptx'].includes(extension)) {
-                return '📋';
-            } else if (fileType.startsWith('text/') || ['txt', 'md'].includes(extension)) {
-                return '📄';
-            } else {
-                return '📎';
+                controls.style.display = 'none';
             }
         }
 
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
+        function generateMockSchedule(subjects, hours, rooms) {
+            debugLog('Generating mock schedule with:', {subjects, hours, rooms});
             
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+            const timeSlots = ['08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
+            const lessons = [];
+
+            // Skapa lektioner baserat på ämnen och timmar
+            for (let i = 0; i < subjects.length; i++) {
+                if (!subjects[i] || !hours[i]) continue;
+                
+                const subjectId = subjects[i];
+                const subjectName = availableSubjects.find(s => s.id == subjectId)?.name || `Ämne ${subjectId}`;
+                const hoursPerWeek = parseInt(hours[i]);
+
+                for (let h = 0; h < hoursPerWeek; h++) {
+                    const dayIndex = Math.floor(Math.random() * weekdays.length);
+                    const timeIndex = Math.floor(Math.random() * timeSlots.length);
+                    const roomIndex = Math.floor(Math.random() * rooms.length);
+
+                    lessons.push({
+                        day: weekdays[dayIndex],
+                        time: timeSlots[timeIndex],
+                        subject_id: subjectId,
+                        subject_name: subjectName,
+                        room: rooms[roomIndex] || 'Okänd sal'
+                    });
+                }
+            }
+
+            debugLog('Generated lessons:', lessons);
+
+            return {
+                lessons: lessons,
+                time_slots: timeSlots,
+                stats: {
+                    total_lessons: lessons.length,
+                    balance_score: 85
+                }
+            };
         }
+
+        function displaySchedule(schedule) {
+            debugLog('Displaying schedule:', schedule);
+            const preview = document.getElementById('schedulePreview');
+            
+            if (!schedule || !schedule.lessons) {
+                preview.innerHTML = '<p>Inget schema att visa</p>';
+                debugLog('No schedule to display');
+                return;
+            }
+
+            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+            const timeSlots = schedule.time_slots || ['08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
+
+            let tableHTML = `
+                <table class="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Tid</th>
+                            ${weekdays.map(day => `<th>${day.charAt(0).toUpperCase() + day.slice(1)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            timeSlots.forEach(timeSlot => {
+                tableHTML += `<tr><td style="font-weight: 600;">${timeSlot}</td>`;
+                
+                weekdays.forEach(day => {
+                    const lesson = schedule.lessons.find(l => l.day === day && l.time === timeSlot);
+                    
+                    if (lesson) {
+                        tableHTML += `
+                            <td class="lesson-cell">
+                                <div class="lesson-subject">${lesson.subject_name}</div>
+                                <div class="lesson-room">${lesson.room || 'Ingen sal'}</div>
+                            </td>
+                        `;
+                    } else {
+                        tableHTML += `<td class="empty-cell">-</td>`;
+                    }
+                });
+                
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += '</tbody></table>';
+            
+            // Lägg till statistik
+            const stats = calculateScheduleStats(schedule);
+            tableHTML += `
+                <div style="margin-top: 1rem; padding: 1rem; background: #f7fafc; border-radius: 6px;">
+                    <h4 style="margin: 0 0 0.5rem 0;">Schemastatistik</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; font-size: 0.9rem;">
+                        <div>📚 Totalt: ${stats.totalLessons} lektioner</div>
+                        <div>📅 Per dag: ${stats.averagePerDay} lektioner</div>
+                        <div>🏫 Salar: ${stats.roomsUsed} använda</div>
+                        <div>⚖️ Balans: ${stats.balanceScore}%</div>
+                    </div>
+                </div>
+            `;
+
+            preview.innerHTML = tableHTML;
+            debugLog('Schedule displayed successfully');
+        }
+
+        function calculateScheduleStats(schedule) {
+            const totalLessons = schedule.lessons.length;
+            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+            const lessonsPerDay = weekdays.map(day => 
+                schedule.lessons.filter(l => l.day === day).length
+            );
+            
+            const averagePerDay = Math.round(totalLessons / 5 * 10) / 10;
+            const roomsUsed = [...new Set(schedule.lessons.map(l => l.room).filter(r => r))].length;
+            
+            // Enkel balansberäkning
+            const maxLessons = Math.max(...lessonsPerDay);
+            const minLessons = Math.min(...lessonsPerDay);
+            const balanceScore = maxLessons === 0 ? 100 : Math.round((1 - (maxLessons - minLessons) / maxLessons) * 100);
+
+            return {
+                totalLessons,
+                averagePerDay,
+                roomsUsed,
+                balanceScore
+            };
+        }
+
+        async function saveSchedule() {
+            if (!currentSchedule) {
+                alert('Inget schema att spara');
+                debugLog('Save failed: No schedule to save');
+                return;
+            }
+
+            const classId = document.getElementById('class_id').value;
+            if (!classId) {
+                alert('Välj en klass först');
+                debugLog('Save failed: No class selected');
+                return;
+            }
+
+            debugLog('Saving schedule for class:', classId);
+
+            // Simulera sparning
+            setTimeout(() => {
+                alert('✅ Schema sparat framgångsrikt!');
+                debugLog('Schedule saved successfully');
+            }, 500);
+        }
+
+        // Auto-resize för bättre UX
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('Page loaded, initializing...');
+            // Fokusera på första fältet
+            document.getElementById('class_id').focus();
+        });
     </script>
 </body>
 </html>
