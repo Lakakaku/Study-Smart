@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schemagenerator - {{ school.name if school else 'Okänd skola' }}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #2d3748;
+            font-size: 1.8rem;
+        }
+
+        .back-btn {
+            background: #718096;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #4a5568;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .generator-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            color: #2d3748;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .form-group select, .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        .subjects-container {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem;
+            background: #f7fafc;
+        }
+
+        .subject-item {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 1rem;
+            align-items: center;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+
+        .subject-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .subject-item input, .subject-item select {
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .add-subject-btn {
+            background: #48bb78;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .add-subject-btn:hover {
+            background: #38a169;
+        }
+
+        .remove-subject-btn {
+            background: #f56565;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .remove-subject-btn:hover {
+            background: #e53e3e;
+        }
+
+        .rooms-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .room-item {
+            display: flex;
+            align-items: center;
+            background: #f7fafc;
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .room-item input[type="checkbox"] {
+            margin-right: 0.5rem;
+            width: auto;
+        }
+
+        .constraints-section {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem;
+            background: #f7fafc;
+        }
+
+        .constraint-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .constraint-item input[type="checkbox"] {
+            margin-right: 0.5rem;
+            width: auto;
+        }
+
+        .time-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .btn {
+            background: #4299e1;
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            background: #3182ce;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-generate {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 100%;
+            justify-self: center;
+        }
+
+        .btn-generate:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+        }
+
+        .schedule-preview {
+            min-height: 400px;
+            background: #f7fafc;
+            border: 2px dashed #cbd5e0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #718096;
+            font-size: 1.1rem;
+            position: relative;
+        }
+
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .schedule-table th {
+            background: #4299e1;
+            color: white;
+            padding: 0.75rem;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .schedule-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .schedule-table tr:hover {
+            background: #f7fafc;
+        }
+
+        .lesson-cell {
+            background: #ebf8ff;
+            border-left: 3px solid #4299e1;
+            font-size: 0.9rem;
+            line-height: 1.2;
+        }
+
+        .lesson-subject {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .lesson-room {
+            color: #718096;
+            font-size: 0.8rem;
+        }
+
+        .empty-cell {
+            color: #a0aec0;
+            font-style: italic;
+        }
+
+        .generation-controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #4299e1;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            color: #22543d;
+            border-color: #38a169;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #c53030;
+            border-color: #e53e3e;
+        }
+
+        .alert-info {
+            background: #ebf8ff;
+            color: #2c5282;
+            border-color: #4299e1;
+        }
+
+        .debug-info {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #4a5568;
+        }
+
+        @media (max-width: 1200px) {
+            .generator-layout {
+                grid-template-columns: 1fr;
+            }
+            
+            .subject-item {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+            
+            .rooms-container {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📅 Schemagenerator - Testskolan</h1>
+        <a href="#" class="back-btn">← Tillbaka till Dashboard</a>
+    </div>
+
+    <div class="container">
+        <div class="generator-layout">
+            <!-- Vänster sida - Inställningar -->
+            <div class="card">
+                <h3>⚙️ Schemainställningar</h3>
+                
+                <form id="scheduleForm">
+                    <!-- Klassval -->
+                    <div class="form-group">
+                        <label for="class_id">Välj klass:</label>
+                        <select id="class_id" name="class_id" required>
+                            <option value="">Välj en klass...</option>
+                            <option value="1">8A (0 elever)</option>
+                            <option value="2">8B (0 elever)</option>
+                            <option value="3">9A (2 elever)</option>
+                            <option value="4">9B (1 elever)</option>
+                            <option value="5">9C (1 elever)</option>
+                        </select>
+                    </div>
+
+                    <!-- Ämnen och timmar -->
+                    <div class="form-group">
+                        <label>Ämnen och timmar per vecka:</label>
+                        <div class="subjects-container" id="subjectsContainer">
+                            <div class="subject-item">
+                                <select name="subjects[]" required>
+                                    <option value="">Välj ämne...</option>
+                                    <option value="1">FRANSKA TEST</option>
+                                    <option value="2">SIGMA SUBJEcT</option>
+                                </select>
+                                <input type="number" name="hours[]" min="1" max="10" placeholder="Timmar/vecka" required>
+                                <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
+                            </div>
+                        </div>
+                        <button type="button" class="add-subject-btn" onclick="addSubject()">+ Lägg till ämne</button>
+                    </div>
+
+                    <!-- Tillgängliga salar -->
+                    <div class="form-group">
+                        <label>Tillgängliga klassrum:</label>
+                        <div class="rooms-container">
+                            <div class="room-item">
+                                <input type="checkbox" name="rooms[]" value="A101" id="room_1" checked>
+                                <label for="room_1">A101</label>
+                            </div>
+                            <div class="room-item">
+                                <input type="checkbox" name="rooms[]" value="B202" id="room_2" checked>
+                                <label for="room_2">B202</label>
+                            </div>
+                            <div class="room-item">
+                                <input type="checkbox" name="rooms[]" value="C305" id="room_3" checked>
+                                <label for="room_3">C305</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tidsbegränsningar -->
+                    <div class="form-group">
+                        <label>Schema-begränsningar:</label>
+                        <div class="constraints-section">
+                            <div class="constraint-item">
+                                <input type="checkbox" id="no_double_lessons" name="constraints[]" value="no_double_lessons">
+                                <label for="no_double_lessons">Undvik dubbellektioner</label>
+                            </div>
+                            <div class="constraint-item">
+                                <input type="checkbox" id="balanced_days" name="constraints[]" value="balanced_days" checked>
+                                <label for="balanced_days">Jämn fördelning över veckan</label>
+                            </div>
+                            <div class="constraint-item">
+                                <input type="checkbox" id="morning_priority" name="constraints[]" value="morning_priority">
+                                <label for="morning_priority">Prioritera förmiddagstid</label>
+                            </div>
+                            
+                            <div style="margin-top: 1rem;">
+                                <label>Skoldagens timmar:</label>
+                                <div class="time-range">
+                                    <input type="time" name="start_time" value="08:00">
+                                    <input type="time" name="end_time" value="15:00">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-generate" onclick="generateSchedule()">
+                        🎲 Generera Schema
+                    </button>
+                </form>
+                
+                <!-- Debug info -->
+                <div id="debugInfo" class="debug-info" style="display: none;">
+                    <h4>Debug Information:</h4>
+                    <div id="debugContent"></div>
+                </div>
+            </div>
+
+            <!-- Höger sida - Schemaförhandsvisning -->
+            <div class="card">
+                <h3>📋 Schemaförhandsvisning</h3>
+                
+                <div class="schedule-preview" id="schedulePreview">
+                    <div style="text-align: center;">
+                        <p>Välj klass och ämnen för att generera ett schema</p>
+                        <p style="color: #a0aec0; font-size: 0.9rem;">Schemat kommer att visas här</p>
+                    </div>
+                </div>
+
+                <div class="generation-controls" id="generationControls" style="display: none;">
+                    <button type="button" class="btn" onclick="generateSchedule()">🔄 Generera nytt</button>
+                    <button type="button" class="btn" style="background: #48bb78;" onclick="saveSchedule()">💾 Spara schema</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSchedule = null;
+        let availableSubjects = [
+            {id: 1, name: 'FRANSKA TEST'},
+            {id: 2, name: 'SIGMA SUBJEcT'}
+        ];
+
+        // Debug flag
+        const DEBUG = true;
+
+        function debugLog(message, data = null) {
+            if (DEBUG) {
+                console.log(`[SCHEDULE DEBUG] ${message}`, data);
+                
+                const debugInfo = document.getElementById('debugInfo');
+                const debugContent = document.getElementById('debugContent');
+                
+                debugInfo.style.display = 'block';
+                debugContent.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
+                if (data) {
+                    debugContent.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            }
+        }
+
+        function addSubject() {
+            const container = document.getElementById('subjectsContainer');
+            const newSubject = document.createElement('div');
+            newSubject.className = 'subject-item';
+            
+            newSubject.innerHTML = `
+                <select name="subjects[]" required>
+                    <option value="">Välj ämne...</option>
+                    ${availableSubjects.map(subject => 
+                        `<option value="${subject.id}">${subject.name}</option>`
+                    ).join('')}
+                </select>
+                <input type="number" name="hours[]" min="1" max="10" placeholder="Timmar/vecka" required>
+                <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
+            `;
+            
+            container.appendChild(newSubject);
+            debugLog('Added new subject row');
+        }
+
+        function removeSubject(button) {
+            const container = document.getElementById('subjectsContainer');
+            if (container.children.length > 1) {
+                button.parentElement.remove();
+                debugLog('Removed subject row');
+            } else {
+                debugLog('Cannot remove last subject row');
+            }
+        }
+
+        async function generateSchedule() {
+            const form = document.getElementById('scheduleForm');
+            const formData = new FormData(form);
+            const preview = document.getElementById('schedulePreview');
+            const controls = document.getElementById('generationControls');
+
+            // Debug: Visa form data
+            const formDataObj = {};
+            for (let [key, value] of formData.entries()) {
+                if (formDataObj[key]) {
+                    if (Array.isArray(formDataObj[key])) {
+                        formDataObj[key].push(value);
+                    } else {
+                        formDataObj[key] = [formDataObj[key], value];
+                    }
+                } else {
+                    formDataObj[key] = value;
+                }
+            }
+            debugLog('Form data being sent:', formDataObj);
+
+            // Validering
+            if (!formData.get('class_id')) {
+                alert('Välj en klass först!');
+                debugLog('Validation failed: No class selected');
+                return;
+            }
+
+            const subjects = formData.getAll('subjects[]');
+            const hours = formData.getAll('hours[]');
+            const rooms = formData.getAll('rooms[]');
+
+            if (subjects.length === 0 || subjects.every(s => !s)) {
+                alert('Välj minst ett ämne!');
+                debugLog('Validation failed: No subjects selected');
+                return;
+            }
+
+            if (hours.length === 0 || hours.every(h => !h || h <= 0)) {
+                alert('Ange timmar för alla ämnen!');
+                debugLog('Validation failed: No hours specified');
+                return;
+            }
+
+            if (rooms.length === 0) {
+                alert('Välj minst ett klassrum!');
+                debugLog('Validation failed: No rooms selected');
+                return;
+            }
+
+            debugLog('Validation passed, generating schedule...');
+
+            // Visa loading
+            preview.innerHTML = `
+                <div style="text-align: center;">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 1rem;">Genererar schema...</p>
+                </div>
+            `;
+
+            // Simulera API-anrop eftersom vi inte har backend
+            try {
+                // Detta är en mock av backend-logiken
+                const mockSchedule = generateMockSchedule(subjects, hours, rooms);
+                
+                setTimeout(() => {
+                    debugLog('Schedule generated successfully', mockSchedule);
+                    currentSchedule = mockSchedule;
+                    displaySchedule(mockSchedule);
+                    controls.style.display = 'flex';
+                }, 1500);
+
+            } catch (error) {
+                debugLog('Error generating schedule:', error);
+                console.error('Error generating schedule:', error);
+                preview.innerHTML = `
+                    <div style="text-align: center; color: #e53e3e;">
+                        <p>❌ Fel vid schemagenerering</p>
+                        <p style="font-size: 0.9rem;">Kontrollera konsolen för mer information</p>
+                    </div>
+                `;
+                controls.style.display = 'none';
+            }
+        }
+
+        function generateMockSchedule(subjects, hours, rooms) {
+            debugLog('Generating mock schedule with:', {subjects, hours, rooms});
+            
+            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+            const timeSlots = ['08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
+            const lessons = [];
+
+            // Skapa lektioner baserat på ämnen och timmar
+            for (let i = 0; i < subjects.length; i++) {
+                if (!subjects[i] || !hours[i]) continue;
+                
+                const subjectId = subjects[i];
+                const subjectName = availableSubjects.find(s => s.id == subjectId)?.name || `Ämne ${subjectId}`;
+                const hoursPerWeek = parseInt(hours[i]);
+
+                for (let h = 0; h < hoursPerWeek; h++) {
+                    const dayIndex = Math.floor(Math.random() * weekdays.length);
+                    const timeIndex = Math.floor(Math.random() * timeSlots.length);
+                    const roomIndex = Math.floor(Math.random() * rooms.length);
+
+                    lessons.push({
+                        day: weekdays[dayIndex],
+                        time: timeSlots[timeIndex],
+                        subject_id: subjectId,
+                        subject_name: subjectName,
+                        room: rooms[roomIndex] || 'Okänd sal'
+                    });
+                }
+            }
+
+            debugLog('Generated lessons:', lessons);
+
+            return {
+                lessons: lessons,
+                time_slots: timeSlots,
+                stats: {
+                    total_lessons: lessons.length,
+                    balance_score: 85
+                }
+            };
+        }
+
+        function displaySchedule(schedule) {
+            debugLog('Displaying schedule:', schedule);
+            const preview = document.getElementById('schedulePreview');
+            
+            if (!schedule || !schedule.lessons) {
+                preview.innerHTML = '<p>Inget schema att visa</p>';
+                debugLog('No schedule to display');
+                return;
+            }
+
+            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+            const timeSlots = schedule.time_slots || ['08:00-09:00', '09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
+
+            let tableHTML = `
+                <table class="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Tid</th>
+                            ${weekdays.map(day => `<th>${day.charAt(0).toUpperCase() + day.slice(1)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            timeSlots.forEach(timeSlot => {
+                tableHTML += `<tr><td style="font-weight: 600;">${timeSlot}</td>`;
+                
+                weekdays.forEach(day => {
+                    const lesson = schedule.lessons.find(l => l.day === day && l.time === timeSlot);
+                    
+                    if (lesson) {
+                        tableHTML += `
+                            <td class="lesson-cell">
+                                <div class="lesson-subject">${lesson.subject_name}</div>
+                                <div class="lesson-room">${lesson.room || 'Ingen sal'}</div>
+                            </td>
+                        `;
+                    } else {
+                        tableHTML += `<td class="empty-cell">-</td>`;
+                    }
+                });
+                
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += '</tbody></table>';
+            
+            // Lägg till statistik
+            const stats = calculateScheduleStats(schedule);
+            tableHTML += `
+                <div style="margin-top: 1rem; padding: 1rem; background: #f7fafc; border-radius: 6px;">
+                    <h4 style="margin: 0 0 0.5rem 0;">Schemastatistik</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; font-size: 0.9rem;">
+                        <div>📚 Totalt: ${stats.totalLessons} lektioner</div>
+                        <div>📅 Per dag: ${stats.averagePerDay} lektioner</div>
+                        <div>🏫 Salar: ${stats.roomsUsed} använda</div>
+                        <div>⚖️ Balans: ${stats.balanceScore}%</div>
+                    </div>
+                </div>
+            `;
+
+            preview.innerHTML = tableHTML;
+            debugLog('Schedule displayed successfully');
+        }
+
+        function calculateScheduleStats(schedule) {
+            const totalLessons = schedule.lessons.length;
+            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+            const lessonsPerDay = weekdays.map(day => 
+                schedule.lessons.filter(l => l.day === day).length
+            );
+            
+            const averagePerDay = Math.round(totalLessons / 5 * 10) / 10;
+            const roomsUsed = [...new Set(schedule.lessons.map(l => l.room).filter(r => r))].length;
+            
+            // Enkel balansberäkning
+            const maxLessons = Math.max(...lessonsPerDay);
+            const minLessons = Math.min(...lessonsPerDay);
+            const balanceScore = maxLessons === 0 ? 100 : Math.round((1 - (maxLessons - minLessons) / maxLessons) * 100);
+
+            return {
+                totalLessons,
+                averagePerDay,
+                roomsUsed,
+                balanceScore
+            };
+        }
+
+        async function saveSchedule() {
+            if (!currentSchedule) {
+                alert('Inget schema att spara');
+                debugLog('Save failed: No schedule to save');
+                return;
+            }
+
+            const classId = document.getElementById('class_id').value;
+            if (!classId) {
+                alert('Välj en klass först');
+                debugLog('Save failed: No class selected');
+                return;
+            }
+
+            debugLog('Saving schedule for class:', classId);
+
+            // Simulera sparning
+            setTimeout(() => {
+                alert('✅ Schema sparat framgångsrikt!');
+                debugLog('Schedule saved successfully');
+            }, 500);
+        }
+
+        // Auto-resize för bättre UX
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('Page loaded, initializing...');
+            // Fokusera på första fältet
+            document.getElementById('class_id').focus();
+        });
+    </script>
+</body>
+</html>
