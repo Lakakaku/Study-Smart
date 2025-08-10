@@ -420,6 +420,38 @@
     </div>
 
     <div class="container">
+
+
+
+        <!-- Lägg till denna sektion INNAN formuläret i schedule_generator.html -->
+        <div class="card" style="margin-bottom: 2rem;">
+            <h3>📚 Hantera Skolämnen</h3>
+            
+            <div class="form-group">
+                <label>Lägg till nytt ämne:</label>
+                <div style="display: flex; gap: 1rem; align-items: end;">
+                    <div style="flex: 1;">
+                        <input type="text" id="newSubjectName" placeholder="Ämnesnamn (t.ex. Matematik, Svenska, Historia)" style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 6px;">
+                    </div>
+                    <button type="button" class="btn" onclick="addNewSubject()" style="background: #48bb78; white-space: nowrap;">+ Lägg till</button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Befintliga ämnen:</label>
+                <div id="existingSubjects" class="subjects-list" style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; background: #f7fafc; min-height: 100px; max-height: 200px; overflow-y: auto;">
+                    <div style="color: #666; text-align: center;" id="noSubjectsMessage">
+                        Inga ämnen ännu. Lägg till ämnen ovan.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-info" style="margin-top: 1rem;">
+                <strong>💡 Tips:</strong> Ämnena du skapar här kommer att vara tillgängliga för alla klasser när du genererar scheman. De sparas automatiskt och behålls mellan sessioner.
+            </div>
+        </div>
+
+        
         <!-- Informationsbox om nya regler -->
         <div class="alert alert-info">
             <h4>📋 Multi-klass schemaläggningsregler</h4>
@@ -679,6 +711,153 @@
                     sel.appendChild(opt);
                 });
             }
+
+
+
+            
+            // JavaScript för ämneshantering - lägg till i <script>-sektionen
+
+            let schoolSubjects = {{ available_subjects | tojson | safe }} || [];
+
+            function renderSubjects() {
+                const container = document.getElementById('existingSubjects');
+                const noMessage = document.getElementById('noSubjectsMessage');
+                
+                if (schoolSubjects.length === 0) {
+                    noMessage.style.display = 'block';
+                    container.innerHTML = '<div style="color: #666; text-align: center;" id="noSubjectsMessage">Inga ämnen ännu. Lägg till ämnen ovan.</div>';
+                    return;
+                }
+                
+                noMessage.style.display = 'none';
+                
+                let html = '';
+                schoolSubjects.forEach(subject => {
+                    html += `
+                        <div class="subject-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid #e2e8f0;">
+                            <div>
+                                <strong style="color: #2d3748;">${subject.name}</strong>
+                            </div>
+                            <button type="button" class="remove-subject-btn" onclick="removeSubject(${subject.id})" style="background: #f56565; color: white; padding: 0.25rem 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                Ta bort
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+                
+                // Uppdatera ämnesdropdowns i formuläret
+                updateSubjectDropdowns();
+            }
+
+            async function addNewSubject() {
+                const input = document.getElementById('newSubjectName');
+                const subjectName = input.value.trim();
+                
+                if (!subjectName) {
+                    alert('Ange ett ämnesnamn');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/school_subjects', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ name: subjectName })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        schoolSubjects.push(data.subject);
+                        availableSubjects.push(data.subject); // Uppdatera även global variabel
+                        input.value = '';
+                        renderSubjects();
+                        debugLog('Subject added successfully:', data.subject);
+                    } else {
+                        alert(data.error || 'Fel vid sparande av ämne');
+                    }
+                } catch (error) {
+                    console.error('Error adding subject:', error);
+                    alert('Fel vid kommunikation med servern');
+                }
+            }
+
+            async function removeSubject(subjectId) {
+                if (!confirm('Är du säker på att du vill ta bort detta ämne?')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/school_subjects/${subjectId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        schoolSubjects = schoolSubjects.filter(s => s.id !== subjectId);
+                        availableSubjects = availableSubjects.filter(s => s.id !== subjectId); // Uppdatera även global variabel
+                        renderSubjects();
+                        debugLog('Subject removed successfully:', subjectId);
+                    } else {
+                        alert(data.error || 'Fel vid borttagning av ämne');
+                    }
+                } catch (error) {
+                    console.error('Error removing subject:', error);
+                    alert('Fel vid kommunikation med servern');
+                }
+            }
+
+            function updateSubjectDropdowns() {
+                // Uppdatera alla ämnesdropdowns i formuläret
+                const subjectSelects = document.querySelectorAll('select[name^="subjects_"]');
+                subjectSelects.forEach(select => {
+                    const currentValue = select.value;
+                    
+                    let optionsHtml = '<option value="">Välj ämne...</option>';
+                    schoolSubjects.forEach(subject => {
+                        optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
+                    });
+                    
+                    select.innerHTML = optionsHtml;
+                    select.value = currentValue; // Behåll vald värde om möjligt
+                });
+            }
+
+            // Uppdatera createSubjectItem funktionen för att använda schoolSubjects
+            function createSubjectItem(classId) {
+                const item = document.createElement('div');
+                item.className = 'subject-item';
+
+                let optionsHtml = '<option value="">Välj ämne...</option>';
+                schoolSubjects.forEach(subject => {
+                    optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
+                });
+
+                item.innerHTML = `
+                    <select name="subjects_${classId}[]" required onchange="validateSubjectHours()">
+                        ${optionsHtml}
+                    </select>
+                    <input type="number" name="hours_${classId}[]" min="1" max="5" placeholder="Timmar/vecka (max 5)" required onchange="validateSubjectHours()">
+                    <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
+                `;
+
+                return item;
+            }
+
+            // Initiera ämneslistan när sidan laddas
+            document.addEventListener('DOMContentLoaded', function() {
+                renderSubjects();
+            });
+            
+
+
+            
+                
 
             // Fyll lärar-filtret - försök med availableTeachers, annars lämna "Alla lärare" tills schemat finns
             function populateTeacherFilter() {
