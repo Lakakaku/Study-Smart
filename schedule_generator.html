@@ -400,8 +400,9 @@
                             <div class="subject-item">
                                 <select name="subjects[]" required>
                                     <option value="">Välj ämne...</option>
-                                    <option value="1">FRANSKA TEST</option>
-                                    <option value="2">SIGMA SUBJEcT</option>
+                                    {% for subject in available_subjects %}
+                                        <option value="{{ subject.id }}">{{ subject.name }}</option>
+                                    {% endfor %}
                                 </select>
                                 <input type="number" name="hours[]" min="1" max="10" placeholder="Timmar/vecka" required>
                                 <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
@@ -489,10 +490,7 @@
 
     <script>
         let currentSchedule = null;
-        let availableSubjects = [
-            {id: 1, name: 'FRANSKA TEST'},
-            {id: 2, name: 'SIGMA SUBJEcT'}
-        ];
+        let availableSubjects = {{ available_subjects | tojson }};
 
         // Debug flag
         const DEBUG = true;
@@ -517,19 +515,21 @@
             const newSubject = document.createElement('div');
             newSubject.className = 'subject-item';
             
+            let optionsHtml = '<option value="">Välj ämne...</option>';
+            availableSubjects.forEach(subject => {
+                optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
+            });
+            
             newSubject.innerHTML = `
                 <select name="subjects[]" required>
-                    <option value="">Välj ämne...</option>
-                    ${availableSubjects.map(subject => 
-                        `<option value="${subject.id}">${subject.name}</option>`
-                    ).join('')}
+                    ${optionsHtml}
                 </select>
                 <input type="number" name="hours[]" min="1" max="10" placeholder="Timmar/vecka" required>
                 <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
             `;
             
             container.appendChild(newSubject);
-            debugLog('Added new subject row');
+            debugLog('Added new subject row with available subjects', availableSubjects);
         }
 
         function removeSubject(button) {
@@ -542,6 +542,7 @@
             }
         }
 
+        // Resten av JavaScript-koden förblir oförändrad...
         async function generateSchedule() {
             const form = document.getElementById('scheduleForm');
             const formData = new FormData(form);
@@ -783,6 +784,7 @@
         // Auto-resize för bättre UX
         document.addEventListener('DOMContentLoaded', function() {
             debugLog('Page loaded, initializing...');
+            debugLog('Available subjects loaded:', availableSubjects);
             // Fokusera på första fältet
             document.getElementById('class_id').focus();
         });
