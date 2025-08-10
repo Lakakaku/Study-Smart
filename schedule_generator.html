@@ -424,8 +424,9 @@
 
 
         <!-- Lägg till denna sektion INNAN formuläret i schedule_generator.html -->
+        <!-- Lägg till denna sektion INNAN formuläret i schedule_generator.html -->
         <div class="card" style="margin-bottom: 2rem;">
-            <h3>📚 Hantera Skolämnen</h3>
+            <h3>📚 Hantera Skolämnen & Lärarbehörigheter</h3>
             
             <div class="form-group">
                 <label>Lägg till nytt ämne:</label>
@@ -438,8 +439,8 @@
             </div>
             
             <div class="form-group">
-                <label>Befintliga ämnen:</label>
-                <div id="existingSubjects" class="subjects-list" style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; background: #f7fafc; min-height: 100px; max-height: 200px; overflow-y: auto;">
+                <label>Befintliga ämnen & behöriga lärare:</label>
+                <div id="existingSubjects" class="subjects-list" style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; background: #f7fafc; min-height: 100px; max-height: 400px; overflow-y: auto;">
                     <div style="color: #666; text-align: center;" id="noSubjectsMessage">
                         Inga ämnen ännu. Lägg till ämnen ovan.
                     </div>
@@ -447,7 +448,25 @@
             </div>
             
             <div class="alert alert-info" style="margin-top: 1rem;">
-                <strong>💡 Tips:</strong> Ämnena du skapar här kommer att vara tillgängliga för alla klasser när du genererar scheman. De sparas automatiskt och behålls mellan sessioner.
+                <strong>💡 Tips:</strong> Ämnena du skapar här kommer att vara tillgängliga för alla klasser när du genererar scheman. Endast lärare som är markerade som behöriga kan schemaläggas för respektive ämne.
+            </div>
+        </div>
+
+        <!-- Modal för lärarhantering -->
+        <div id="teacherModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+            <div class="modal-content" style="background: white; margin: 5% auto; padding: 2rem; width: 80%; max-width: 600px; border-radius: 12px; max-height: 80vh; overflow-y: auto;">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem;">
+                    <h3 id="modalTitle" style="margin: 0; color: #2d3748;">Hantera Lärarbehörigheter</h3>
+                    <button class="close" onclick="closeTeacherModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+                </div>
+                
+                <div id="modalContent" style="margin-bottom: 1.5rem;">
+                    <!-- Content fylls dynamiskt -->
+                </div>
+                
+                <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding-top: 1rem; text-align: right;">
+                    <button type="button" class="btn" onclick="closeTeacherModal()" style="background: #718096;">Stäng</button>
+                </div>
             </div>
         </div>
 
@@ -988,6 +1007,250 @@
                 });
             }
 
+
+            // Uppdatera renderSubjects funktionen för att inkludera lärarhantering
+            function renderSubjects() {
+                const container = document.getElementById('existingSubjects');
+                const noMessage = document.getElementById('noSubjectsMessage');
+                
+                if (schoolSubjects.length === 0) {
+                    noMessage.style.display = 'block';
+                    container.innerHTML = '<div style="color: #666; text-align: center;" id="noSubjectsMessage">Inga ämnen ännu. Lägg till ämnen ovan.</div>';
+                    return;
+                }
+                
+                noMessage.style.display = 'none';
+                
+                let html = '';
+                schoolSubjects.forEach(subject => {
+                    html += `
+                        <div class="subject-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid #e2e8f0;">
+                            <div style="flex: 1;">
+                                <div>
+                                    <strong style="color: #2d3748;">${subject.name}</strong>
+                                    <span id="teacherCount_${subject.id}" style="color: #718096; font-size: 0.85rem; margin-left: 0.5rem;">
+                                        (Laddar lärare...)
+                                    </span>
+                                </div>
+                                <div id="qualifiedTeachers_${subject.id}" style="margin-top: 0.25rem; font-size: 0.8rem; color: #4a5568;">
+                                    <!-- Behöriga lärare visas här -->
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <button type="button" class="btn" onclick="manageTeachers(${subject.id}, '${subject.name}')" 
+                                        style="background: #4299e1; color: white; padding: 0.375rem 0.75rem; font-size: 0.8rem;">
+                                    👨‍🏫 Lärare
+                                </button>
+                                <button type="button" class="remove-subject-btn" onclick="removeSubject(${subject.id})" 
+                                        style="background: #f56565; color: white; padding: 0.25rem 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                    Ta bort
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+                
+                // Ladda lärarbehörigheter för varje ämne
+                schoolSubjects.forEach(subject => {
+                    loadTeacherQualifications(subject.id);
+                });
+                
+                // Uppdatera ämnesdropdowns i formuläret
+                updateSubjectDropdowns();
+            }
+
+            // Ladda och visa behöriga lärare för ett ämne
+            async function loadTeacherQualifications(subjectId) {
+                try {
+                    const response = await fetch(`/api/teacher_qualifications/${subjectId}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const countSpan = document.getElementById(`teacherCount_${subjectId}`);
+                        const teachersDiv = document.getElementById(`qualifiedTeachers_${subjectId}`);
+                        
+                        const qualifiedCount = data.qualified_teachers.length;
+                        countSpan.textContent = `(${qualifiedCount} behörig${qualifiedCount !== 1 ? 'a' : ''} lärare)`;
+                        countSpan.style.color = qualifiedCount > 0 ? '#38a169' : '#e53e3e';
+                        
+                        if (qualifiedCount > 0) {
+                            const teacherNames = data.qualified_teachers.map(t => t.name).slice(0, 3);
+                            let displayText = teacherNames.join(', ');
+                            if (qualifiedCount > 3) {
+                                displayText += ` +${qualifiedCount - 3} till`;
+                            }
+                            teachersDiv.innerHTML = `Behöriga: ${displayText}`;
+                        } else {
+                            teachersDiv.innerHTML = '<span style="color: #e53e3e;">⚠️ Inga behöriga lärare - schema kan inte genereras</span>';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading teacher qualifications:', error);
+                    const countSpan = document.getElementById(`teacherCount_${subjectId}`);
+                    if (countSpan) {
+                        countSpan.textContent = '(Fel vid laddning)';
+                        countSpan.style.color = '#e53e3e';
+                    }
+                }
+            }
+
+            // Hantera lärare för ett ämne
+            async function manageTeachers(subjectId, subjectName) {
+                try {
+                    const response = await fetch(`/api/teacher_qualifications/${subjectId}`);
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        alert('Fel vid laddning av lärardata');
+                        return;
+                    }
+                    
+                    const modalTitle = document.getElementById('modalTitle');
+                    const modalContent = document.getElementById('modalContent');
+                    
+                    modalTitle.textContent = `Lärarbehörigheter för ${subjectName}`;
+                    
+                    let html = `
+                        <div style="margin-bottom: 1.5rem;">
+                            <h4 style="color: #2d3748; margin-bottom: 0.75rem;">Behöriga lärare (${data.qualified_teachers.length})</h4>
+                            <div id="qualifiedTeachersList" style="background: #f0fff4; border: 1px solid #38a169; border-radius: 6px; padding: 1rem; min-height: 60px;">
+                    `;
+                    
+                    if (data.qualified_teachers.length > 0) {
+                        data.qualified_teachers.forEach(teacher => {
+                            html += `
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: white; border-radius: 4px; margin-bottom: 0.5rem; border: 1px solid #c6f6d5;">
+                                    <div>
+                                        <strong>${teacher.name}</strong>
+                                        <span style="color: #666; font-size: 0.9rem; margin-left: 0.5rem;">(${teacher.username})</span>
+                                    </div>
+                                    <button onclick="removeTeacherQualification(${subjectId}, ${teacher.id}, '${teacher.name}', '${subjectName}')" 
+                                            style="background: #f56565; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">
+                                        Ta bort
+                                    </button>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        html += '<p style="color: #666; text-align: center; margin: 0;">Inga behöriga lärare ännu</p>';
+                    }
+                    
+                    html += `
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 style="color: #2d3748; margin-bottom: 0.75rem;">Lägg till behörig lärare</h4>
+                            <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem;">
+                                <select id="teacherSelect" style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 1rem;">
+                                    <option value="">Välj lärare...</option>
+                    `;
+                    
+                    data.available_teachers.forEach(teacher => {
+                        if (!teacher.is_qualified) {
+                            html += `<option value="${teacher.id}">${teacher.name} (${teacher.username})</option>`;
+                        }
+                    });
+                    
+                    html += `
+                                </select>
+                                <button onclick="addTeacherQualification(${subjectId}, '${subjectName}')" 
+                                        style="background: #48bb78; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; cursor: pointer;">
+                                    + Lägg till behörighet
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    modalContent.innerHTML = html;
+                    document.getElementById('teacherModal').style.display = 'block';
+                    
+                } catch (error) {
+                    console.error('Error loading teachers:', error);
+                    alert('Fel vid laddning av lärardata');
+                }
+            }
+
+            // Lägg till lärarbehörighet
+            async function addTeacherQualification(subjectId, subjectName) {
+                const select = document.getElementById('teacherSelect');
+                const teacherId = select.value;
+                
+                if (!teacherId) {
+                    alert('Välj en lärare först');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/teacher_qualifications/${subjectId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ teacher_id: parseInt(teacherId) })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Stäng modal och uppdatera visning
+                        closeTeacherModal();
+                        loadTeacherQualifications(subjectId);
+                        alert(data.message);
+                    } else {
+                        alert(data.error || 'Fel vid tillägg av behörighet');
+                    }
+                } catch (error) {
+                    console.error('Error adding teacher qualification:', error);
+                    alert('Fel vid kommunikation med servern');
+                }
+            }
+
+            // Ta bort lärarbehörighet
+            async function removeTeacherQualification(subjectId, teacherId, teacherName, subjectName) {
+                if (!confirm(`Är du säker på att du vill ta bort ${teacherName}s behörighet att undervisa i ${subjectName}?`)) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/teacher_qualifications/${subjectId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ teacher_id: teacherId })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Stäng modal och uppdatera visning
+                        closeTeacherModal();
+                        loadTeacherQualifications(subjectId);
+                        alert(data.message);
+                    } else {
+                        alert(data.error || 'Fel vid borttagning av behörighet');
+                    }
+                } catch (error) {
+                    console.error('Error removing teacher qualification:', error);
+                    alert('Fel vid kommunikation med servern');
+                }
+            }
+
+            function closeTeacherModal() {
+                document.getElementById('teacherModal').style.display = 'none';
+            }
+
+            // Stäng modal vid klick utanför
+            window.onclick = function(event) {
+                const modal = document.getElementById('teacherModal');
+                if (event.target === modal) {
+                    closeTeacherModal();
+                }
+            }
+
             
 
 
@@ -1187,19 +1450,30 @@
                 }
 
                 // Enhanced function to assign teacher to lesson
+                // Enhanced function to assign teacher to lesson with subject qualification check
+                // Fix 3: Improved teacher qualification checking
                 function assignTeacherToLesson(lesson, day, timeSlot) {
                     const [startTime, endTime] = timeSlot.split('-');
                     const startMinutes = timeToMinutes(startTime);
                     const endMinutes = timeToMinutes(endTime);
 
                     if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
-                        // Try to find an available teacher
-                        const availableTeachersList = availableTeachers.filter(teacher => 
-                            isTeacherAvailable(teacher.id, day, timeSlot, lessonDuration)
-                        );
+                        // Filter teachers who are both available AND qualified for this subject
+                        const qualifiedAndAvailableTeachers = availableTeachers.filter(teacher => {
+                            // Check if teacher is available at this time
+                            const isTimeAvailable = isTeacherAvailable(teacher.id, day, timeSlot, 60);
+                            
+                            // Check if teacher is qualified for this subject
+                            let isQualified = true; // Default to true for backward compatibility
+                            if (teacher.qualified_subjects && Array.isArray(teacher.qualified_subjects)) {
+                                isQualified = teacher.qualified_subjects.includes(parseInt(lesson.subject_id));
+                            }
+                            
+                            return isTimeAvailable && isQualified;
+                        });
 
-                        if (availableTeachersList.length > 0) {
-                            const selectedTeacher = availableTeachersList[Math.floor(Math.random() * availableTeachersList.length)];
+                        if (qualifiedAndAvailableTeachers.length > 0) {
+                            const selectedTeacher = qualifiedAndAvailableTeachers[Math.floor(Math.random() * qualifiedAndAvailableTeachers.length)];
                             
                             // Reserve the teacher for this time slot
                             if (!teacherAvailability[selectedTeacher.id]) {
@@ -1222,8 +1496,8 @@
                                 teacher_name: selectedTeacher.name || selectedTeacher.username || 'Lärare'
                             };
                         } else {
-                            // No teachers available - this is a conflict
-                            debugLog(`No teachers available for ${lesson.class_name} - ${lesson.subject_name} on ${day} at ${timeSlot}`);
+                            // No qualified AND available teachers
+                            debugLog(`No qualified teachers available for ${lesson.class_name} - ${lesson.subject_name} on ${day} at ${timeSlot}`);
                             return null;
                         }
                     } else {
@@ -1377,141 +1651,12 @@
             // --- Slut på funktionen ---
 
 
+            // Fix 1: Remove duplicate function declaration
             async function generateMultiClassSchedule() {
-                // Uppdatera selected classes och UI
-                updateSelectedClasses();
-
                 const preview = document.getElementById('schedulePreview');
                 const controls = document.getElementById('generationControls');
 
-                if (selectedClasses.length === 0) {
-                    alert('Välj minst en klass!');
-                    debugLog('Validation failed: No classes selected');
-                    return;
-                }
-
-                // Bygg per-klass ämneskartor
-                const classSubjectMap = {}; // classId -> [{subject_id, hours}, ...]
-                for (const cls of selectedClasses) {
-                    const classId = cls.id;
-                    const container = document.getElementById(`class_subjects_${classId}`);
-                    if (!container) {
-                        alert(`Ingen ämnessektion hittades för klass ${cls.name}.`);
-                        debugLog('Validation failed: missing class subject container', {class: cls});
-                        return;
-                    }
-
-                    const rows = Array.from(container.querySelectorAll('.subject-item'));
-                    if (rows.length === 0) {
-                        alert(`Ingen ämneskonfiguration för klass ${cls.name}. Ange minst ett ämne.`);
-                        debugLog('Validation failed: No subject rows for class', {class: cls});
-                        return;
-                    }
-
-                    const items = [];
-                    for (let i = 0; i < rows.length; i++) {
-                        const row = rows[i];
-                        const subjSelect = row.querySelector('select');
-                        const hourInput = row.querySelector('input[type="number"]');
-
-                        const subjVal = subjSelect ? subjSelect.value.trim() : '';
-                        const hrsValRaw = hourInput ? hourInput.value.trim() : '';
-                        const hrsVal = hrsValRaw === '' ? NaN : parseInt(hrsValRaw, 10);
-
-                        if (!subjVal) {
-                            alert(`Välj ämne i alla rader för klass ${cls.name}`);
-                            debugLog('Validation failed: empty subject row', {class: cls, index: i});
-                            return;
-                        }
-                        if (isNaN(hrsVal) || hrsVal <= 0) {
-                            alert(`Ange giltigt antal timmar för ämnet i klass ${cls.name}`);
-                            debugLog('Validation failed: invalid hours', {class: cls, index: i, hours: hrsValRaw});
-                            return;
-                        }
-                        if (hrsVal > 5) {
-                            alert(`Max 5 lektioner per vecka per ämne. Du angav ${hrsVal} för ämnet i klass ${cls.name}`);
-                            debugLog('Validation failed: hours > 5', {class: cls, hours: hrsVal});
-                            return;
-                        }
-
-                        items.push({ subject_id: subjVal, hours: hrsVal });
-                    }
-
-                    classSubjectMap[classId] = items;
-                }
-
-                const rooms = getAvailableRooms();
-                const maxSimultaneousClasses = selectedClasses.length;
-                if (rooms.length < maxSimultaneousClasses) {
-                    const proceed = confirm(
-                        `Du har valt ${maxSimultaneousClasses} klasser men bara ${rooms.length} klassrum. ` +
-                        `Detta kan orsaka schemaläggningsproblem när klasser har lektioner samtidigt. Fortsätt ändå?`
-                    );
-                    if (!proceed) {
-                        debugLog('User cancelled due to insufficient rooms');
-                        return;
-                    }
-                }
-
-                debugLog('Multi-class validation passed, generating schedule...', {
-                    classes: selectedClasses.length,
-                    classSubjectMap,
-                    rooms: rooms.length
-                });
-
-                // Visa loading
-                preview.innerHTML = `
-                    <div style="text-align: center;">
-                        <div class="loading-spinner"></div>
-                        <p style="margin-top: 1rem;">Genererar multi-klass schema...</p>
-                        <p style="font-size: 0.9rem; color: #666;">
-                            Schemaläggning för ${selectedClasses.length} klasser med klassrumshantering
-                        </p>
-                        <p style="font-size: 0.85rem; color: #888;">
-                            Följer: Ingen klassrumskonflikt, max 1 ämne/dag per klass, 5-min intervall
-                        </p>
-                    </div>
-                `;
-
-                try {
-                    const form = document.getElementById('scheduleForm');
-                    const formData = new FormData(form);
-                    const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
-                    const multiClassSchedule = generateMultiClassScheduleWithConstraints(
-                        selectedClasses, classSubjectMap, rooms, 
-                        formData.get('start_time'), formData.get('end_time'), lessonDuration
-                    );
-
-                    setTimeout(() => {
-                        debugLog('Multi-class schedule generated successfully', multiClassSchedule);
-                        currentSchedule = multiClassSchedule;
-                        displayMultiClassSchedule(multiClassSchedule);
-                        controls.style.display = 'flex';
-                    }, 1000);
-
-                } catch (error) {
-                    debugLog('Error generating multi-class schedule:', error);
-                    console.error('Error generating multi-class schedule:', error);
-                    preview.innerHTML = `
-                        <div style="text-align: center; color: #e53e3e;">
-                            <p>❌ Fel vid multi-klass schemagenerering</p>
-                            <p style="font-size: 0.9rem;">${error.message}</p>
-                            <p style="font-size: 0.85rem; color: #666;">
-                                Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
-                            </p>
-                        </div>
-                    `;
-                    controls.style.display = 'none';
-                }
-            }
-
-            async function generateMultiClassSchedule() {
-                // OBS: anropa INTE updateSelectedClasses() här — det åter-renderar ämnessektionerna och nollställer användarens val.
-                // Istället: läs direkt vilka klasser som är ikryssade (men undvik att re-rendera UI).
-                const preview = document.getElementById('schedulePreview');
-                const controls = document.getElementById('generationControls');
-
-                // Säkerställ att selectedClasses speglar DOM om användaren inte redan ändrat det via checkbox onchange
+                // Säkerställ att selectedClasses speglar DOM
                 const checkedBoxes = Array.from(document.querySelectorAll('input[name="class_ids[]"]:checked'));
                 if (checkedBoxes.length > 0) {
                     selectedClasses = checkedBoxes.map(cb => {
@@ -1530,8 +1675,8 @@
                     return;
                 }
 
-                // Bygg per-klass ämneskartor (robust: går igenom varje .subject-item för respektive klass)
-                const classSubjectMap = {}; // classId -> [{subject_id, hours}, ...]
+                // Bygg per-klass ämneskartor
+                const classSubjectMap = {};
                 for (const cls of selectedClasses) {
                     const classId = cls.id;
                     const container = document.getElementById(`class_subjects_${classId}`);
@@ -1625,12 +1770,19 @@
                     setTimeout(() => {
                         debugLog('Multi-class schedule generated successfully', multiClassSchedule);
                         currentSchedule = multiClassSchedule;
-                        // om användaren redan valt ett filter, använd det:
-                        const sel = document.getElementById('classFilter');
-                        const selectedFilter = sel && sel.value !== 'all' ? sel.value : null;
-                        displayMultiClassSchedule(currentSchedule, selectedFilter);
-                        controls.style.display = 'flex';
-                        displayMultiClassSchedule(multiClassSchedule);
+                        
+                        // Fill teacher filter from schedule if not already available
+                        if (!(typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0)) {
+                            populateTeacherFilterFromSchedule(currentSchedule);
+                        }
+                        
+                        // Display with current filters
+                        const classSel = document.getElementById('classFilter');
+                        const teacherSel = document.getElementById('teacherFilter');
+                        const selectedClass = classSel && classSel.value !== 'all' ? classSel.value : null;
+                        const selectedTeacher = teacherSel && teacherSel.value !== 'all' ? teacherSel.value : null;
+                        
+                        displayMultiClassSchedule(currentSchedule, selectedClass, selectedTeacher);
                         controls.style.display = 'flex';
                     }, 1000);
 
@@ -1649,6 +1801,28 @@
                     controls.style.display = 'none';
                 }
             }
+
+            // Fix 2: Ensure availableTeachers is properly initialized
+            function initializeData() {
+                // Make sure availableTeachers is defined
+                if (typeof availableTeachers === 'undefined') {
+                    availableTeachers = [];
+                }
+                
+                // Make sure other global variables are properly initialized
+                if (typeof availableSubjects === 'undefined') {
+                    availableSubjects = [];
+                }
+                
+                if (typeof availableClasses === 'undefined') {
+                    availableClasses = [];
+                }
+                
+                if (typeof schoolSubjects === 'undefined') {
+                    schoolSubjects = availableSubjects || [];
+                }
+            }
+
 
 
             
@@ -1917,6 +2091,15 @@
                 validateSubjectHours();
                 populateClassFilter();
                 populateTeacherFilter();
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                initializeData();
+                debugLog('Multi-class schedule generator loaded');
+                validateSubjectHours();
+                populateClassFilter();
+                populateTeacherFilter();
+                renderSubjects();
             });
 
 
