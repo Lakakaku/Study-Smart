@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Schemagenerator - {{ school.name if school else 'Okänd skola' }}</title>
     <style>
+        /* --- (Samma stil som innan, oförändrad) --- */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
@@ -12,7 +13,6 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
         }
-
         .header {
             background: rgba(255, 255, 255, 0.95);
             padding: 1rem 2rem;
@@ -21,13 +21,11 @@
             justify-content: space-between;
             align-items: center;
         }
-
         .header h1 {
             margin: 0;
             color: #2d3748;
             font-size: 1.8rem;
         }
-
         .back-btn {
             background: #718096;
             color: white;
@@ -39,30 +37,25 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
-
         .back-btn:hover {
             background: #4a5568;
         }
-
         .container {
             max-width: 1400px;
             margin: 2rem auto;
             padding: 0 2rem;
         }
-
         .generator-layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 2rem;
         }
-
         .card {
             background: white;
             border-radius: 12px;
             padding: 2rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
-
         .card h3 {
             margin-top: 0;
             color: #2d3748;
@@ -71,18 +64,15 @@
             align-items: center;
             gap: 0.5rem;
         }
-
         .form-group {
             margin-bottom: 1.5rem;
         }
-
         .form-group label {
             display: block;
             margin-bottom: 0.5rem;
             font-weight: 500;
             color: #4a5568;
         }
-
         .form-group select, .form-group input {
             width: 100%;
             padding: 0.75rem;
@@ -91,7 +81,6 @@
             font-size: 1rem;
             box-sizing: border-box;
         }
-
         /* Multi-select klasser */
         .classes-container {
             border: 1px solid #e2e8f0;
@@ -101,7 +90,6 @@
             max-height: 200px;
             overflow-y: auto;
         }
-
         .class-item {
             display: flex;
             align-items: center;
@@ -111,37 +99,40 @@
             margin-bottom: 0.5rem;
             border: 1px solid #e2e8f0;
         }
-
         .class-item:last-child {
             margin-bottom: 0;
         }
-
         .class-item input[type="checkbox"] {
             margin-right: 0.75rem;
             width: auto;
         }
-
         .class-item-info {
             flex: 1;
         }
-
         .class-name {
             font-weight: 600;
             color: #2d3748;
         }
-
         .class-details {
             font-size: 0.85rem;
             color: #718096;
         }
-
         .subjects-container {
             border: 1px solid #e2e8f0;
             border-radius: 6px;
             padding: 1rem;
             background: #f7fafc;
         }
-
+        .class-subject-section {
+            margin-bottom: 1rem;
+        }
+        .class-subject-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            gap: 0.5rem;
+        }
         .subject-item {
             display: grid;
             grid-template-columns: 2fr 1fr 1fr;
@@ -152,11 +143,9 @@
             border-radius: 6px;
             margin-bottom: 0.5rem;
         }
-
         .subject-item:last-child {
             margin-bottom: 0;
         }
-
         .subject-item input, .subject-item select {
             padding: 0.5rem;
             border: 1px solid #e2e8f0;
@@ -164,7 +153,6 @@
             width: 100%;
             box-sizing: border-box;
         }
-
         .add-subject-btn {
             background: #48bb78;
             color: white;
@@ -175,11 +163,9 @@
             margin-top: 0.5rem;
             font-size: 0.9rem;
         }
-
         .add-subject-btn:hover {
             background: #38a169;
         }
-
         .remove-subject-btn {
             background: #f56565;
             color: white;
@@ -189,18 +175,15 @@
             cursor: pointer;
             font-size: 0.8rem;
         }
-
         .remove-subject-btn:hover {
             background: #e53e3e;
         }
-
         .rooms-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             gap: 0.5rem;
             margin-top: 0.5rem;
         }
-
         .room-item {
             display: flex;
             align-items: center;
@@ -209,37 +192,31 @@
             border-radius: 6px;
             border: 1px solid #e2e8f0;
         }
-
         .room-item input[type="checkbox"] {
             margin-right: 0.5rem;
             width: auto;
         }
-
         .constraints-section {
             border: 1px solid #e2e8f0;
             border-radius: 6px;
             padding: 1rem;
             background: #f7fafc;
         }
-
         .constraint-item {
             display: flex;
             align-items: center;
             margin-bottom: 0.5rem;
         }
-
         .constraint-item input[type="checkbox"] {
             margin-right: 0.5rem;
             width: auto;
         }
-
         .time-range {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0.5rem;
             margin-top: 0.5rem;
         }
-
         .lesson-duration-section {
             margin-top: 1rem;
             padding: 1rem;
@@ -247,7 +224,6 @@
             border-radius: 6px;
             border-left: 4px solid #4299e1;
         }
-
         .btn {
             background: #4299e1;
             color: white;
@@ -261,28 +237,23 @@
             transition: all 0.2s;
             font-weight: 600;
         }
-
         .btn:hover {
             background: #3182ce;
             transform: translateY(-1px);
         }
-
         .btn:disabled {
             background: #cbd5e0;
             cursor: not-allowed;
             transform: none;
         }
-
         .btn-generate {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             width: 100%;
             justify-self: center;
         }
-
         .btn-generate:hover {
             background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
         }
-
         .schedule-preview {
             min-height: 400px;
             background: #f7fafc;
@@ -296,7 +267,6 @@
             position: relative;
             overflow-x: auto;
         }
-
         .schedule-table {
             width: 100%;
             border-collapse: collapse;
@@ -306,7 +276,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             min-width: 800px;
         }
-
         .schedule-table th {
             background: #4299e1;
             color: white;
@@ -315,7 +284,6 @@
             font-weight: 600;
             font-size: 0.9rem;
         }
-
         .schedule-table td {
             padding: 0.5rem;
             border-bottom: 1px solid #e2e8f0;
@@ -324,11 +292,9 @@
             font-size: 0.85rem;
             min-width: 120px;
         }
-
         .schedule-table tr:hover {
             background: #f7fafc;
         }
-
         .lesson-cell {
             background: #ebf8ff;
             border-left: 3px solid #4299e1;
@@ -337,36 +303,30 @@
             text-align: left;
             padding: 0.4rem;
         }
-
         .lesson-subject {
             font-weight: 600;
             color: #2d3748;
             font-size: 0.8rem;
         }
-
         .lesson-class {
             color: #4299e1;
             font-size: 0.75rem;
             font-weight: 500;
         }
-
         .lesson-room {
             color: #718096;
             font-size: 0.7rem;
         }
-
         .empty-cell {
             color: #a0aec0;
             font-style: italic;
             font-size: 0.8rem;
         }
-
         .generation-controls {
             display: flex;
             gap: 1rem;
             margin-top: 1rem;
         }
-
         .loading-spinner {
             border: 3px solid #f3f3f3;
             border-radius: 50%;
@@ -376,43 +336,36 @@
             animation: spin 1s linear infinite;
             margin: 0 auto;
         }
-
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
         .alert {
             padding: 1rem;
             margin-bottom: 1rem;
             border-radius: 6px;
             border-left: 4px solid;
         }
-
         .alert-success {
             background: #f0fff4;
             color: #22543d;
             border-color: #38a169;
         }
-
         .alert-error {
             background: #fed7d7;
             color: #c53030;
             border-color: #e53e3e;
         }
-
         .alert-info {
             background: #ebf8ff;
             color: #2c5282;
             border-color: #4299e1;
         }
-
         .alert-warning {
             background: #fffbeb;
             color: #744210;
             border-color: #f59e0b;
         }
-
         .debug-info {
             background: #f7fafc;
             border: 1px solid #e2e8f0;
@@ -422,7 +375,6 @@
             font-size: 0.9rem;
             color: #4a5568;
         }
-
         .validation-warning {
             background: #fffbeb;
             border-left: 4px solid #f59e0b;
@@ -431,7 +383,6 @@
             margin: 1rem 0;
             border-radius: 6px;
         }
-
         .selected-classes-info {
             background: #e6fffa;
             border: 1px solid #38b2ac;
@@ -440,7 +391,6 @@
             margin-top: 0.5rem;
             color: #234e52;
         }
-
         .class-color-indicator {
             display: inline-block;
             width: 12px;
@@ -449,17 +399,14 @@
             margin-right: 0.5rem;
             vertical-align: middle;
         }
-
         @media (max-width: 1200px) {
             .generator-layout {
                 grid-template-columns: 1fr;
             }
-            
             .subject-item {
                 grid-template-columns: 1fr;
                 gap: 0.5rem;
             }
-            
             .rooms-container {
                 grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
             }
@@ -520,25 +467,17 @@
                         </div>
                     </div>
 
-                    <!-- Ämnen och timmar -->
+                    <!-- Ämnen och timmar per klass -->
                     <div class="form-group">
-                        <label>Ämnen och timmar per vecka (gäller alla valda klasser):</label>
+                        <label>Ämnen och timmar per vecka (per klass):</label>
                         <div class="validation-warning" id="subjectValidation" style="display: none;">
                             <strong>⚠️ Viktigt:</strong> Varje ämne kan max ha 5 lektioner per vecka per klass (1 per dag).
                         </div>
                         <div class="subjects-container" id="subjectsContainer">
-                            <div class="subject-item">
-                                <select name="subjects[]" required onchange="validateSubjectHours()">
-                                    <option value="">Välj ämne...</option>
-                                    {% for subject in available_subjects %}
-                                        <option value="{{ subject.id }}">{{ subject.name }}</option>
-                                    {% endfor %}
-                                </select>
-                                <input type="number" name="hours[]" min="1" max="5" placeholder="Timmar/vecka (max 5)" required onchange="validateSubjectHours()">
-                                <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
+                            <div id="subjectsPlaceholder" style="color:#666;">
+                                Välj en eller flera klasser till vänster för att ange ämnen och timmar per klass.
                             </div>
                         </div>
-                        <button type="button" class="add-subject-btn" onclick="addSubject()">+ Lägg till ämne</button>
                     </div>
 
                     <div class="form-group">
@@ -678,15 +617,17 @@
             const infoDiv = document.getElementById('selectedClassesInfo');
             const listSpan = document.getElementById('selectedClassesList');
             
-            selectedClasses = Array.from(checkboxes).map(cb => {
+            // Build selectedClasses anew
+            const tempSelected = Array.from(checkboxes).map(cb => {
                 const classId = cb.value;
                 const classData = availableClasses.find(c => c.id == classId);
                 return {
                     id: classId,
-                    name: classData ? classData.name : `Klass ${classId}`,
-                    color: classColors[selectedClasses.length % classColors.length]
+                    name: classData ? classData.name : `Klass ${classId}`
                 };
             });
+
+            selectedClasses = tempSelected;
 
             if (selectedClasses.length > 0) {
                 infoDiv.style.display = 'block';
@@ -698,14 +639,112 @@
                 infoDiv.style.display = 'none';
                 debugLog('No classes selected');
             }
+
+            // Re-render per-class subject sections
+            renderClassSubjectSections();
+        }
+
+        function renderClassSubjectSections() {
+            const container = document.getElementById('subjectsContainer');
+            const placeholder = document.getElementById('subjectsPlaceholder');
+            container.innerHTML = ''; // clear
+
+            if (selectedClasses.length === 0) {
+                placeholder && container.appendChild(placeholder);
+                return;
+            }
+
+            // For each selected class, create a section
+            selectedClasses.forEach((cls, idx) => {
+                const section = document.createElement('div');
+                section.className = 'class-subject-section';
+                section.id = `class_subjects_${cls.id}`;
+                section.setAttribute('data-class-id', cls.id);
+
+                const header = document.createElement('div');
+                header.className = 'class-subject-header';
+                header.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span class="class-color-indicator" style="background:${classColors[idx % classColors.length]}"></span>
+                        <strong>${cls.name}</strong>
+                        <span style="color:#718096; font-size:0.9rem; margin-left:0.5rem;">(Ange ämnen & timmar för denna klass)</span>
+                    </div>
+                    <div>
+                        <button type="button" class="add-subject-btn" onclick="addSubjectForClass('${cls.id}')">+ Lägg till ämne</button>
+                    </div>
+                `;
+                section.appendChild(header);
+
+                const list = document.createElement('div');
+                list.className = 'class-subject-list';
+                list.id = `class_subject_list_${cls.id}`;
+
+                // Add initial subject row
+                const subjectRow = createSubjectItem(cls.id);
+                list.appendChild(subjectRow);
+
+                section.appendChild(list);
+                container.appendChild(section);
+            });
+
+            // Re-validate subjects UI
+            validateSubjectHours();
+        }
+
+        function createSubjectItem(classId) {
+            // Create a subject-row element for classId
+            const item = document.createElement('div');
+            item.className = 'subject-item';
+
+            let optionsHtml = '<option value="">Välj ämne...</option>';
+            availableSubjects.forEach(subject => {
+                optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
+            });
+
+            // Note: name attributes include class id so they are per-class
+            item.innerHTML = `
+                <select name="subjects_${classId}[]" required onchange="validateSubjectHours()">
+                    ${optionsHtml}
+                </select>
+                <input type="number" name="hours_${classId}[]" min="1" max="5" placeholder="Timmar/vecka (max 5)" required onchange="validateSubjectHours()">
+                <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
+            `;
+
+            return item;
+        }
+
+        function addSubjectForClass(classId) {
+            const list = document.getElementById(`class_subject_list_${classId}`);
+            if (!list) return;
+            const newRow = createSubjectItem(classId);
+            list.appendChild(newRow);
+            debugLog(`Added subject row for class ${classId}`);
+        }
+
+        function removeSubject(button) {
+            const list = button.parentElement.parentElement; // .class-subject-list or just parent
+            const sectionList = list.classList && list.classList.contains('class-subject-list') ? list : button.parentElement.parentElement;
+            // Try to find the sibling rows to ensure at least one remains per class
+            const container = button.closest('.class-subject-section');
+            if (!container) return;
+            const rows = container.querySelectorAll('.subject-item');
+            if (rows.length > 1) {
+                button.parentElement.remove();
+                validateSubjectHours();
+                debugLog('Removed subject row', {classSection: container.id});
+            } else {
+                // Don't allow removing last row
+                alert('Minst ett ämne måste finnas per klass. Lägg till ett annat ämne först om du vill ta bort detta.');
+                debugLog('Attempted to remove last subject row - blocked');
+            }
         }
 
         function validateSubjectHours() {
-            const hourInputs = document.querySelectorAll('input[name="hours[]"]');
+            const allHourInputs = document.querySelectorAll('input[type="number"][name^="hours_"]');
             const validationWarning = document.getElementById('subjectValidation');
             let hasViolation = false;
 
-            hourInputs.forEach(input => {
+            allHourInputs.forEach(input => {
                 const value = parseInt(input.value);
                 if (value > 5) {
                     hasViolation = true;
@@ -724,39 +763,6 @@
             }
         }
 
-        function addSubject() {
-            const container = document.getElementById('subjectsContainer');
-            const newSubject = document.createElement('div');
-            newSubject.className = 'subject-item';
-            
-            let optionsHtml = '<option value="">Välj ämne...</option>';
-            availableSubjects.forEach(subject => {
-                optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
-            });
-            
-            newSubject.innerHTML = `
-                <select name="subjects[]" required onchange="validateSubjectHours()">
-                    ${optionsHtml}
-                </select>
-                <input type="number" name="hours[]" min="1" max="5" placeholder="Timmar/vecka (max 5)" required onchange="validateSubjectHours()">
-                <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
-            `;
-            
-            container.appendChild(newSubject);
-            debugLog('Added new subject row');
-        }
-
-        function removeSubject(button) {
-            const container = document.getElementById('subjectsContainer');
-            if (container.children.length > 1) {
-                button.parentElement.remove();
-                validateSubjectHours();
-                debugLog('Removed subject row');
-            } else {
-                debugLog('Cannot remove last subject row');
-            }
-        }
-
         function getAvailableRooms() {
             const roomCheckboxes = document.querySelectorAll('input[name="rooms[]"]:checked');
             const rooms = [];
@@ -766,164 +772,63 @@
             return rooms;
         }
 
-        async function generateMultiClassSchedule() {
-            const form = document.getElementById('scheduleForm');
-            const formData = new FormData(form);
-            const preview = document.getElementById('schedulePreview');
-            const controls = document.getElementById('generationControls');
 
-            // Uppdatera selected classes
-            updateSelectedClasses();
 
-            // Validering för multi-klass
-            if (selectedClasses.length === 0) {
-                alert('Välj minst en klass!');
-                debugLog('Validation failed: No classes selected');
-                return;
-            }
 
-            const subjects = formData.getAll('subjects[]');
-            const hours = formData.getAll('hours[]');
-            const rooms = formData.getAll('rooms[]');
 
-            if (subjects.length === 0 || subjects.every(s => !s)) {
-                alert('Välj minst ett ämne!');
-                debugLog('Validation failed: No subjects selected');
-                return;
-            }
 
-            if (hours.length === 0 || hours.every(h => !h || h <= 0)) {
-                alert('Ange timmar för alla ämnen!');
-                debugLog('Validation failed: No hours specified');
-                return;
-            }
-
-            // Kontrollera att vi har tillräckligt med klassrum för simultana lektioner
-            const maxSimultaneousClasses = selectedClasses.length;
-            if (rooms.length < maxSimultaneousClasses) {
-                const proceed = confirm(
-                    `Du har valt ${maxSimultaneousClasses} klasser men bara ${rooms.length} klassrum. ` +
-                    `Detta kan orsaka schemaläggningsproblem när klasser har lektioner samtidigt. Fortsätt ändå?`
-                );
-                if (!proceed) {
-                    debugLog('User cancelled due to insufficient rooms');
-                    return;
-                }
-            }
-
-            // Validering av timmar per ämne
-            for (let i = 0; i < hours.length; i++) {
-                const hourCount = parseInt(hours[i]);
-                if (hourCount > 5) {
-                    alert(`Ämnet kan max ha 5 lektioner per vecka per klass (1 per dag). Du har angett ${hourCount} lektioner.`);
-                    debugLog('Validation failed: Too many hours for subject', {index: i, hours: hourCount});
-                    return;
-                }
-            }
-
-            debugLog('Multi-class validation passed, generating schedule...', {
-                classes: selectedClasses.length,
-                subjects: subjects.length,
-                rooms: rooms.length
-            });
-
-            // Visa loading för multi-klass
-            preview.innerHTML = `
-                <div style="text-align: center;">
-                    <div class="loading-spinner"></div>
-                    <p style="margin-top: 1rem;">Genererar multi-klass schema...</p>
-                    <p style="font-size: 0.9rem; color: #666;">
-                        Schemaläggning för ${selectedClasses.length} klasser med klassrumshantering
-                    </p>
-                    <p style="font-size: 0.85rem; color: #888;">
-                        Följer: Ingen klassrumskonflikt, max 1 ämne/dag per klass, 5-min intervall
-                    </p>
-                </div>
-            `;
-
-            // Generera multi-klass schema
-            try {
-                const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
-                const multiClassSchedule = generateMultiClassScheduleWithConstraints(
-                    selectedClasses, subjects, hours, rooms, 
-                    formData.get('start_time'), formData.get('end_time'), lessonDuration
-                );
-                
-                setTimeout(() => {
-                    debugLog('Multi-class schedule generated successfully', multiClassSchedule);
-                    currentSchedule = multiClassSchedule;
-                    displayMultiClassSchedule(multiClassSchedule);
-                    controls.style.display = 'flex';
-                }, 3000); // Längre tid för multi-klass komplexitet
-
-            } catch (error) {
-                debugLog('Error generating multi-class schedule:', error);
-                console.error('Error generating multi-class schedule:', error);
-                preview.innerHTML = `
-                    <div style="text-align: center; color: #e53e3e;">
-                        <p>❌ Fel vid multi-klass schemagenerering</p>
-                        <p style="font-size: 0.9rem;">${error.message}</p>
-                        <p style="font-size: 0.85rem; color: #666;">
-                            Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
-                        </p>
-                    </div>
-                `;
-                controls.style.display = 'none';
-            }
-        }
-
-        function generateMultiClassScheduleWithConstraints(classes, subjects, hours, rooms, startTime, endTime, lessonDuration) {
+        // --- Klistra in denna funktion i din scriptsektion (funktion-deklaration, alltså hoistas) ---
+        function generateMultiClassScheduleWithConstraints(classes, classSubjectMap, rooms, startTime, endTime, lessonDuration) {
             debugLog('Generating multi-class schedule with constraints:', {
                 classes: classes.length, 
-                subjects, 
-                hours, 
+                classSubjectMap, 
                 rooms: rooms.length, 
                 startTime, 
                 endTime, 
                 lessonDuration
             });
-            
-            const actualRooms = getAvailableRooms();
-            if (actualRooms.length === 0) {
+
+            const actualRooms = (rooms && rooms.length) ? rooms : getAvailableRooms();
+            if (!actualRooms || actualRooms.length === 0) {
                 throw new Error('Inga klassrum valda. Välj minst ett klassrum.');
             }
-            
+
             const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
             const timeSlots = generateTimeSlots(startTime || '08:00', endTime || '15:00', lessonDuration);
             const allLessons = [];
-            
-            // Skapa ämnesplan för varje klass
+
+            // Skapa ämnesplan för varje klass baserat på classSubjectMap
             const classSubjectPlans = {};
             let totalLessonsNeeded = 0;
             
             classes.forEach(classInfo => {
-                classSubjectPlans[classInfo.id] = [];
-                
-                for (let i = 0; i < subjects.length; i++) {
-                    if (!subjects[i] || !hours[i]) continue;
-                    
-                    const subjectId = subjects[i];
+                const cid = classInfo.id;
+                classSubjectPlans[cid] = [];
+
+                const items = classSubjectMap[cid] || [];
+                items.forEach(item => {
+                    const subjectId = item.subject_id;
                     const subjectName = availableSubjects.find(s => s.id == subjectId)?.name || `Ämne ${subjectId}`;
-                    const hoursPerWeek = parseInt(hours[i]);
+                    const hoursPerWeek = parseInt(item.hours);
 
                     if (hoursPerWeek > 5) {
                         throw new Error(`Ämnet "${subjectName}" för klass ${classInfo.name} har ${hoursPerWeek} lektioner, men max 5 är tillåtet (1 per dag)`);
                     }
 
                     for (let h = 0; h < hoursPerWeek; h++) {
-                        classSubjectPlans[classInfo.id].push({
+                        classSubjectPlans[cid].push({
                             class_id: classInfo.id,
                             class_name: classInfo.name,
                             subject_id: subjectId,
                             subject_name: subjectName,
-                            color: classInfo.color
+                            color: classInfo.color || classColors[Math.floor(Math.random() * classColors.length)]
                         });
                         totalLessonsNeeded++;
                     }
-                }
+                });
             });
 
-            debugLog('Subject plans created:', {classSubjectPlans, totalLessonsNeeded});
+            debugLog('Subject plans created per class:', {classSubjectPlans, totalLessonsNeeded});
 
             // Globala schemastrukturer för konflikthantering
             const globalSchedule = {};
@@ -962,7 +867,7 @@
             for (const lesson of allLessonsToPlace) {
                 let placed = false;
                 let attempts = 0;
-                const maxAttempts = 100;
+                const maxAttempts = 200;
 
                 while (!placed && attempts < maxAttempts) {
                     // Välj dag som inte redan har detta ämne för denna klass
@@ -1066,6 +971,277 @@
                 }
             };
         }
+        // --- Slut på funktionen ---
+
+
+        async function generateMultiClassSchedule() {
+            // Uppdatera selected classes och UI
+            updateSelectedClasses();
+
+            const preview = document.getElementById('schedulePreview');
+            const controls = document.getElementById('generationControls');
+
+            if (selectedClasses.length === 0) {
+                alert('Välj minst en klass!');
+                debugLog('Validation failed: No classes selected');
+                return;
+            }
+
+            // Bygg per-klass ämneskartor
+            const classSubjectMap = {}; // classId -> [{subject_id, hours}, ...]
+            for (const cls of selectedClasses) {
+                const classId = cls.id;
+                const container = document.getElementById(`class_subjects_${classId}`);
+                if (!container) {
+                    alert(`Ingen ämnessektion hittades för klass ${cls.name}.`);
+                    debugLog('Validation failed: missing class subject container', {class: cls});
+                    return;
+                }
+
+                const rows = Array.from(container.querySelectorAll('.subject-item'));
+                if (rows.length === 0) {
+                    alert(`Ingen ämneskonfiguration för klass ${cls.name}. Ange minst ett ämne.`);
+                    debugLog('Validation failed: No subject rows for class', {class: cls});
+                    return;
+                }
+
+                const items = [];
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const subjSelect = row.querySelector('select');
+                    const hourInput = row.querySelector('input[type="number"]');
+
+                    const subjVal = subjSelect ? subjSelect.value.trim() : '';
+                    const hrsValRaw = hourInput ? hourInput.value.trim() : '';
+                    const hrsVal = hrsValRaw === '' ? NaN : parseInt(hrsValRaw, 10);
+
+                    if (!subjVal) {
+                        alert(`Välj ämne i alla rader för klass ${cls.name}`);
+                        debugLog('Validation failed: empty subject row', {class: cls, index: i});
+                        return;
+                    }
+                    if (isNaN(hrsVal) || hrsVal <= 0) {
+                        alert(`Ange giltigt antal timmar för ämnet i klass ${cls.name}`);
+                        debugLog('Validation failed: invalid hours', {class: cls, index: i, hours: hrsValRaw});
+                        return;
+                    }
+                    if (hrsVal > 5) {
+                        alert(`Max 5 lektioner per vecka per ämne. Du angav ${hrsVal} för ämnet i klass ${cls.name}`);
+                        debugLog('Validation failed: hours > 5', {class: cls, hours: hrsVal});
+                        return;
+                    }
+
+                    items.push({ subject_id: subjVal, hours: hrsVal });
+                }
+
+                classSubjectMap[classId] = items;
+            }
+
+            const rooms = getAvailableRooms();
+            const maxSimultaneousClasses = selectedClasses.length;
+            if (rooms.length < maxSimultaneousClasses) {
+                const proceed = confirm(
+                    `Du har valt ${maxSimultaneousClasses} klasser men bara ${rooms.length} klassrum. ` +
+                    `Detta kan orsaka schemaläggningsproblem när klasser har lektioner samtidigt. Fortsätt ändå?`
+                );
+                if (!proceed) {
+                    debugLog('User cancelled due to insufficient rooms');
+                    return;
+                }
+            }
+
+            debugLog('Multi-class validation passed, generating schedule...', {
+                classes: selectedClasses.length,
+                classSubjectMap,
+                rooms: rooms.length
+            });
+
+            // Visa loading
+            preview.innerHTML = `
+                <div style="text-align: center;">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 1rem;">Genererar multi-klass schema...</p>
+                    <p style="font-size: 0.9rem; color: #666;">
+                        Schemaläggning för ${selectedClasses.length} klasser med klassrumshantering
+                    </p>
+                    <p style="font-size: 0.85rem; color: #888;">
+                        Följer: Ingen klassrumskonflikt, max 1 ämne/dag per klass, 5-min intervall
+                    </p>
+                </div>
+            `;
+
+            try {
+                const form = document.getElementById('scheduleForm');
+                const formData = new FormData(form);
+                const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
+                const multiClassSchedule = generateMultiClassScheduleWithConstraints(
+                    selectedClasses, classSubjectMap, rooms, 
+                    formData.get('start_time'), formData.get('end_time'), lessonDuration
+                );
+
+                setTimeout(() => {
+                    debugLog('Multi-class schedule generated successfully', multiClassSchedule);
+                    currentSchedule = multiClassSchedule;
+                    displayMultiClassSchedule(multiClassSchedule);
+                    controls.style.display = 'flex';
+                }, 1000);
+
+            } catch (error) {
+                debugLog('Error generating multi-class schedule:', error);
+                console.error('Error generating multi-class schedule:', error);
+                preview.innerHTML = `
+                    <div style="text-align: center; color: #e53e3e;">
+                        <p>❌ Fel vid multi-klass schemagenerering</p>
+                        <p style="font-size: 0.9rem;">${error.message}</p>
+                        <p style="font-size: 0.85rem; color: #666;">
+                            Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
+                        </p>
+                    </div>
+                `;
+                controls.style.display = 'none';
+            }
+        }
+
+        async function generateMultiClassSchedule() {
+            // OBS: anropa INTE updateSelectedClasses() här — det åter-renderar ämnessektionerna och nollställer användarens val.
+            // Istället: läs direkt vilka klasser som är ikryssade (men undvik att re-rendera UI).
+            const preview = document.getElementById('schedulePreview');
+            const controls = document.getElementById('generationControls');
+
+            // Säkerställ att selectedClasses speglar DOM om användaren inte redan ändrat det via checkbox onchange
+            const checkedBoxes = Array.from(document.querySelectorAll('input[name="class_ids[]"]:checked'));
+            if (checkedBoxes.length > 0) {
+                selectedClasses = checkedBoxes.map(cb => {
+                    const classId = cb.value;
+                    const classData = availableClasses.find(c => c.id == classId);
+                    return {
+                        id: classId,
+                        name: classData ? classData.name : `Klass ${classId}`
+                    };
+                });
+            }
+
+            if (selectedClasses.length === 0) {
+                alert('Välj minst en klass!');
+                debugLog('Validation failed: No classes selected');
+                return;
+            }
+
+            // Bygg per-klass ämneskartor (robust: går igenom varje .subject-item för respektive klass)
+            const classSubjectMap = {}; // classId -> [{subject_id, hours}, ...]
+            for (const cls of selectedClasses) {
+                const classId = cls.id;
+                const container = document.getElementById(`class_subjects_${classId}`);
+                if (!container) {
+                    alert(`Ingen ämnessektion hittades för klass ${cls.name}.`);
+                    debugLog('Validation failed: missing class subject container', {class: cls});
+                    return;
+                }
+
+                const rows = Array.from(container.querySelectorAll('.subject-item'));
+                if (rows.length === 0) {
+                    alert(`Ingen ämneskonfiguration för klass ${cls.name}. Ange minst ett ämne.`);
+                    debugLog('Validation failed: No subject rows for class', {class: cls});
+                    return;
+                }
+
+                const items = [];
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const subjSelect = row.querySelector('select');
+                    const hourInput = row.querySelector('input[type="number"]');
+
+                    const subjVal = subjSelect ? subjSelect.value.trim() : '';
+                    const hrsValRaw = hourInput ? hourInput.value.trim() : '';
+                    const hrsVal = hrsValRaw === '' ? NaN : parseInt(hrsValRaw, 10);
+
+                    if (!subjVal) {
+                        alert(`Välj ämne i alla rader för klass ${cls.name}`);
+                        debugLog('Validation failed: empty subject row', {class: cls, index: i});
+                        return;
+                    }
+                    if (isNaN(hrsVal) || hrsVal <= 0) {
+                        alert(`Ange giltigt antal timmar för ämnet i klass ${cls.name}`);
+                        debugLog('Validation failed: invalid hours', {class: cls, index: i, hours: hrsValRaw});
+                        return;
+                    }
+                    if (hrsVal > 5) {
+                        alert(`Max 5 lektioner per vecka per ämne. Du angav ${hrsVal} för ämnet i klass ${cls.name}`);
+                        debugLog('Validation failed: hours > 5', {class: cls, hours: hrsVal});
+                        return;
+                    }
+
+                    items.push({ subject_id: subjVal, hours: hrsVal });
+                }
+
+                classSubjectMap[classId] = items;
+            }
+
+            const rooms = getAvailableRooms();
+            const maxSimultaneousClasses = selectedClasses.length;
+            if (rooms.length < maxSimultaneousClasses) {
+                const proceed = confirm(
+                    `Du har valt ${maxSimultaneousClasses} klasser men bara ${rooms.length} klassrum. ` +
+                    `Detta kan orsaka schemaläggningsproblem när klasser har lektioner samtidigt. Fortsätt ändå?`
+                );
+                if (!proceed) {
+                    debugLog('User cancelled due to insufficient rooms');
+                    return;
+                }
+            }
+
+            debugLog('Multi-class validation passed, generating schedule...', {
+                classes: selectedClasses.length,
+                classSubjectMap,
+                rooms: rooms.length
+            });
+
+            // Visa loading
+            preview.innerHTML = `
+                <div style="text-align: center;">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 1rem;">Genererar multi-klass schema...</p>
+                    <p style="font-size: 0.9rem; color: #666;">
+                        Schemaläggning för ${selectedClasses.length} klasser med klassrumshantering
+                    </p>
+                    <p style="font-size: 0.85rem; color: #888;">
+                        Följer: Ingen klassrumskonflikt, max 1 ämne/dag per klass, 5-min intervall
+                    </p>
+                </div>
+            `;
+
+            try {
+                const form = document.getElementById('scheduleForm');
+                const formData = new FormData(form);
+                const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
+                const multiClassSchedule = generateMultiClassScheduleWithConstraints(
+                    selectedClasses, classSubjectMap, rooms, 
+                    formData.get('start_time'), formData.get('end_time'), lessonDuration
+                );
+
+                setTimeout(() => {
+                    debugLog('Multi-class schedule generated successfully', multiClassSchedule);
+                    currentSchedule = multiClassSchedule;
+                    displayMultiClassSchedule(multiClassSchedule);
+                    controls.style.display = 'flex';
+                }, 1000);
+
+            } catch (error) {
+                debugLog('Error generating multi-class schedule:', error);
+                console.error('Error generating multi-class schedule:', error);
+                preview.innerHTML = `
+                    <div style="text-align: center; color: #e53e3e;">
+                        <p>❌ Fel vid multi-klass schemagenerering</p>
+                        <p style="font-size: 0.9rem;">${error.message}</p>
+                        <p style="font-size: 0.85rem; color: #666;">
+                            Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
+                        </p>
+                    </div>
+                `;
+                controls.style.display = 'none';
+            }
+        }
+
 
         function findAvailableTimeSlotsForClass(daySchedule, classId, allTimeSlots, minBreakMinutes) {
             const availableSlots = [];
@@ -1179,10 +1355,10 @@
 
             const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
             
-            // Generera tidsluckor
+            // Generera tidsluckor (visa var 15:e minut i tabellen)
             const timeSlots = [];
             for (let hour = 7; hour <= 18; hour++) {
-                for (let minute = 0; minute < 60; minute += 15) { // Visa var 15:e minut för mindre rader
+                for (let minute = 0; minute < 60; minute += 15) {
                     if (hour === 18 && minute > 0) break;
                     const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
                     timeSlots.push(timeStr);
@@ -1209,27 +1385,45 @@
             });
 
             // Visa bara tider som har lektioner eller ligger inom skoldag
+            // ---- Ersätt motsvarande del i displayMultiClassSchedule med detta ----
+
+            // Visa bara tider som har lektioner eller ligger inom skoldag
             const schoolStart = 8 * 60; // 08:00 i minuter
             const schoolEnd = 16 * 60;   // 16:00 i minuter
-            
-            const relevantTimeSlots = timeSlots.filter(time => {
-                const minutes = timeToMinutes(time);
-                if (minutes < schoolStart || minutes > schoolEnd) return false;
-                
-                // Visa alltid jämna timmar och halvtimmar
-                const minute = minutes % 60;
-                if (minute === 0 || minute === 30) return true;
-                
-                // Visa om det finns en lektion som börjar vid denna tid
-                return schedule.lessons.some(lesson => {
-                    if (lesson.time && lesson.time.includes('-')) {
-                        const startTime = lesson.time.split('-')[0];
-                        return startTime === time;
+
+            // Bygg en set med tider vi vill visa:
+            // - alltid visa jämna timmar och halvtimmar (0 eller 30 minuter)
+            // - och visa ALLA lektioners starttider (så t.ex. 09:10 inkluderas)
+            const timesToShowSet = new Set();
+
+            // lägg till jämna timmar och halvtimmar (för läsbarhet)
+            for (let hour = 7; hour <= 18; hour++) {
+                [0, 30].forEach(min => {
+                    const minutes = hour * 60 + min;
+                    if (minutes >= schoolStart && minutes <= schoolEnd) {
+                        timesToShowSet.add(minutesToTime(minutes));
                     }
-                    return false;
                 });
+            }
+
+            // lägg till alla lektioners starttider
+            schedule.lessons.forEach(lesson => {
+                if (lesson.time && lesson.time.includes('-')) {
+                    const start = lesson.time.split('-')[0];
+                    const startMinutes = timeToMinutes(start);
+                    if (startMinutes >= schoolStart && startMinutes <= schoolEnd) {
+                        timesToShowSet.add(start);
+                    }
+                }
             });
 
+            // konvertera set -> sorterad array (kronologisk)
+            const relevantTimeSlots = Array.from(timesToShowSet)
+                .map(t => ({ time: t, minutes: timeToMinutes(t) }))
+                .sort((a,b) => a.minutes - b.minutes)
+                .map(x => x.time);
+
+            // --- rendera rader baserat på relevantTimeSlots ---
             relevantTimeSlots.forEach(currentTime => {
                 const currentMinutes = timeToMinutes(currentTime);
                 
@@ -1240,7 +1434,7 @@
                     let cellContent = '';
                     let cellClass = 'empty-cell';
                     
-                    // Samla alla lektioner som pågår vid denna tid
+                    // Samla alla lektioner som pågår vid denna tid (även om de inte startar exakt här)
                     const activeLessons = [];
                     
                     for (const lesson of dayLessons) {
@@ -1258,21 +1452,13 @@
                     if (activeLessons.length > 0) {
                         cellClass = 'lesson-cell';
                         
-                        // Visa bara vid starttiden
-                        const startingLessons = activeLessons.filter(lesson => {
-                            const startTime = lesson.time.split('-')[0];
-                            return timeToMinutes(startTime) === currentMinutes;
-                        });
-                        
-                        if (startingLessons.length > 0) {
-                            cellContent = startingLessons.map(lesson => `
-                                <div style="margin-bottom: 2px; padding: 2px; border-left: 3px solid ${lesson.color}; background: ${lesson.color}15;">
-                                    <div class="lesson-subject">${lesson.subject_name}</div>
-                                    <div class="lesson-class">${lesson.class_name}</div>
-                                    <div class="lesson-room">${lesson.room}</div>
-                                </div>
-                            `).join('');
-                        }
+                        // Visa alla aktiva lektioner (både start och fortsättning)
+                        cellContent = activeLessons.map(lesson => `
+                            <div style="margin-bottom: 4px; padding: 4px; border-left: 3px solid ${lesson.color}; background: ${lesson.color}15;">
+                                <div class="lesson-subject">${lesson.subject_name}</div>
+                                <div class="lesson-class">${lesson.class_name} • <span style="font-size:0.75rem;color:#718096">${lesson.room}</span></div>
+                            </div>
+                        `).join('');
                     }
                     
                     if (cellContent) {
@@ -1286,6 +1472,7 @@
                 
                 tableHTML += '</tr>';
             });
+
 
             tableHTML += '</tbody></table></div>';
             
