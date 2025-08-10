@@ -565,13 +565,20 @@
             <div class="card">
                 <h3>📋 Multi-klass Schemaförhandsvisning</h3>
 
-                <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.75rem;">
+                <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:0.75rem;">
                     <label for="classFilter" style="margin:0; font-weight:600; color:#4a5568;">Visa:</label>
                     <select id="classFilter" onchange="onClassFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0;">
                         <option value="all">Alla klasser</option>
-                        <!-- Options will be populated av JS -->
+                        <!-- JS fyller resterande -->
+                    </select>
+
+                    <label for="teacherFilter" style="margin:0; font-weight:600; color:#4a5568;">Lärare:</label>
+                    <select id="teacherFilter" onchange="onTeacherFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0;">
+                        <option value="all">Alla lärare</option>
+                        <!-- JS fyller resterande -->
                     </select>
                 </div>
+
 
 
 
@@ -597,561 +604,41 @@
     </div>
 
     <script>
-        let currentSchedule = null;
-        let availableSubjects = {{ available_subjects | tojson }};
-        let availableClasses = {{ classes | tojson }};
-        let selectedClasses = [];
+            let availableTeachers = {{ available_teachers | tojson | safe }} || [];
 
-        // Class colors for visual distinction
-        const classColors = ['#4299e1', '#48bb78', '#f56565', '#ed8936', '#9f7aea', '#38b2ac', '#ec407a', '#26c6da', '#ab47bc', '#66bb6a'];
+            let currentSchedule = null;
+            let availableSubjects = {{ available_subjects | tojson }};
+            let availableClasses = {{ classes | tojson }};
+            let selectedClasses = [];
 
-        // Debug flag
-        const DEBUG = true;
+            // Class colors for visual distinction
+            const classColors = ['#4299e1', '#48bb78', '#f56565', '#ed8936', '#9f7aea', '#38b2ac', '#ec407a', '#26c6da', '#ab47bc', '#66bb6a'];
 
-        function debugLog(message, data = null) {
-            if (DEBUG) {
-                console.log(`[MULTI-CLASS SCHEDULE DEBUG] ${message}`, data);
-                
-                const debugInfo = document.getElementById('debugInfo');
-                const debugContent = document.getElementById('debugContent');
-                
-                debugInfo.style.display = 'block';
-                debugContent.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
-                if (data) {
-                    debugContent.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-                }
-            }
-        }
+            // Debug flag
+            const DEBUG = true;
 
-        function updateSelectedClasses() {
-            const checkboxes = document.querySelectorAll('input[name="class_ids[]"]:checked');
-            const infoDiv = document.getElementById('selectedClassesInfo');
-            const listSpan = document.getElementById('selectedClassesList');
-            
-            // Build selectedClasses anew
-            const tempSelected = Array.from(checkboxes).map(cb => {
-                const classId = cb.value;
-                const classData = availableClasses.find(c => c.id == classId);
-                return {
-                    id: classId,
-                    name: classData ? classData.name : `Klass ${classId}`
-                };
-            });
-
-            selectedClasses = tempSelected;
-
-            if (selectedClasses.length > 0) {
-                infoDiv.style.display = 'block';
-                listSpan.innerHTML = selectedClasses.map((cls, index) => 
-                    `<span style="color: ${classColors[index % classColors.length]};">●</span> ${cls.name}`
-                ).join(', ');
-                debugLog('Selected classes updated:', selectedClasses);
-            } else {
-                infoDiv.style.display = 'none';
-                debugLog('No classes selected');
-            }
-
-            // Re-render per-class subject sections
-            renderClassSubjectSections();
-        }
-
-        function renderClassSubjectSections() {
-            const container = document.getElementById('subjectsContainer');
-            const placeholder = document.getElementById('subjectsPlaceholder');
-            container.innerHTML = ''; // clear
-
-            if (selectedClasses.length === 0) {
-                placeholder && container.appendChild(placeholder);
-                return;
-            }
-
-            // For each selected class, create a section
-            selectedClasses.forEach((cls, idx) => {
-                const section = document.createElement('div');
-                section.className = 'class-subject-section';
-                section.id = `class_subjects_${cls.id}`;
-                section.setAttribute('data-class-id', cls.id);
-
-                const header = document.createElement('div');
-                header.className = 'class-subject-header';
-                header.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:0.5rem;">
-                        <span class="class-color-indicator" style="background:${classColors[idx % classColors.length]}"></span>
-                        <strong>${cls.name}</strong>
-                        <span style="color:#718096; font-size:0.9rem; margin-left:0.5rem;">(Ange ämnen & timmar för denna klass)</span>
-                    </div>
-                    <div>
-                        <button type="button" class="add-subject-btn" onclick="addSubjectForClass('${cls.id}')">+ Lägg till ämne</button>
-                    </div>
-                `;
-                section.appendChild(header);
-
-                const list = document.createElement('div');
-                list.className = 'class-subject-list';
-                list.id = `class_subject_list_${cls.id}`;
-
-                // Add initial subject row
-                const subjectRow = createSubjectItem(cls.id);
-                list.appendChild(subjectRow);
-
-                section.appendChild(list);
-                container.appendChild(section);
-            });
-
-            // Re-validate subjects UI
-            validateSubjectHours();
-        }
-
-
-
-        function populateClassFilter() {
-            const sel = document.getElementById('classFilter');
-            if (!sel) return;
-            // Rensa utom 'Alla'
-            sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
-            // Lägg till klasser från availableClasses
-            availableClasses.forEach(cls => {
-                const opt = document.createElement('option');
-                opt.value = cls.id;
-                opt.textContent = cls.name;
-                opt.setAttribute('data-generated', '1');
-                sel.appendChild(opt);
-            });
-        }
-
-        function onClassFilterChange() {
-            const sel = document.getElementById('classFilter');
-            if (!sel) return;
-            const selected = sel.value; // 'all' eller classId
-            // Om det finns ett genererat schema, rendera om med filter
-            if (currentSchedule) {
-                displayMultiClassSchedule(currentSchedule, selected === 'all' ? null : selected);
-            }
-        }
-
-
-
-        function createSubjectItem(classId) {
-            // Create a subject-row element for classId
-            const item = document.createElement('div');
-            item.className = 'subject-item';
-
-            let optionsHtml = '<option value="">Välj ämne...</option>';
-            availableSubjects.forEach(subject => {
-                optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
-            });
-
-            // Note: name attributes include class id so they are per-class
-            item.innerHTML = `
-                <select name="subjects_${classId}[]" required onchange="validateSubjectHours()">
-                    ${optionsHtml}
-                </select>
-                <input type="number" name="hours_${classId}[]" min="1" max="5" placeholder="Timmar/vecka (max 5)" required onchange="validateSubjectHours()">
-                <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
-            `;
-
-            return item;
-        }
-
-        function addSubjectForClass(classId) {
-            const list = document.getElementById(`class_subject_list_${classId}`);
-            if (!list) return;
-            const newRow = createSubjectItem(classId);
-            list.appendChild(newRow);
-            debugLog(`Added subject row for class ${classId}`);
-        }
-
-        function removeSubject(button) {
-            const list = button.parentElement.parentElement; // .class-subject-list or just parent
-            const sectionList = list.classList && list.classList.contains('class-subject-list') ? list : button.parentElement.parentElement;
-            // Try to find the sibling rows to ensure at least one remains per class
-            const container = button.closest('.class-subject-section');
-            if (!container) return;
-            const rows = container.querySelectorAll('.subject-item');
-            if (rows.length > 1) {
-                button.parentElement.remove();
-                validateSubjectHours();
-                debugLog('Removed subject row', {classSection: container.id});
-            } else {
-                // Don't allow removing last row
-                alert('Minst ett ämne måste finnas per klass. Lägg till ett annat ämne först om du vill ta bort detta.');
-                debugLog('Attempted to remove last subject row - blocked');
-            }
-        }
-
-        function validateSubjectHours() {
-            const allHourInputs = document.querySelectorAll('input[type="number"][name^="hours_"]');
-            const validationWarning = document.getElementById('subjectValidation');
-            let hasViolation = false;
-
-            allHourInputs.forEach(input => {
-                const value = parseInt(input.value);
-                if (value > 5) {
-                    hasViolation = true;
-                    input.style.borderColor = '#e53e3e';
-                    input.style.backgroundColor = '#fed7d7';
-                } else {
-                    input.style.borderColor = '#e2e8f0';
-                    input.style.backgroundColor = 'white';
-                }
-            });
-
-            if (hasViolation) {
-                validationWarning.style.display = 'block';
-            } else {
-                validationWarning.style.display = 'none';
-            }
-        }
-
-        function getAvailableRooms() {
-            const roomCheckboxes = document.querySelectorAll('input[name="rooms[]"]:checked');
-            const rooms = [];
-            roomCheckboxes.forEach(checkbox => {
-                rooms.push(checkbox.value);
-            });
-            return rooms;
-        }
-
-
-
-
-
-
-        // --- Klistra in denna funktion i din scriptsektion (funktion-deklaration, alltså hoistas) ---
-        function generateMultiClassScheduleWithConstraints(classes, classSubjectMap, rooms, startTime, endTime, lessonDuration) {
-            debugLog('Generating multi-class schedule with constraints:', {
-                classes: classes.length, 
-                classSubjectMap, 
-                rooms: rooms.length, 
-                startTime, 
-                endTime, 
-                lessonDuration
-            });
-
-            const actualRooms = (rooms && rooms.length) ? rooms : getAvailableRooms();
-            if (!actualRooms || actualRooms.length === 0) {
-                throw new Error('Inga klassrum valda. Välj minst ett klassrum.');
-            }
-
-            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
-            const timeSlots = generateTimeSlots(startTime || '08:00', endTime || '15:00', lessonDuration);
-            const allLessons = [];
-
-            // Skapa ämnesplan för varje klass baserat på classSubjectMap
-            const classSubjectPlans = {};
-            let totalLessonsNeeded = 0;
-            
-            classes.forEach(classInfo => {
-                const cid = classInfo.id;
-                classSubjectPlans[cid] = [];
-
-                const items = classSubjectMap[cid] || [];
-                items.forEach(item => {
-                    const subjectId = item.subject_id;
-                    const subjectName = availableSubjects.find(s => s.id == subjectId)?.name || `Ämne ${subjectId}`;
-                    const hoursPerWeek = parseInt(item.hours);
-
-                    if (hoursPerWeek > 5) {
-                        throw new Error(`Ämnet "${subjectName}" för klass ${classInfo.name} har ${hoursPerWeek} lektioner, men max 5 är tillåtet (1 per dag)`);
-                    }
-
-                    for (let h = 0; h < hoursPerWeek; h++) {
-                        classSubjectPlans[cid].push({
-                            class_id: classInfo.id,
-                            class_name: classInfo.name,
-                            subject_id: subjectId,
-                            subject_name: subjectName,
-                            color: classInfo.color || classColors[Math.floor(Math.random() * classColors.length)]
-                        });
-                        totalLessonsNeeded++;
-                    }
-                });
-            });
-
-            debugLog('Subject plans created per class:', {classSubjectPlans, totalLessonsNeeded});
-
-            // Globala schemastrukturer för konflikthantering
-            const globalSchedule = {};
-            const roomOccupancy = {}; // Spårar vilka rum som är upptagna när
-            const classSubjectsByDay = {}; // Spårar vilka ämnen varje klass har per dag
-            
-            // Initiera strukturer
-            weekdays.forEach(day => {
-                globalSchedule[day] = [];
-                roomOccupancy[day] = {};
-                classSubjectsByDay[day] = {};
-                
-                classes.forEach(classInfo => {
-                    classSubjectsByDay[day][classInfo.id] = new Set();
-                });
-                
-                timeSlots.forEach(slot => {
-                    roomOccupancy[day][slot] = new Set(); // Vilka rum som är upptagna under denna tid
-                });
-            });
-
-            // Placera lektioner för alla klasser samtidigt
-            const allLessonsToPlace = [];
-            Object.keys(classSubjectPlans).forEach(classId => {
-                classSubjectPlans[classId].forEach(lesson => {
-                    allLessonsToPlace.push(lesson);
-                });
-            });
-
-            // Randomisera för bättre fördelning
-            allLessonsToPlace.sort(() => Math.random() - 0.5);
-
-            debugLog('Starting lesson placement for all classes...', {totalLessons: allLessonsToPlace.length});
-
-            let placedLessons = 0;
-            for (const lesson of allLessonsToPlace) {
-                let placed = false;
-                let attempts = 0;
-                const maxAttempts = 200;
-
-                while (!placed && attempts < maxAttempts) {
-                    // Välj dag som inte redan har detta ämne för denna klass
-                    const availableDays = weekdays.filter(day => 
-                        !classSubjectsByDay[day][lesson.class_id].has(lesson.subject_name)
-                    );
+            function debugLog(message, data = null) {
+                if (DEBUG) {
+                    console.log(`[MULTI-CLASS SCHEDULE DEBUG] ${message}`, data);
                     
-                    if (availableDays.length === 0) {
-                        throw new Error(`Kan inte placera fler lektioner i ${lesson.subject_name} för klass ${lesson.class_name} - alla dagar upptagna`);
-                    }
-
-                    // Prioritera dagar med färre lektioner för denna klass
-                    availableDays.sort((a, b) => {
-                        const aCount = globalSchedule[a].filter(l => l.class_id === lesson.class_id).length;
-                        const bCount = globalSchedule[b].filter(l => l.class_id === lesson.class_id).length;
-                        return aCount - bCount;
-                    });
+                    const debugInfo = document.getElementById('debugInfo');
+                    const debugContent = document.getElementById('debugContent');
                     
-                    const day = availableDays[0];
-
-                    // Hitta tillgängliga tidsluckor
-                    const availableSlots = findAvailableTimeSlotsForClass(
-                        globalSchedule[day], lesson.class_id, timeSlots, 10
-                    );
-                    
-                    if (availableSlots.length > 0) {
-                        // Försök hitta ett ledigt klassrum för varje tillgänglig tidslucka
-                        let roomFound = false;
-                        
-                        for (const timeSlot of availableSlots) {
-                            const occupiedRooms = roomOccupancy[day][timeSlot];
-                            const availableRooms = actualRooms.filter(room => !occupiedRooms.has(room));
-                            
-                            if (availableRooms.length > 0) {
-                                const selectedRoom = availableRooms[Math.floor(Math.random() * availableRooms.length)];
-                                
-                                const lessonData = {
-                                    day: day,
-                                    time: timeSlot,
-                                    class_id: lesson.class_id,
-                                    class_name: lesson.class_name,
-                                    subject_id: lesson.subject_id,
-                                    subject_name: lesson.subject_name,
-                                    room: selectedRoom,
-                                    color: lesson.color,
-                                    start_minutes: timeToMinutes(timeSlot.split('-')[0])
-                                };
-
-                                // Placera lektionen
-                                globalSchedule[day].push(lessonData);
-                                roomOccupancy[day][timeSlot].add(selectedRoom);
-                                classSubjectsByDay[day][lesson.class_id].add(lesson.subject_name);
-                                allLessons.push(lessonData);
-                                
-                                placed = true;
-                                placedLessons++;
-                                roomFound = true;
-
-                                debugLog(`Placed lesson ${placedLessons}/${allLessonsToPlace.length}: ${lesson.class_name} - ${lesson.subject_name} on ${day} at ${timeSlot} in ${selectedRoom}`);
-                                break;
-                            }
-                        }
-                        
-                        if (!roomFound) {
-                            debugLog(`No available rooms found for ${lesson.class_name} - ${lesson.subject_name} on ${day}`);
-                        }
+                    debugInfo.style.display = 'block';
+                    debugContent.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
+                    if (data) {
+                        debugContent.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
                     }
-
-                    attempts++;
-                }
-
-                if (!placed) {
-                    throw new Error(`Kunde inte placera lektion i ${lesson.subject_name} för klass ${lesson.class_name} efter ${maxAttempts} försök. Försök med fler klassrum eller färre klasser.`);
                 }
             }
 
-            // Rensa hjälpdata
-            allLessons.forEach(lesson => {
-                delete lesson.start_minutes;
-            });
-
-            debugLog('Multi-class lesson placement completed:', {
-                totalPlaced: placedLessons,
-                totalNeeded: allLessonsToPlace.length
-            });
-
-            return {
-                lessons: allLessons,
-                time_slots: timeSlots,
-                classes: classes,
-                stats: {
-                    total_lessons: allLessons.length,
-                    lessons_per_class: classes.reduce((acc, cls) => {
-                        acc[cls.name] = allLessons.filter(l => l.class_id === cls.id).length;
-                        return acc;
-                    }, {}),
-                    rooms_used: [...new Set(allLessons.map(l => l.room))],
-                    balance_score: calculateMultiClassBalanceScore(globalSchedule, classes),
-                    room_conflicts: checkRoomConflicts(allLessons),
-                    constraint_violations: validateMultiClassConstraints(globalSchedule, classes)
-                }
-            };
-        }
-        // --- Slut på funktionen ---
-
-
-        async function generateMultiClassSchedule() {
-            // Uppdatera selected classes och UI
-            updateSelectedClasses();
-
-            const preview = document.getElementById('schedulePreview');
-            const controls = document.getElementById('generationControls');
-
-            if (selectedClasses.length === 0) {
-                alert('Välj minst en klass!');
-                debugLog('Validation failed: No classes selected');
-                return;
-            }
-
-            // Bygg per-klass ämneskartor
-            const classSubjectMap = {}; // classId -> [{subject_id, hours}, ...]
-            for (const cls of selectedClasses) {
-                const classId = cls.id;
-                const container = document.getElementById(`class_subjects_${classId}`);
-                if (!container) {
-                    alert(`Ingen ämnessektion hittades för klass ${cls.name}.`);
-                    debugLog('Validation failed: missing class subject container', {class: cls});
-                    return;
-                }
-
-                const rows = Array.from(container.querySelectorAll('.subject-item'));
-                if (rows.length === 0) {
-                    alert(`Ingen ämneskonfiguration för klass ${cls.name}. Ange minst ett ämne.`);
-                    debugLog('Validation failed: No subject rows for class', {class: cls});
-                    return;
-                }
-
-                const items = [];
-                for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i];
-                    const subjSelect = row.querySelector('select');
-                    const hourInput = row.querySelector('input[type="number"]');
-
-                    const subjVal = subjSelect ? subjSelect.value.trim() : '';
-                    const hrsValRaw = hourInput ? hourInput.value.trim() : '';
-                    const hrsVal = hrsValRaw === '' ? NaN : parseInt(hrsValRaw, 10);
-
-                    if (!subjVal) {
-                        alert(`Välj ämne i alla rader för klass ${cls.name}`);
-                        debugLog('Validation failed: empty subject row', {class: cls, index: i});
-                        return;
-                    }
-                    if (isNaN(hrsVal) || hrsVal <= 0) {
-                        alert(`Ange giltigt antal timmar för ämnet i klass ${cls.name}`);
-                        debugLog('Validation failed: invalid hours', {class: cls, index: i, hours: hrsValRaw});
-                        return;
-                    }
-                    if (hrsVal > 5) {
-                        alert(`Max 5 lektioner per vecka per ämne. Du angav ${hrsVal} för ämnet i klass ${cls.name}`);
-                        debugLog('Validation failed: hours > 5', {class: cls, hours: hrsVal});
-                        return;
-                    }
-
-                    items.push({ subject_id: subjVal, hours: hrsVal });
-                }
-
-                classSubjectMap[classId] = items;
-            }
-
-            const rooms = getAvailableRooms();
-            const maxSimultaneousClasses = selectedClasses.length;
-            if (rooms.length < maxSimultaneousClasses) {
-                const proceed = confirm(
-                    `Du har valt ${maxSimultaneousClasses} klasser men bara ${rooms.length} klassrum. ` +
-                    `Detta kan orsaka schemaläggningsproblem när klasser har lektioner samtidigt. Fortsätt ändå?`
-                );
-                if (!proceed) {
-                    debugLog('User cancelled due to insufficient rooms');
-                    return;
-                }
-            }
-
-            debugLog('Multi-class validation passed, generating schedule...', {
-                classes: selectedClasses.length,
-                classSubjectMap,
-                rooms: rooms.length
-            });
-
-            // Visa loading
-            preview.innerHTML = `
-                <div style="text-align: center;">
-                    <div class="loading-spinner"></div>
-                    <p style="margin-top: 1rem;">Genererar multi-klass schema...</p>
-                    <p style="font-size: 0.9rem; color: #666;">
-                        Schemaläggning för ${selectedClasses.length} klasser med klassrumshantering
-                    </p>
-                    <p style="font-size: 0.85rem; color: #888;">
-                        Följer: Ingen klassrumskonflikt, max 1 ämne/dag per klass, 5-min intervall
-                    </p>
-                </div>
-            `;
-
-            try {
-                const form = document.getElementById('scheduleForm');
-                const formData = new FormData(form);
-                const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
-                const multiClassSchedule = generateMultiClassScheduleWithConstraints(
-                    selectedClasses, classSubjectMap, rooms, 
-                    formData.get('start_time'), formData.get('end_time'), lessonDuration
-                );
-
-                setTimeout(() => {
-                    debugLog('Multi-class schedule generated successfully', multiClassSchedule);
-                    currentSchedule = multiClassSchedule;
-                    displayMultiClassSchedule(multiClassSchedule);
-                    controls.style.display = 'flex';
-                }, 1000);
-
-            } catch (error) {
-                debugLog('Error generating multi-class schedule:', error);
-                console.error('Error generating multi-class schedule:', error);
-                preview.innerHTML = `
-                    <div style="text-align: center; color: #e53e3e;">
-                        <p>❌ Fel vid multi-klass schemagenerering</p>
-                        <p style="font-size: 0.9rem;">${error.message}</p>
-                        <p style="font-size: 0.85rem; color: #666;">
-                            Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
-                        </p>
-                    </div>
-                `;
-                controls.style.display = 'none';
-            }
-        }
-
-        async function generateMultiClassSchedule() {
-            // OBS: anropa INTE updateSelectedClasses() här — det åter-renderar ämnessektionerna och nollställer användarens val.
-            // Istället: läs direkt vilka klasser som är ikryssade (men undvik att re-rendera UI).
-            const preview = document.getElementById('schedulePreview');
-            const controls = document.getElementById('generationControls');
-
-            // Säkerställ att selectedClasses speglar DOM om användaren inte redan ändrat det via checkbox onchange
-            const checkedBoxes = Array.from(document.querySelectorAll('input[name="class_ids[]"]:checked'));
-            if (checkedBoxes.length > 0) {
-                selectedClasses = checkedBoxes.map(cb => {
+            function updateSelectedClasses() {
+                const checkboxes = document.querySelectorAll('input[name="class_ids[]"]:checked');
+                const infoDiv = document.getElementById('selectedClassesInfo');
+                const listSpan = document.getElementById('selectedClassesList');
+                
+                // Build selectedClasses anew
+                const tempSelected = Array.from(checkboxes).map(cb => {
                     const classId = cb.value;
                     const classData = availableClasses.find(c => c.id == classId);
                     return {
@@ -1159,402 +646,1045 @@
                         name: classData ? classData.name : `Klass ${classId}`
                     };
                 });
+
+                selectedClasses = tempSelected;
+
+                if (selectedClasses.length > 0) {
+                    infoDiv.style.display = 'block';
+                    listSpan.innerHTML = selectedClasses.map((cls, index) => 
+                        `<span style="color: ${classColors[index % classColors.length]};">●</span> ${cls.name}`
+                    ).join(', ');
+                    debugLog('Selected classes updated:', selectedClasses);
+                } else {
+                    infoDiv.style.display = 'none';
+                    debugLog('No classes selected');
+                }
+
+                // Re-render per-class subject sections
+                renderClassSubjectSections();
             }
 
-            if (selectedClasses.length === 0) {
-                alert('Välj minst en klass!');
-                debugLog('Validation failed: No classes selected');
-                return;
+
+            // Fyll klass-filtret (finns redan i din kod om du följde tidigare steg)
+            function populateClassFilter() {
+                const sel = document.getElementById('classFilter');
+                if (!sel) return;
+                // Ta bort tidigare genererade options
+                sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
+                availableClasses.forEach(cls => {
+                    const opt = document.createElement('option');
+                    opt.value = cls.id;
+                    opt.textContent = cls.name;
+                    opt.setAttribute('data-generated', '1');
+                    sel.appendChild(opt);
+                });
             }
 
-            // Bygg per-klass ämneskartor (robust: går igenom varje .subject-item för respektive klass)
-            const classSubjectMap = {}; // classId -> [{subject_id, hours}, ...]
-            for (const cls of selectedClasses) {
-                const classId = cls.id;
-                const container = document.getElementById(`class_subjects_${classId}`);
-                if (!container) {
-                    alert(`Ingen ämnessektion hittades för klass ${cls.name}.`);
-                    debugLog('Validation failed: missing class subject container', {class: cls});
+            // Fyll lärar-filtret - försök med availableTeachers, annars lämna "Alla lärare" tills schemat finns
+            function populateTeacherFilter() {
+                const sel = document.getElementById('teacherFilter');
+                if (!sel) return;
+                // Rensa tidigare genererade
+                sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
+
+                if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
+                    availableTeachers.forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t.id ?? t.name;
+                        opt.textContent = t.name ?? t.displayName ?? t.id;
+                        opt.setAttribute('data-generated', '1');
+                        sel.appendChild(opt);
+                    });
                     return;
                 }
 
-                const rows = Array.from(container.querySelectorAll('.subject-item'));
-                if (rows.length === 0) {
-                    alert(`Ingen ämneskonfiguration för klass ${cls.name}. Ange minst ett ämne.`);
-                    debugLog('Validation failed: No subject rows for class', {class: cls});
+                // Om inga lärardata finns ännu - lämna standard 'Alla lärare' (vi kommer att fylla från schedule senare)
+            }
+
+            // Fyll teacher-filter från ett genererat schema (används efter generering om backend ej skickade teachers)
+            function populateTeacherFilterFromSchedule(schedule) {
+                const sel = document.getElementById('teacherFilter');
+                if (!sel || !schedule || !Array.isArray(schedule.lessons)) return;
+                // Ta bort gamla genererade options
+                sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
+
+                const teacherSet = new Map();
+                schedule.lessons.forEach(lesson => {
+                    // Förväntar att lesson har property lesson.teacher_name eller lesson.teacher_id
+                    const teacherName = lesson.teacher_name || lesson.teacher || null;
+                    const teacherId = lesson.teacher_id || lesson.teacher || teacherName;
+                    if (teacherName) {
+                        if (!teacherSet.has(teacherId)) teacherSet.set(teacherId, teacherName);
+                    }
+                });
+
+                Array.from(teacherSet.entries()).forEach(([id, name]) => {
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = name;
+                    opt.setAttribute('data-generated', '1');
+                    sel.appendChild(opt);
+                });
+            }
+
+            // Händelsehanterare för filter
+            function onClassFilterChange() {
+                const classSel = document.getElementById('classFilter');
+                const teacherSel = document.getElementById('teacherFilter');
+                const classVal = classSel && classSel.value !== 'all' ? classSel.value : null;
+                const teacherVal = teacherSel && teacherSel.value !== 'all' ? teacherSel.value : null;
+                if (currentSchedule) displayMultiClassSchedule(currentSchedule, classVal, teacherVal);
+            }
+
+            function onTeacherFilterChange() {
+                const classSel = document.getElementById('classFilter');
+                const teacherSel = document.getElementById('teacherFilter');
+                const classVal = classSel && classSel.value !== 'all' ? classSel.value : null;
+                const teacherVal = teacherSel && teacherSel.value !== 'all' ? teacherSel.value : null;
+                if (currentSchedule) displayMultiClassSchedule(currentSchedule, classVal, teacherVal);
+            }
+
+
+            function renderClassSubjectSections() {
+                const container = document.getElementById('subjectsContainer');
+                const placeholder = document.getElementById('subjectsPlaceholder');
+                container.innerHTML = ''; // clear
+
+                if (selectedClasses.length === 0) {
+                    placeholder && container.appendChild(placeholder);
                     return;
                 }
 
-                const items = [];
-                for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i];
-                    const subjSelect = row.querySelector('select');
-                    const hourInput = row.querySelector('input[type="number"]');
+                // For each selected class, create a section
+                selectedClasses.forEach((cls, idx) => {
+                    const section = document.createElement('div');
+                    section.className = 'class-subject-section';
+                    section.id = `class_subjects_${cls.id}`;
+                    section.setAttribute('data-class-id', cls.id);
 
-                    const subjVal = subjSelect ? subjSelect.value.trim() : '';
-                    const hrsValRaw = hourInput ? hourInput.value.trim() : '';
-                    const hrsVal = hrsValRaw === '' ? NaN : parseInt(hrsValRaw, 10);
+                    const header = document.createElement('div');
+                    header.className = 'class-subject-header';
+                    header.innerHTML = `
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <span class="class-color-indicator" style="background:${classColors[idx % classColors.length]}"></span>
+                            <strong>${cls.name}</strong>
+                            <span style="color:#718096; font-size:0.9rem; margin-left:0.5rem;">(Ange ämnen & timmar för denna klass)</span>
+                        </div>
+                        <div>
+                            <button type="button" class="add-subject-btn" onclick="addSubjectForClass('${cls.id}')">+ Lägg till ämne</button>
+                        </div>
+                    `;
+                    section.appendChild(header);
 
-                    if (!subjVal) {
-                        alert(`Välj ämne i alla rader för klass ${cls.name}`);
-                        debugLog('Validation failed: empty subject row', {class: cls, index: i});
-                        return;
-                    }
-                    if (isNaN(hrsVal) || hrsVal <= 0) {
-                        alert(`Ange giltigt antal timmar för ämnet i klass ${cls.name}`);
-                        debugLog('Validation failed: invalid hours', {class: cls, index: i, hours: hrsValRaw});
-                        return;
-                    }
-                    if (hrsVal > 5) {
-                        alert(`Max 5 lektioner per vecka per ämne. Du angav ${hrsVal} för ämnet i klass ${cls.name}`);
-                        debugLog('Validation failed: hours > 5', {class: cls, hours: hrsVal});
-                        return;
-                    }
+                    const list = document.createElement('div');
+                    list.className = 'class-subject-list';
+                    list.id = `class_subject_list_${cls.id}`;
 
-                    items.push({ subject_id: subjVal, hours: hrsVal });
-                }
+                    // Add initial subject row
+                    const subjectRow = createSubjectItem(cls.id);
+                    list.appendChild(subjectRow);
 
-                classSubjectMap[classId] = items;
+                    section.appendChild(list);
+                    container.appendChild(section);
+                });
+
+                // Re-validate subjects UI
+                validateSubjectHours();
             }
 
-            const rooms = getAvailableRooms();
-            const maxSimultaneousClasses = selectedClasses.length;
-            if (rooms.length < maxSimultaneousClasses) {
-                const proceed = confirm(
-                    `Du har valt ${maxSimultaneousClasses} klasser men bara ${rooms.length} klassrum. ` +
-                    `Detta kan orsaka schemaläggningsproblem när klasser har lektioner samtidigt. Fortsätt ändå?`
-                );
-                if (!proceed) {
-                    debugLog('User cancelled due to insufficient rooms');
+
+
+            function populateClassFilter() {
+                const sel = document.getElementById('classFilter');
+                if (!sel) return;
+                // Rensa utom 'Alla'
+                sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
+                // Lägg till klasser från availableClasses
+                availableClasses.forEach(cls => {
+                    const opt = document.createElement('option');
+                    opt.value = cls.id;
+                    opt.textContent = cls.name;
+                    opt.setAttribute('data-generated', '1');
+                    sel.appendChild(opt);
+                });
+            }
+
+            
+
+
+
+            function createSubjectItem(classId) {
+                // Create a subject-row element for classId
+                const item = document.createElement('div');
+                item.className = 'subject-item';
+
+                let optionsHtml = '<option value="">Välj ämne...</option>';
+                availableSubjects.forEach(subject => {
+                    optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
+                });
+
+                // Note: name attributes include class id so they are per-class
+                item.innerHTML = `
+                    <select name="subjects_${classId}[]" required onchange="validateSubjectHours()">
+                        ${optionsHtml}
+                    </select>
+                    <input type="number" name="hours_${classId}[]" min="1" max="5" placeholder="Timmar/vecka (max 5)" required onchange="validateSubjectHours()">
+                    <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
+                `;
+
+                return item;
+            }
+
+            function addSubjectForClass(classId) {
+                const list = document.getElementById(`class_subject_list_${classId}`);
+                if (!list) return;
+                const newRow = createSubjectItem(classId);
+                list.appendChild(newRow);
+                debugLog(`Added subject row for class ${classId}`);
+            }
+
+            function removeSubject(button) {
+                const list = button.parentElement.parentElement; // .class-subject-list or just parent
+                const sectionList = list.classList && list.classList.contains('class-subject-list') ? list : button.parentElement.parentElement;
+                // Try to find the sibling rows to ensure at least one remains per class
+                const container = button.closest('.class-subject-section');
+                if (!container) return;
+                const rows = container.querySelectorAll('.subject-item');
+                if (rows.length > 1) {
+                    button.parentElement.remove();
+                    validateSubjectHours();
+                    debugLog('Removed subject row', {classSection: container.id});
+                } else {
+                    // Don't allow removing last row
+                    alert('Minst ett ämne måste finnas per klass. Lägg till ett annat ämne först om du vill ta bort detta.');
+                    debugLog('Attempted to remove last subject row - blocked');
+                }
+            }
+
+            function validateSubjectHours() {
+                const allHourInputs = document.querySelectorAll('input[type="number"][name^="hours_"]');
+                const validationWarning = document.getElementById('subjectValidation');
+                let hasViolation = false;
+
+                allHourInputs.forEach(input => {
+                    const value = parseInt(input.value);
+                    if (value > 5) {
+                        hasViolation = true;
+                        input.style.borderColor = '#e53e3e';
+                        input.style.backgroundColor = '#fed7d7';
+                    } else {
+                        input.style.borderColor = '#e2e8f0';
+                        input.style.backgroundColor = 'white';
+                    }
+                });
+
+                if (hasViolation) {
+                    validationWarning.style.display = 'block';
+                } else {
+                    validationWarning.style.display = 'none';
+                }
+            }
+
+            function getAvailableRooms() {
+                const roomCheckboxes = document.querySelectorAll('input[name="rooms[]"]:checked');
+                const rooms = [];
+                roomCheckboxes.forEach(checkbox => {
+                    rooms.push(checkbox.value);
+                });
+                return rooms;
+            }
+
+
+
+
+
+
+            // --- Klistra in denna funktion i din scriptsektion (funktion-deklaration, alltså hoistas) ---
+            function generateMultiClassScheduleWithConstraints(classes, classSubjectMap, rooms, startTime, endTime, lessonDuration) {
+                debugLog('Generating multi-class schedule with constraints:', {
+                    classes: classes.length, 
+                    classSubjectMap, 
+                    rooms: rooms.length, 
+                    startTime, 
+                    endTime, 
+                    lessonDuration
+                });
+
+                const actualRooms = (rooms && rooms.length) ? rooms : getAvailableRooms();
+                if (!actualRooms || actualRooms.length === 0) {
+                    throw new Error('Inga klassrum valda. Välj minst ett klassrum.');
+                }
+
+                const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+                const timeSlots = generateTimeSlots(startTime || '08:00', endTime || '15:00', lessonDuration);
+                const allLessons = [];
+
+                // Skapa ämnesplan för varje klass baserat på classSubjectMap
+                const classSubjectPlans = {};
+                let totalLessonsNeeded = 0;
+                
+                classes.forEach(classInfo => {
+                    const cid = classInfo.id;
+                    classSubjectPlans[cid] = [];
+
+                    const items = classSubjectMap[cid] || [];
+                    items.forEach(item => {
+                        const subjectId = item.subject_id;
+                        const subjectName = availableSubjects.find(s => s.id == subjectId)?.name || `Ämne ${subjectId}`;
+                        const hoursPerWeek = parseInt(item.hours);
+
+                        if (hoursPerWeek > 5) {
+                            throw new Error(`Ämnet "${subjectName}" för klass ${classInfo.name} har ${hoursPerWeek} lektioner, men max 5 är tillåtet (1 per dag)`);
+                        }
+
+                        for (let h = 0; h < hoursPerWeek; h++) {
+                            classSubjectPlans[cid].push({
+                                class_id: classInfo.id,
+                                class_name: classInfo.name,
+                                subject_id: subjectId,
+                                subject_name: subjectName,
+                                color: classInfo.color || classColors[Math.floor(Math.random() * classColors.length)]
+                            });
+                            totalLessonsNeeded++;
+                        }
+                    });
+                });
+
+                debugLog('Subject plans created per class:', {classSubjectPlans, totalLessonsNeeded});
+
+                // Globala schemastrukturer för konflikthantering
+                const globalSchedule = {};
+                const roomOccupancy = {}; // Spårar vilka rum som är upptagna när
+                const classSubjectsByDay = {}; // Spårar vilka ämnen varje klass har per dag
+                
+                // Initiera strukturer
+                weekdays.forEach(day => {
+                    globalSchedule[day] = [];
+                    roomOccupancy[day] = {};
+                    classSubjectsByDay[day] = {};
+                    
+                    classes.forEach(classInfo => {
+                        classSubjectsByDay[day][classInfo.id] = new Set();
+                    });
+                    
+                    timeSlots.forEach(slot => {
+                        roomOccupancy[day][slot] = new Set(); // Vilka rum som är upptagna under denna tid
+                    });
+                });
+
+                // Placera lektioner för alla klasser samtidigt
+                const allLessonsToPlace = [];
+                Object.keys(classSubjectPlans).forEach(classId => {
+                    classSubjectPlans[classId].forEach(lesson => {
+                        allLessonsToPlace.push(lesson);
+                    });
+                });
+
+                // Randomisera för bättre fördelning
+                allLessonsToPlace.sort(() => Math.random() - 0.5);
+
+                debugLog('Starting lesson placement for all classes...', {totalLessons: allLessonsToPlace.length});
+
+                let placedLessons = 0;
+                for (const lesson of allLessonsToPlace) {
+                    let placed = false;
+                    let attempts = 0;
+                    const maxAttempts = 200;
+
+                    while (!placed && attempts < maxAttempts) {
+                        // Välj dag som inte redan har detta ämne för denna klass
+                        const availableDays = weekdays.filter(day => 
+                            !classSubjectsByDay[day][lesson.class_id].has(lesson.subject_name)
+                        );
+                        
+                        if (availableDays.length === 0) {
+                            throw new Error(`Kan inte placera fler lektioner i ${lesson.subject_name} för klass ${lesson.class_name} - alla dagar upptagna`);
+                        }
+
+                        // Prioritera dagar med färre lektioner för denna klass
+                        availableDays.sort((a, b) => {
+                            const aCount = globalSchedule[a].filter(l => l.class_id === lesson.class_id).length;
+                            const bCount = globalSchedule[b].filter(l => l.class_id === lesson.class_id).length;
+                            return aCount - bCount;
+                        });
+                        
+                        const day = availableDays[0];
+
+                        // Hitta tillgängliga tidsluckor
+                        const availableSlots = findAvailableTimeSlotsForClass(
+                            globalSchedule[day], lesson.class_id, timeSlots, 10
+                        );
+                        
+                        if (availableSlots.length > 0) {
+                            // Försök hitta ett ledigt klassrum för varje tillgänglig tidslucka
+                            let roomFound = false;
+                            
+                            for (const timeSlot of availableSlots) {
+                                const occupiedRooms = roomOccupancy[day][timeSlot];
+                                const availableRooms = actualRooms.filter(room => !occupiedRooms.has(room));
+                                
+                                if (availableRooms.length > 0) {
+                                    const selectedRoom = availableRooms[Math.floor(Math.random() * availableRooms.length)];
+                                    
+                                    // FIX: Välj en lärare för lektionen
+                                    let teacherName = 'Okänd lärare';
+                                    if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
+                                        const randomTeacher = availableTeachers[Math.floor(Math.random() * availableTeachers.length)];
+                                        teacherName = randomTeacher.name || randomTeacher.username || 'Lärare';
+                                    } else {
+                                        // Fallback names if no teachers available
+                                        const fallbackTeachers = ['Lärare A', 'Lärare B', 'Lärare C', 'Lärare D'];
+                                        teacherName = fallbackTeachers[Math.floor(Math.random() * fallbackTeachers.length)];
+                                    }
+                                    
+                                    const lessonData = {
+                                        day: day,
+                                        time: timeSlot,
+                                        class_id: lesson.class_id,
+                                        class_name: lesson.class_name,
+                                        subject_id: lesson.subject_id,
+                                        subject_name: lesson.subject_name,
+                                        room: selectedRoom,
+                                        teacher_name: teacherName,  // FIX: Använd rätt variabelnamn
+                                        color: lesson.color,
+                                        start_minutes: timeToMinutes(timeSlot.split('-')[0])
+                                    };
+
+                                    // Placera lektionen
+                                    globalSchedule[day].push(lessonData);
+                                    roomOccupancy[day][timeSlot].add(selectedRoom);
+                                    classSubjectsByDay[day][lesson.class_id].add(lesson.subject_name);
+                                    allLessons.push(lessonData);
+                                    
+                                    placed = true;
+                                    placedLessons++;
+                                    roomFound = true;
+
+                                    debugLog(`Placed lesson ${placedLessons}/${allLessonsToPlace.length}: ${lesson.class_name} - ${lesson.subject_name} on ${day} at ${timeSlot} in ${selectedRoom}`);
+                                    break;
+                                }
+                            }
+                            
+                            if (!roomFound) {
+                                debugLog(`No available rooms found for ${lesson.class_name} - ${lesson.subject_name} on ${day}`);
+                            }
+                        }
+
+                        attempts++;
+                    }
+
+                    if (!placed) {
+                        throw new Error(`Kunde inte placera lektion i ${lesson.subject_name} för klass ${lesson.class_name} efter ${maxAttempts} försök. Försök med fler klassrum eller färre klasser.`);
+                    }
+                }
+
+                // Rensa hjälpdata
+                allLessons.forEach(lesson => {
+                    delete lesson.start_minutes;
+                });
+
+                debugLog('Multi-class lesson placement completed:', {
+                    totalPlaced: placedLessons,
+                    totalNeeded: allLessonsToPlace.length
+                });
+
+                return {
+                    lessons: allLessons,
+                    time_slots: timeSlots,
+                    classes: classes,
+                    stats: {
+                        total_lessons: allLessons.length,
+                        lessons_per_class: classes.reduce((acc, cls) => {
+                            acc[cls.name] = allLessons.filter(l => l.class_id === cls.id).length;
+                            return acc;
+                        }, {}),
+                        rooms_used: [...new Set(allLessons.map(l => l.room))],
+                        balance_score: calculateMultiClassBalanceScore(globalSchedule, classes),
+                        room_conflicts: checkRoomConflicts(allLessons),
+                        constraint_violations: validateMultiClassConstraints(globalSchedule, classes)
+                    }
+                };
+            }
+            // --- Slut på funktionen ---
+
+
+            async function generateMultiClassSchedule() {
+                // Uppdatera selected classes och UI
+                updateSelectedClasses();
+
+                const preview = document.getElementById('schedulePreview');
+                const controls = document.getElementById('generationControls');
+
+                if (selectedClasses.length === 0) {
+                    alert('Välj minst en klass!');
+                    debugLog('Validation failed: No classes selected');
                     return;
                 }
-            }
 
-            debugLog('Multi-class validation passed, generating schedule...', {
-                classes: selectedClasses.length,
-                classSubjectMap,
-                rooms: rooms.length
-            });
+                // Bygg per-klass ämneskartor
+                const classSubjectMap = {}; // classId -> [{subject_id, hours}, ...]
+                for (const cls of selectedClasses) {
+                    const classId = cls.id;
+                    const container = document.getElementById(`class_subjects_${classId}`);
+                    if (!container) {
+                        alert(`Ingen ämnessektion hittades för klass ${cls.name}.`);
+                        debugLog('Validation failed: missing class subject container', {class: cls});
+                        return;
+                    }
 
-            // Visa loading
-            preview.innerHTML = `
-                <div style="text-align: center;">
-                    <div class="loading-spinner"></div>
-                    <p style="margin-top: 1rem;">Genererar multi-klass schema...</p>
-                    <p style="font-size: 0.9rem; color: #666;">
-                        Schemaläggning för ${selectedClasses.length} klasser med klassrumshantering
-                    </p>
-                    <p style="font-size: 0.85rem; color: #888;">
-                        Följer: Ingen klassrumskonflikt, max 1 ämne/dag per klass, 5-min intervall
-                    </p>
-                </div>
-            `;
+                    const rows = Array.from(container.querySelectorAll('.subject-item'));
+                    if (rows.length === 0) {
+                        alert(`Ingen ämneskonfiguration för klass ${cls.name}. Ange minst ett ämne.`);
+                        debugLog('Validation failed: No subject rows for class', {class: cls});
+                        return;
+                    }
 
-            try {
-                const form = document.getElementById('scheduleForm');
-                const formData = new FormData(form);
-                const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
-                const multiClassSchedule = generateMultiClassScheduleWithConstraints(
-                    selectedClasses, classSubjectMap, rooms, 
-                    formData.get('start_time'), formData.get('end_time'), lessonDuration
-                );
+                    const items = [];
+                    for (let i = 0; i < rows.length; i++) {
+                        const row = rows[i];
+                        const subjSelect = row.querySelector('select');
+                        const hourInput = row.querySelector('input[type="number"]');
 
-                setTimeout(() => {
-                    debugLog('Multi-class schedule generated successfully', multiClassSchedule);
-                    currentSchedule = multiClassSchedule;
-                    // om användaren redan valt ett filter, använd det:
-                    const sel = document.getElementById('classFilter');
-                    const selectedFilter = sel && sel.value !== 'all' ? sel.value : null;
-                    displayMultiClassSchedule(currentSchedule, selectedFilter);
-                    controls.style.display = 'flex';
-                    displayMultiClassSchedule(multiClassSchedule);
-                    controls.style.display = 'flex';
-                }, 1000);
+                        const subjVal = subjSelect ? subjSelect.value.trim() : '';
+                        const hrsValRaw = hourInput ? hourInput.value.trim() : '';
+                        const hrsVal = hrsValRaw === '' ? NaN : parseInt(hrsValRaw, 10);
 
-            } catch (error) {
-                debugLog('Error generating multi-class schedule:', error);
-                console.error('Error generating multi-class schedule:', error);
+                        if (!subjVal) {
+                            alert(`Välj ämne i alla rader för klass ${cls.name}`);
+                            debugLog('Validation failed: empty subject row', {class: cls, index: i});
+                            return;
+                        }
+                        if (isNaN(hrsVal) || hrsVal <= 0) {
+                            alert(`Ange giltigt antal timmar för ämnet i klass ${cls.name}`);
+                            debugLog('Validation failed: invalid hours', {class: cls, index: i, hours: hrsValRaw});
+                            return;
+                        }
+                        if (hrsVal > 5) {
+                            alert(`Max 5 lektioner per vecka per ämne. Du angav ${hrsVal} för ämnet i klass ${cls.name}`);
+                            debugLog('Validation failed: hours > 5', {class: cls, hours: hrsVal});
+                            return;
+                        }
+
+                        items.push({ subject_id: subjVal, hours: hrsVal });
+                    }
+
+                    classSubjectMap[classId] = items;
+                }
+
+                const rooms = getAvailableRooms();
+                const maxSimultaneousClasses = selectedClasses.length;
+                if (rooms.length < maxSimultaneousClasses) {
+                    const proceed = confirm(
+                        `Du har valt ${maxSimultaneousClasses} klasser men bara ${rooms.length} klassrum. ` +
+                        `Detta kan orsaka schemaläggningsproblem när klasser har lektioner samtidigt. Fortsätt ändå?`
+                    );
+                    if (!proceed) {
+                        debugLog('User cancelled due to insufficient rooms');
+                        return;
+                    }
+                }
+
+                debugLog('Multi-class validation passed, generating schedule...', {
+                    classes: selectedClasses.length,
+                    classSubjectMap,
+                    rooms: rooms.length
+                });
+
+                // Visa loading
                 preview.innerHTML = `
-                    <div style="text-align: center; color: #e53e3e;">
-                        <p>❌ Fel vid multi-klass schemagenerering</p>
-                        <p style="font-size: 0.9rem;">${error.message}</p>
-                        <p style="font-size: 0.85rem; color: #666;">
-                            Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
+                    <div style="text-align: center;">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 1rem;">Genererar multi-klass schema...</p>
+                        <p style="font-size: 0.9rem; color: #666;">
+                            Schemaläggning för ${selectedClasses.length} klasser med klassrumshantering
+                        </p>
+                        <p style="font-size: 0.85rem; color: #888;">
+                            Följer: Ingen klassrumskonflikt, max 1 ämne/dag per klass, 5-min intervall
                         </p>
                     </div>
                 `;
-                controls.style.display = 'none';
+
+                try {
+                    const form = document.getElementById('scheduleForm');
+                    const formData = new FormData(form);
+                    const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
+                    const multiClassSchedule = generateMultiClassScheduleWithConstraints(
+                        selectedClasses, classSubjectMap, rooms, 
+                        formData.get('start_time'), formData.get('end_time'), lessonDuration
+                    );
+
+                    setTimeout(() => {
+                        debugLog('Multi-class schedule generated successfully', multiClassSchedule);
+                        currentSchedule = multiClassSchedule;
+                        displayMultiClassSchedule(multiClassSchedule);
+                        controls.style.display = 'flex';
+                    }, 1000);
+
+                } catch (error) {
+                    debugLog('Error generating multi-class schedule:', error);
+                    console.error('Error generating multi-class schedule:', error);
+                    preview.innerHTML = `
+                        <div style="text-align: center; color: #e53e3e;">
+                            <p>❌ Fel vid multi-klass schemagenerering</p>
+                            <p style="font-size: 0.9rem;">${error.message}</p>
+                            <p style="font-size: 0.85rem; color: #666;">
+                                Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
+                            </p>
+                        </div>
+                    `;
+                    controls.style.display = 'none';
+                }
             }
-        }
+
+            async function generateMultiClassSchedule() {
+                // OBS: anropa INTE updateSelectedClasses() här — det åter-renderar ämnessektionerna och nollställer användarens val.
+                // Istället: läs direkt vilka klasser som är ikryssade (men undvik att re-rendera UI).
+                const preview = document.getElementById('schedulePreview');
+                const controls = document.getElementById('generationControls');
+
+                // Säkerställ att selectedClasses speglar DOM om användaren inte redan ändrat det via checkbox onchange
+                const checkedBoxes = Array.from(document.querySelectorAll('input[name="class_ids[]"]:checked'));
+                if (checkedBoxes.length > 0) {
+                    selectedClasses = checkedBoxes.map(cb => {
+                        const classId = cb.value;
+                        const classData = availableClasses.find(c => c.id == classId);
+                        return {
+                            id: classId,
+                            name: classData ? classData.name : `Klass ${classId}`
+                        };
+                    });
+                }
+
+                if (selectedClasses.length === 0) {
+                    alert('Välj minst en klass!');
+                    debugLog('Validation failed: No classes selected');
+                    return;
+                }
+
+                // Bygg per-klass ämneskartor (robust: går igenom varje .subject-item för respektive klass)
+                const classSubjectMap = {}; // classId -> [{subject_id, hours}, ...]
+                for (const cls of selectedClasses) {
+                    const classId = cls.id;
+                    const container = document.getElementById(`class_subjects_${classId}`);
+                    if (!container) {
+                        alert(`Ingen ämnessektion hittades för klass ${cls.name}.`);
+                        debugLog('Validation failed: missing class subject container', {class: cls});
+                        return;
+                    }
+
+                    const rows = Array.from(container.querySelectorAll('.subject-item'));
+                    if (rows.length === 0) {
+                        alert(`Ingen ämneskonfiguration för klass ${cls.name}. Ange minst ett ämne.`);
+                        debugLog('Validation failed: No subject rows for class', {class: cls});
+                        return;
+                    }
+
+                    const items = [];
+                    for (let i = 0; i < rows.length; i++) {
+                        const row = rows[i];
+                        const subjSelect = row.querySelector('select');
+                        const hourInput = row.querySelector('input[type="number"]');
+
+                        const subjVal = subjSelect ? subjSelect.value.trim() : '';
+                        const hrsValRaw = hourInput ? hourInput.value.trim() : '';
+                        const hrsVal = hrsValRaw === '' ? NaN : parseInt(hrsValRaw, 10);
+
+                        if (!subjVal) {
+                            alert(`Välj ämne i alla rader för klass ${cls.name}`);
+                            debugLog('Validation failed: empty subject row', {class: cls, index: i});
+                            return;
+                        }
+                        if (isNaN(hrsVal) || hrsVal <= 0) {
+                            alert(`Ange giltigt antal timmar för ämnet i klass ${cls.name}`);
+                            debugLog('Validation failed: invalid hours', {class: cls, index: i, hours: hrsValRaw});
+                            return;
+                        }
+                        if (hrsVal > 5) {
+                            alert(`Max 5 lektioner per vecka per ämne. Du angav ${hrsVal} för ämnet i klass ${cls.name}`);
+                            debugLog('Validation failed: hours > 5', {class: cls, hours: hrsVal});
+                            return;
+                        }
+
+                        items.push({ subject_id: subjVal, hours: hrsVal });
+                    }
+
+                    classSubjectMap[classId] = items;
+                }
+
+                const rooms = getAvailableRooms();
+                const maxSimultaneousClasses = selectedClasses.length;
+                if (rooms.length < maxSimultaneousClasses) {
+                    const proceed = confirm(
+                        `Du har valt ${maxSimultaneousClasses} klasser men bara ${rooms.length} klassrum. ` +
+                        `Detta kan orsaka schemaläggningsproblem när klasser har lektioner samtidigt. Fortsätt ändå?`
+                    );
+                    if (!proceed) {
+                        debugLog('User cancelled due to insufficient rooms');
+                        return;
+                    }
+                }
+
+                debugLog('Multi-class validation passed, generating schedule...', {
+                    classes: selectedClasses.length,
+                    classSubjectMap,
+                    rooms: rooms.length
+                });
+
+                // Visa loading
+                preview.innerHTML = `
+                    <div style="text-align: center;">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 1rem;">Genererar multi-klass schema...</p>
+                        <p style="font-size: 0.9rem; color: #666;">
+                            Schemaläggning för ${selectedClasses.length} klasser med klassrumshantering
+                        </p>
+                        <p style="font-size: 0.85rem; color: #888;">
+                            Följer: Ingen klassrumskonflikt, max 1 ämne/dag per klass, 5-min intervall
+                        </p>
+                    </div>
+                `;
+
+                try {
+                    const form = document.getElementById('scheduleForm');
+                    const formData = new FormData(form);
+                    const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
+                    const multiClassSchedule = generateMultiClassScheduleWithConstraints(
+                        selectedClasses, classSubjectMap, rooms, 
+                        formData.get('start_time'), formData.get('end_time'), lessonDuration
+                    );
+
+                    setTimeout(() => {
+                        debugLog('Multi-class schedule generated successfully', multiClassSchedule);
+                        currentSchedule = multiClassSchedule;
+                        // om användaren redan valt ett filter, använd det:
+                        const sel = document.getElementById('classFilter');
+                        const selectedFilter = sel && sel.value !== 'all' ? sel.value : null;
+                        displayMultiClassSchedule(currentSchedule, selectedFilter);
+                        controls.style.display = 'flex';
+                        displayMultiClassSchedule(multiClassSchedule);
+                        controls.style.display = 'flex';
+                    }, 1000);
+
+                } catch (error) {
+                    debugLog('Error generating multi-class schedule:', error);
+                    console.error('Error generating multi-class schedule:', error);
+                    preview.innerHTML = `
+                        <div style="text-align: center; color: #e53e3e;">
+                            <p>❌ Fel vid multi-klass schemagenerering</p>
+                            <p style="font-size: 0.9rem;">${error.message}</p>
+                            <p style="font-size: 0.85rem; color: #666;">
+                                Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
+                            </p>
+                        </div>
+                    `;
+                    controls.style.display = 'none';
+                }
+            }
 
 
-        function findAvailableTimeSlotsForClass(daySchedule, classId, allTimeSlots, minBreakMinutes) {
-            const availableSlots = [];
-            const classLessons = daySchedule.filter(lesson => lesson.class_id === classId);
-            
-            for (const timeSlot of allTimeSlots) {
-                const [startTime, endTime] = timeSlot.split('-');
+            function findAvailableTimeSlotsForClass(daySchedule, classId, allTimeSlots, minBreakMinutes) {
+                const availableSlots = [];
+                const classLessons = daySchedule.filter(lesson => lesson.class_id === classId);
+                
+                for (const timeSlot of allTimeSlots) {
+                    const [startTime, endTime] = timeSlot.split('-');
+                    const startMinutes = timeToMinutes(startTime);
+                    const endMinutes = timeToMinutes(endTime);
+                    
+                    let canPlace = true;
+                    
+                    // Kontrollera mot denna klass befintliga lektioner
+                    for (const existingLesson of classLessons) {
+                        const [existingStart, existingEnd] = existingLesson.time.split('-');
+                        const existingStartMinutes = timeToMinutes(existingStart);
+                        const existingEndMinutes = timeToMinutes(existingEnd);
+                        
+                        // Kontrollera överlappning och paus
+                        if (!(endMinutes + minBreakMinutes <= existingStartMinutes || 
+                            startMinutes >= existingEndMinutes + minBreakMinutes)) {
+                            canPlace = false;
+                            break;
+                        }
+                    }
+                    
+                    if (canPlace) {
+                        availableSlots.push(timeSlot);
+                    }
+                }
+                
+                return availableSlots;
+            }
+
+            function checkRoomConflicts(lessons) {
+                const conflicts = [];
+                
+                // Gruppera lektioner efter dag och tid
+                const lessonsByDayTime = {};
+                lessons.forEach(lesson => {
+                    const key = `${lesson.day}-${lesson.time}`;
+                    if (!lessonsByDayTime[key]) {
+                        lessonsByDayTime[key] = [];
+                    }
+                    lessonsByDayTime[key].push(lesson);
+                });
+                
+                // Kontrollera konflikter
+                Object.keys(lessonsByDayTime).forEach(key => {
+                    const timeLessons = lessonsByDayTime[key];
+                    const roomsUsed = {};
+                    
+                    timeLessons.forEach(lesson => {
+                        if (roomsUsed[lesson.room]) {
+                            conflicts.push({
+                                room: lesson.room,
+                                time: key,
+                                classes: [roomsUsed[lesson.room].class_name, lesson.class_name]
+                            });
+                        } else {
+                            roomsUsed[lesson.room] = lesson;
+                        }
+                    });
+                });
+                
+                return conflicts;
+            }
+
+            function calculateMultiClassBalanceScore(schedule, classes) {
+                let totalBalance = 0;
+                
+                classes.forEach(classInfo => {
+                    const dailyCounts = Object.keys(schedule).map(day => 
+                        schedule[day].filter(lesson => lesson.class_id === classInfo.id).length
+                    );
+                    const max = Math.max(...dailyCounts);
+                    const min = Math.min(...dailyCounts);
+                    
+                    const balance = max === 0 ? 100 : Math.round((1 - (max - min) / max) * 100);
+                    totalBalance += balance;
+                });
+                
+                return Math.round(totalBalance / classes.length);
+            }
+
+            function validateMultiClassConstraints(schedule, classes) {
+                let violations = 0;
+                
+                classes.forEach(classInfo => {
+                    Object.values(schedule).forEach(dayLessons => {
+                        const classLessons = dayLessons.filter(l => l.class_id === classInfo.id);
+                        const subjects = classLessons.map(l => l.subject_name);
+                        const uniqueSubjects = new Set(subjects);
+                        if (subjects.length !== uniqueSubjects.size) {
+                            violations++;
+                        }
+                    });
+                });
+                
+                return violations;
+            }
+
+            // classFilter: null eller classId
+            // teacherFilter: null eller teacherId/name
+            function displayMultiClassSchedule(schedule, classFilter = null, teacherFilter = null) {
+                debugLog('Displaying schedule with filters', { classFilter, teacherFilter });
+
+                const preview = document.getElementById('schedulePreview');
+                if (!schedule || !schedule.lessons) {
+                    preview.innerHTML = '<p>Inget multi-klass schema att visa</p>';
+                    return;
+                }
+
+                const weekdays = ['måndag','tisdag','onsdag','torsdag','fredag'];
+
+                // Vänsterspalten 07:00 -> 18:00 i 5-minuterssteg
+                const times = [];
+                for (let m = 7*60; m <= 18*60; m += 5) times.push(minutesToTime(m));
+
+                // Bygg lessonMap med filter: lesson matchar om (classFilter === null || lesson.class_id == classFilter)
+                // OCH (teacherFilter === null || lesson.teacher_id == teacherFilter || lesson.teacher_name == teacherFilter)
+                const lessonMap = {};
+                schedule.lessons.forEach(lesson => {
+                    // Filter-check:
+                    if (classFilter && String(lesson.class_id) !== String(classFilter)) return;
+                    if (teacherFilter) {
+                        const tId = lesson.teacher_id ?? null;
+                        const tName = lesson.teacher_name ?? lesson.teacher ?? null;
+                        if (!(String(tId) === String(teacherFilter) || String(tName) === String(teacherFilter))) return;
+                    }
+
+                    if (!lessonMap[lesson.day]) lessonMap[lesson.day] = [];
+                    lessonMap[lesson.day].push(lesson);
+                });
+
+                // If we filtered by teacher but teacher-select had no options initially, ensure options include teachers from schedule
+                if ((!document.getElementById('teacherFilter').querySelectorAll('option[data-generated]').length) ) {
+                    populateTeacherFilterFromSchedule(schedule);
+                }
+
+                let tableHTML = `<div style="overflow-x:auto;"><table class="schedule-table"><thead><tr><th style="min-width:60px;">Tid</th>${weekdays.map(d=>`<th>${d.charAt(0).toUpperCase()+d.slice(1)}</th>`).join('')}</tr></thead><tbody>`;
+
+                times.forEach(currentTime => {
+                    const currentMinutes = timeToMinutes(currentTime);
+                    tableHTML += `<tr><td style="font-weight:600; font-size:0.8rem;">${currentTime}</td>`;
+
+                    weekdays.forEach(day => {
+                        const dayLessons = lessonMap[day] || [];
+                        let cellContent = '';
+                        let cellClass = 'empty-cell';
+
+                        const activeLessons = [];
+                        for (const lesson of dayLessons) {
+                            if (lesson.time && lesson.time.includes('-')) {
+                                const [startTime, endTime] = lesson.time.split('-');
+                                const startMinutes = timeToMinutes(startTime);
+                                const endMinutes = timeToMinutes(endTime);
+                                if (currentMinutes >= startMinutes && currentMinutes < endMinutes) activeLessons.push(lesson);
+                            }
+                        }
+
+                        if (activeLessons.length > 0) {
+                            cellClass = 'lesson-cell';
+                            cellContent = activeLessons.map(lesson => `
+                                <div style="margin-bottom:4px;padding:4px;border-left:3px solid ${lesson.color};background:${lesson.color}15;">
+                                    <div class="lesson-subject">${lesson.subject_name}</div>
+                                    <div class="lesson-class">${lesson.class_name} • <span style="font-size:0.75rem;color:#718096">${lesson.room}</span></div>
+                                    ${lesson.teacher_name || lesson.teacher ? `<div style="font-size:0.75rem;color:#4a5568">Lärare: ${lesson.teacher_name || lesson.teacher}</div>` : ''}
+                                </div>
+                            `).join('');
+                        }
+
+                        if (cellContent) {
+                            tableHTML += `<td class="${cellClass}" style="padding:0.3rem;">${cellContent}</td>`;
+                        } else {
+                            tableHTML += `<td class="${cellClass}">${cellClass === 'empty-cell' ? '-' : ''}</td>`;
+                        }
+                    });
+
+                    tableHTML += '</tr>';
+                });
+
+                tableHTML += '</tbody></table></div>';
+
+                // Statistik (lite förenklad om filter används)
+                const stats = schedule.stats;
+                if (classFilter || teacherFilter) {
+                    tableHTML += `<div style="margin-top:1rem;padding:1rem;background:#f7fafc;border-radius:6px;">
+                        <h4 style="margin:0 0 0.5rem 0;">Filtrerad vy</h4>
+                        <div style="font-size:0.95rem;">
+                            Visade lektioner: ${Object.values(lessonMap).reduce((a,b)=>a+b.length,0)}<br>
+                            ${classFilter ? `Klass: ${ (availableClasses.find(c=>String(c.id)===String(classFilter))||{name:classFilter}).name }<br>` : ''}
+                            ${teacherFilter ? `Lärare: ${teacherFilter}<br>` : ''}
+                        </div>
+                    </div>`;
+                } else {
+                    // befintlig full statistik (oförändrad)
+                    tableHTML += `
+                        <div style="margin-top: 1rem; padding: 1rem; background: #f7fafc; border-radius: 6px;">
+                            <h4 style="margin: 0 0 0.5rem 0;">Multi-klass Schemastatistik</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.9rem;">
+                                <div>📚 Totalt lektioner: ${stats.total_lessons}</div>
+                                <div>👥 Klasser: ${schedule.classes.length}</div>
+                                <div>🏫 Rum använda: ${stats.rooms_used.length}</div>
+                                <div>⚖️ Balans: ${stats.balance_score}%</div>
+                                <div>🚫 Rumskonflikter: ${stats.room_conflicts.length}</div>
+                                <div>✅ Regelefterlevnad: ${stats.constraint_violations === 0 ? 'Perfekt' : `${stats.constraint_violations} fel`}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                preview.innerHTML = tableHTML;
+                debugLog('Multi-class schedule displayed (with teacher filter)', { classFilter, teacherFilter });
+            }
+
+
+            document.addEventListener('DOMContentLoaded', function() {
+                debugLog('Multi-class schedule generator loaded');
+                validateSubjectHours();
+                populateClassFilter();
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                debugLog('Multi-class schedule generator loaded');
+                validateSubjectHours();
+                populateClassFilter();
+                populateTeacherFilter();
+            });
+
+
+
+
+            // Efter att schemat skapats
+            currentSchedule = multiClassSchedule;
+            // Fyll teacher-filter från schemat om backend inte skickade teachers
+            if (!(typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0)) {
+                populateTeacherFilterFromSchedule(currentSchedule);
+            }
+            // Rendera med eventuellt redan valt filter
+            const classSel = document.getElementById('classFilter');
+            const teacherSel = document.getElementById('teacherFilter');
+            const selectedClass = classSel && classSel.value !== 'all' ? classSel.value : null;
+            const selectedTeacher = teacherSel && teacherSel.value !== 'all' ? teacherSel.value : null;
+            displayMultiClassSchedule(currentSchedule, selectedClass, selectedTeacher);
+            controls.style.display = 'flex';
+
+
+
+
+            function timeToMinutes(timeStr) {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes;
+            }
+
+            function minutesToTime(minutes) {
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+            }
+
+            function generateTimeSlots(startTime, endTime, lessonDuration) {
+                const slots = [];
                 const startMinutes = timeToMinutes(startTime);
                 const endMinutes = timeToMinutes(endTime);
                 
-                let canPlace = true;
+                let currentTime = startMinutes;
                 
-                // Kontrollera mot denna klass befintliga lektioner
-                for (const existingLesson of classLessons) {
-                    const [existingStart, existingEnd] = existingLesson.time.split('-');
-                    const existingStartMinutes = timeToMinutes(existingStart);
-                    const existingEndMinutes = timeToMinutes(existingEnd);
+                while (currentTime + lessonDuration <= endMinutes) {
+                    const slotStart = minutesToTime(currentTime);
+                    const slotEnd = minutesToTime(currentTime + lessonDuration);
+                    slots.push(`${slotStart}-${slotEnd}`);
                     
-                    // Kontrollera överlappning och paus
-                    if (!(endMinutes + minBreakMinutes <= existingStartMinutes || 
-                          startMinutes >= existingEndMinutes + minBreakMinutes)) {
-                        canPlace = false;
-                        break;
-                    }
+                    currentTime += 5; // 5-minutersintervall
                 }
                 
-                if (canPlace) {
-                    availableSlots.push(timeSlot);
+                return slots;
+            }
+
+            async function saveMultiClassSchedule() {
+                if (!currentSchedule) {
+                    alert('Inget schema att spara');
+                    return;
                 }
-            }
-            
-            return availableSlots;
-        }
 
-        function checkRoomConflicts(lessons) {
-            const conflicts = [];
-            
-            // Gruppera lektioner efter dag och tid
-            const lessonsByDayTime = {};
-            lessons.forEach(lesson => {
-                const key = `${lesson.day}-${lesson.time}`;
-                if (!lessonsByDayTime[key]) {
-                    lessonsByDayTime[key] = [];
+                if (selectedClasses.length === 0) {
+                    alert('Inga klasser valda');
+                    return;
                 }
-                lessonsByDayTime[key].push(lesson);
-            });
-            
-            // Kontrollera konflikter
-            Object.keys(lessonsByDayTime).forEach(key => {
-                const timeLessons = lessonsByDayTime[key];
-                const roomsUsed = {};
-                
-                timeLessons.forEach(lesson => {
-                    if (roomsUsed[lesson.room]) {
-                        conflicts.push({
-                            room: lesson.room,
-                            time: key,
-                            classes: [roomsUsed[lesson.room].class_name, lesson.class_name]
-                        });
-                    } else {
-                        roomsUsed[lesson.room] = lesson;
-                    }
-                });
-            });
-            
-            return conflicts;
-        }
 
-        function calculateMultiClassBalanceScore(schedule, classes) {
-            let totalBalance = 0;
-            
-            classes.forEach(classInfo => {
-                const dailyCounts = Object.keys(schedule).map(day => 
-                    schedule[day].filter(lesson => lesson.class_id === classInfo.id).length
-                );
-                const max = Math.max(...dailyCounts);
-                const min = Math.min(...dailyCounts);
-                
-                const balance = max === 0 ? 100 : Math.round((1 - (max - min) / max) * 100);
-                totalBalance += balance;
-            });
-            
-            return Math.round(totalBalance / classes.length);
-        }
+                debugLog('Saving multi-class schedule for classes:', selectedClasses.map(c => c.name));
 
-        function validateMultiClassConstraints(schedule, classes) {
-            let violations = 0;
-            
-            classes.forEach(classInfo => {
-                Object.values(schedule).forEach(dayLessons => {
-                    const classLessons = dayLessons.filter(l => l.class_id === classInfo.id);
-                    const subjects = classLessons.map(l => l.subject_name);
-                    const uniqueSubjects = new Set(subjects);
-                    if (subjects.length !== uniqueSubjects.size) {
-                        violations++;
-                    }
-                });
-            });
-            
-            return violations;
-        }
-
-        function displayMultiClassSchedule(schedule, classFilter = null) {
-            debugLog('Displaying multi-class schedule (filter):', { filter: classFilter, schedule });
-
-            const preview = document.getElementById('schedulePreview');
-            if (!schedule || !schedule.lessons) {
-                preview.innerHTML = '<p>Inget multi-klass schema att visa</p>';
-                return;
+                // Simulera sparning
+                setTimeout(() => {
+                    alert(`✅ Multi-klass schema sparat framgångsrikt för ${selectedClasses.length} klasser!`);
+                    debugLog('Multi-class schedule saved successfully');
+                }, 500);
             }
 
-            const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
-
-            // Vänsterspalten 07:00 -> 18:00 i 5-minuterssteg
-            const times = [];
-            const startMinutesAll = 7 * 60;
-            const endMinutesAll = 18 * 60;
-            for (let m = startMinutesAll; m <= endMinutesAll; m += 5) times.push(minutesToTime(m));
-
-            // Bygg lektion-map MEN filtrera om classFilter är satt
-            const lessonMap = {};
-            schedule.lessons.forEach(lesson => {
-                if (classFilter && String(lesson.class_id) !== String(classFilter)) return; // filtrera bort
-                if (!lessonMap[lesson.day]) lessonMap[lesson.day] = [];
-                lessonMap[lesson.day].push(lesson);
+            // Initiera när sidan laddas
+            document.addEventListener('DOMContentLoaded', function() {
+                debugLog('Multi-class schedule generator loaded');
+                validateSubjectHours();
             });
-
-            let tableHTML = `<div style="overflow-x: auto;"><table class="schedule-table"><thead><tr><th style="min-width: 60px;">Tid</th>${weekdays.map(d=>`<th>${d.charAt(0).toUpperCase()+d.slice(1)}</th>`).join('')}</tr></thead><tbody>`;
-
-            times.forEach(currentTime => {
-                const currentMinutes = timeToMinutes(currentTime);
-                tableHTML += `<tr><td style="font-weight: 600; font-size: 0.8rem;">${currentTime}</td>`;
-                weekdays.forEach(day => {
-                    const dayLessons = lessonMap[day] || [];
-                    let cellContent = '';
-                    let cellClass = 'empty-cell';
-
-                    const activeLessons = [];
-                    for (const lesson of dayLessons) {
-                        if (lesson.time && lesson.time.includes('-')) {
-                            const [startTime, endTime] = lesson.time.split('-');
-                            const startMinutes = timeToMinutes(startTime);
-                            const endMinutes = timeToMinutes(endTime);
-                            if (currentMinutes >= startMinutes && currentMinutes < endMinutes) activeLessons.push(lesson);
-                        }
-                    }
-
-                    if (activeLessons.length > 0) {
-                        cellClass = 'lesson-cell';
-                        cellContent = activeLessons.map(lesson => `
-                            <div style="margin-bottom:4px; padding:4px; border-left:3px solid ${lesson.color}; background:${lesson.color}15;">
-                            <div class="lesson-subject">${lesson.subject_name}</div>
-                            <div class="lesson-class">${lesson.class_name} • <span style="font-size:0.75rem;color:#718096">${lesson.room}</span></div>
-                            </div>
-                        `).join('');
-                    }
-
-                    if (cellContent) {
-                        tableHTML += `<td class="${cellClass}" style="padding:0.3rem;">${cellContent}</td>`;
-                    } else {
-                        tableHTML += `<td class="${cellClass}">${cellClass === 'empty-cell' ? '-' : ''}</td>`;
-                    }
-                });
-                tableHTML += '</tr>';
-            });
-
-            tableHTML += `</tbody></table></div>`;
-
-            // Statistik: om classFilter är satt, visa stats för just den klassen
-            const stats = schedule.stats;
-            if (classFilter) {
-                const cls = availableClasses.find(c => String(c.id) === String(classFilter));
-                const className = cls ? cls.name : classFilter;
-                const lessonsCount = stats.lessons_per_class[className] || 0;
-
-                tableHTML += `
-                    <div style="margin-top:1rem; padding:1rem; background:#f7fafc; border-radius:6px;">
-                    <h4 style="margin:0 0 0.5rem 0;">Schema för ${className}</h4>
-                    <div style="font-size:0.95rem;">
-                        📚 Lektioner visade: ${lessonsCount}<br>
-                        🏫 Rum använda: ${stats.rooms_used.length}
-                    </div>
-                    </div>
-                `;
-            } else {
-                // Behåll full statistik som tidigare
-                tableHTML += `
-                    <div style="margin-top:1rem; padding:1rem; background:#f7fafc; border-radius:6px;">
-                    <h4 style="margin:0 0 0.5rem 0;">Multi-klass Schemastatistik</h4>
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap:1rem; font-size:0.9rem;">
-                        <div>📚 Totalt lektioner: ${stats.total_lessons}</div>
-                        <div>👥 Klasser: ${schedule.classes.length}</div>
-                        <div>🏫 Rum använda: ${stats.rooms_used.length}</div>
-                        <div>⚖️ Balans: ${stats.balance_score}%</div>
-                        <div>🚫 Rumskonflikter: ${stats.room_conflicts.length}</div>
-                        <div>✅ Regelefterlevnad: ${stats.constraint_violations === 0 ? 'Perfekt' : `${stats.constraint_violations} fel`}</div>
-                    </div>
-                    </div>
-                `;
-            }
-
-            preview.innerHTML = tableHTML;
-            debugLog('Multi-class schedule displayed successfully (filtered):', { filter: classFilter });
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            debugLog('Multi-class schedule generator loaded');
-            validateSubjectHours();
-            populateClassFilter();
-        });
-
-
-
-
-        function timeToMinutes(timeStr) {
-            const [hours, minutes] = timeStr.split(':').map(Number);
-            return hours * 60 + minutes;
-        }
-
-        function minutesToTime(minutes) {
-            const hours = Math.floor(minutes / 60);
-            const mins = minutes % 60;
-            return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-        }
-
-        function generateTimeSlots(startTime, endTime, lessonDuration) {
-            const slots = [];
-            const startMinutes = timeToMinutes(startTime);
-            const endMinutes = timeToMinutes(endTime);
-            
-            let currentTime = startMinutes;
-            
-            while (currentTime + lessonDuration <= endMinutes) {
-                const slotStart = minutesToTime(currentTime);
-                const slotEnd = minutesToTime(currentTime + lessonDuration);
-                slots.push(`${slotStart}-${slotEnd}`);
-                
-                currentTime += 5; // 5-minutersintervall
-            }
-            
-            return slots;
-        }
-
-        async function saveMultiClassSchedule() {
-            if (!currentSchedule) {
-                alert('Inget schema att spara');
-                return;
-            }
-
-            if (selectedClasses.length === 0) {
-                alert('Inga klasser valda');
-                return;
-            }
-
-            debugLog('Saving multi-class schedule for classes:', selectedClasses.map(c => c.name));
-
-            // Simulera sparning
-            setTimeout(() => {
-                alert(`✅ Multi-klass schema sparat framgångsrikt för ${selectedClasses.length} klasser!`);
-                debugLog('Multi-class schedule saved successfully');
-            }, 500);
-        }
-
-        // Initiera när sidan laddas
-        document.addEventListener('DOMContentLoaded', function() {
-            debugLog('Multi-class schedule generator loaded');
-            validateSubjectHours();
-        });
     </script>
 </body>
 </html>
