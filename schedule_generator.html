@@ -564,6 +564,17 @@
             <!-- Höger sida - Schemaförhandsvisning -->
             <div class="card">
                 <h3>📋 Multi-klass Schemaförhandsvisning</h3>
+
+                <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.75rem;">
+                    <label for="classFilter" style="margin:0; font-weight:600; color:#4a5568;">Visa:</label>
+                    <select id="classFilter" onchange="onClassFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0;">
+                        <option value="all">Alla klasser</option>
+                        <!-- Options will be populated av JS -->
+                    </select>
+                </div>
+
+
+
                 
                 <div class="schedule-preview" id="schedulePreview">
                     <div style="text-align: center;">
@@ -690,6 +701,35 @@
             // Re-validate subjects UI
             validateSubjectHours();
         }
+
+
+
+        function populateClassFilter() {
+            const sel = document.getElementById('classFilter');
+            if (!sel) return;
+            // Rensa utom 'Alla'
+            sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
+            // Lägg till klasser från availableClasses
+            availableClasses.forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls.id;
+                opt.textContent = cls.name;
+                opt.setAttribute('data-generated', '1');
+                sel.appendChild(opt);
+            });
+        }
+
+        function onClassFilterChange() {
+            const sel = document.getElementById('classFilter');
+            if (!sel) return;
+            const selected = sel.value; // 'all' eller classId
+            // Om det finns ett genererat schema, rendera om med filter
+            if (currentSchedule) {
+                displayMultiClassSchedule(currentSchedule, selected === 'all' ? null : selected);
+            }
+        }
+
+
 
         function createSubjectItem(classId) {
             // Create a subject-row element for classId
@@ -1222,6 +1262,11 @@
                 setTimeout(() => {
                     debugLog('Multi-class schedule generated successfully', multiClassSchedule);
                     currentSchedule = multiClassSchedule;
+                    // om användaren redan valt ett filter, använd det:
+                    const sel = document.getElementById('classFilter');
+                    const selectedFilter = sel && sel.value !== 'all' ? sel.value : null;
+                    displayMultiClassSchedule(currentSchedule, selectedFilter);
+                    controls.style.display = 'flex';
                     displayMultiClassSchedule(multiClassSchedule);
                     controls.style.display = 'flex';
                 }, 1000);
@@ -1344,99 +1389,94 @@
             return violations;
         }
 
-        function displayMultiClassSchedule(schedule) {
-            debugLog('Displaying multi-class schedule:', schedule);
+        function displayMultiClassSchedule(schedule, classFilter = null) {
+            debugLog('Displaying multi-class schedule (filter):', { filter: classFilter, schedule });
+
             const preview = document.getElementById('schedulePreview');
-            
             if (!schedule || !schedule.lessons) {
                 preview.innerHTML = '<p>Inget multi-klass schema att visa</p>';
                 return;
             }
 
             const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
-            
-            // --- Bygg vänsterspalten: 07:00 -> 18:00 i 5-minuterssteg (ALLTID) ---
+
+            // Vänsterspalten 07:00 -> 18:00 i 5-minuterssteg
             const times = [];
-            const startMinutesAll = 7 * 60;   // 07:00 i minuter
-            const endMinutesAll = 18 * 60;    // 18:00 i minuter
-            for (let m = startMinutesAll; m <= endMinutesAll; m += 5) {
-                times.push(minutesToTime(m));
-            }
+            const startMinutesAll = 7 * 60;
+            const endMinutesAll = 18 * 60;
+            for (let m = startMinutesAll; m <= endMinutesAll; m += 5) times.push(minutesToTime(m));
 
-            let tableHTML = `
-                <div style="overflow-x: auto;">
-                <table class="schedule-table">
-                    <thead>
-                        <tr>
-                            <th style="min-width: 60px;">Tid</th>
-                            ${weekdays.map(day => `<th>${day.charAt(0).toUpperCase() + day.slice(1)}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            // Skapa karta över lektioner per dag (för snabb uppslagning)
+            // Bygg lektion-map MEN filtrera om classFilter är satt
             const lessonMap = {};
             schedule.lessons.forEach(lesson => {
+                if (classFilter && String(lesson.class_id) !== String(classFilter)) return; // filtrera bort
                 if (!lessonMap[lesson.day]) lessonMap[lesson.day] = [];
                 lessonMap[lesson.day].push(lesson);
             });
 
-            // Rendera varje tid (07:00 -> 18:00, var 5:e minut)
+            let tableHTML = `<div style="overflow-x: auto;"><table class="schedule-table"><thead><tr><th style="min-width: 60px;">Tid</th>${weekdays.map(d=>`<th>${d.charAt(0).toUpperCase()+d.slice(1)}</th>`).join('')}</tr></thead><tbody>`;
+
             times.forEach(currentTime => {
                 const currentMinutes = timeToMinutes(currentTime);
                 tableHTML += `<tr><td style="font-weight: 600; font-size: 0.8rem;">${currentTime}</td>`;
-
                 weekdays.forEach(day => {
                     const dayLessons = lessonMap[day] || [];
                     let cellContent = '';
                     let cellClass = 'empty-cell';
 
-                    // Hämta lektioner som är aktiva vid denna tid (start <= current < end)
                     const activeLessons = [];
                     for (const lesson of dayLessons) {
                         if (lesson.time && lesson.time.includes('-')) {
                             const [startTime, endTime] = lesson.time.split('-');
                             const startMinutes = timeToMinutes(startTime);
                             const endMinutes = timeToMinutes(endTime);
-                            if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
-                                activeLessons.push(lesson);
-                            }
+                            if (currentMinutes >= startMinutes && currentMinutes < endMinutes) activeLessons.push(lesson);
                         }
                     }
 
                     if (activeLessons.length > 0) {
                         cellClass = 'lesson-cell';
-
-                        // Visa lektionens detaljer (ämne, klass och sal). Vi visar alla aktiva lektioner om flera finns.
                         cellContent = activeLessons.map(lesson => `
-                            <div style="margin-bottom: 4px; padding: 4px; border-left: 3px solid ${lesson.color}; background: ${lesson.color}15;">
-                                <div class="lesson-subject">${lesson.subject_name}</div>
-                                <div class="lesson-class">${lesson.class_name} • <span style="font-size:0.75rem;color:#718096">${lesson.room}</span></div>
+                            <div style="margin-bottom:4px; padding:4px; border-left:3px solid ${lesson.color}; background:${lesson.color}15;">
+                            <div class="lesson-subject">${lesson.subject_name}</div>
+                            <div class="lesson-class">${lesson.class_name} • <span style="font-size:0.75rem;color:#718096">${lesson.room}</span></div>
                             </div>
                         `).join('');
                     }
 
                     if (cellContent) {
-                        tableHTML += `<td class="${cellClass}" style="padding: 0.3rem;">${cellContent}</td>`;
-                    } else if (cellClass === 'lesson-cell') {
-                        tableHTML += `<td class="${cellClass}"></td>`;
+                        tableHTML += `<td class="${cellClass}" style="padding:0.3rem;">${cellContent}</td>`;
                     } else {
-                        tableHTML += `<td class="${cellClass}">-</td>`;
+                        tableHTML += `<td class="${cellClass}">${cellClass === 'empty-cell' ? '-' : ''}</td>`;
                     }
                 });
-
                 tableHTML += '</tr>';
             });
 
-            tableHTML += '</tbody></table></div>';
+            tableHTML += `</tbody></table></div>`;
 
-            // --- Statistik (samma som tidigare) ---
+            // Statistik: om classFilter är satt, visa stats för just den klassen
             const stats = schedule.stats;
-            tableHTML += `
-                <div style="margin-top: 1rem; padding: 1rem; background: #f7fafc; border-radius: 6px;">
-                    <h4 style="margin: 0 0 0.5rem 0;">Multi-klass Schemastatistik</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.9rem;">
+            if (classFilter) {
+                const cls = availableClasses.find(c => String(c.id) === String(classFilter));
+                const className = cls ? cls.name : classFilter;
+                const lessonsCount = stats.lessons_per_class[className] || 0;
+
+                tableHTML += `
+                    <div style="margin-top:1rem; padding:1rem; background:#f7fafc; border-radius:6px;">
+                    <h4 style="margin:0 0 0.5rem 0;">Schema för ${className}</h4>
+                    <div style="font-size:0.95rem;">
+                        📚 Lektioner visade: ${lessonsCount}<br>
+                        🏫 Rum använda: ${stats.rooms_used.length}
+                    </div>
+                    </div>
+                `;
+            } else {
+                // Behåll full statistik som tidigare
+                tableHTML += `
+                    <div style="margin-top:1rem; padding:1rem; background:#f7fafc; border-radius:6px;">
+                    <h4 style="margin:0 0 0.5rem 0;">Multi-klass Schemastatistik</h4>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap:1rem; font-size:0.9rem;">
                         <div>📚 Totalt lektioner: ${stats.total_lessons}</div>
                         <div>👥 Klasser: ${schedule.classes.length}</div>
                         <div>🏫 Rum använda: ${stats.rooms_used.length}</div>
@@ -1444,37 +1484,21 @@
                         <div>🚫 Rumskonflikter: ${stats.room_conflicts.length}</div>
                         <div>✅ Regelefterlevnad: ${stats.constraint_violations === 0 ? 'Perfekt' : `${stats.constraint_violations} fel`}</div>
                     </div>
-                    
-                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0;">
-                        <strong>Lektioner per klass:</strong><br>
-                        <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.5rem;">
-                            ${Object.keys(stats.lessons_per_class).map(className => 
-                                `<span style="background: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 4px;">
-                                    ${className}: ${stats.lessons_per_class[className]}
-                                </span>`
-                            ).join('')}
-                        </div>
                     </div>
-                    
-                    ${stats.room_conflicts.length > 0 ? 
-                        `<div style="color: #e53e3e; margin-top: 0.5rem; font-size: 0.85rem;">
-                            ⚠️ Rumskonflikter upptäckta! Kontrollera schemagenereringen.
-                        </div>` : 
-                        `<div style="color: #38a169; margin-top: 0.5rem;">
-                            ✅ Inga rumskonflikter - Multi-klass schema framgångsrikt genererat!
-                        </div>`
-                    }
-                    
-                    <div style="margin-top: 0.75rem; font-size: 0.85rem; color: #666;">
-                        💡 Schema följer alla regler: max 1 ämne per dag per klass, automatisk rumshantering, 
-                        10-minuters paus mellan lektioner.
-                    </div>
-                </div>
-            `;
+                `;
+            }
 
             preview.innerHTML = tableHTML;
-            debugLog('Multi-class schedule displayed successfully');
+            debugLog('Multi-class schedule displayed successfully (filtered):', { filter: classFilter });
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('Multi-class schedule generator loaded');
+            validateSubjectHours();
+            populateClassFilter();
+        });
+
+
 
 
         function timeToMinutes(timeStr) {
