@@ -2753,17 +2753,21 @@ def schedule_generator():
     if not classes:
         flash('Inga aktiva klasser hittades. Skapa klasser först innan du genererar scheman.', 'info')
     
-    # Hämta tillgängliga ämnen (från lärare på skolan)
+    # Hämta endast DELADE ämnen från lärare på skolan
     teachers = User.query.filter_by(
         school_id=current_user.school_id,
         user_type='teacher',
-        
     ).all()
     
     teacher_ids = [t.id for t in teachers]
-    available_subjects_query = Subject.query.filter(Subject.user_id.in_(teacher_ids)).all() if teacher_ids else []
     
-    # CONVERT SUBJECT OBJECTS TO DICTIONARIES (This is the fix!)
+    # Filtrera för endast delade ämnen (is_shared=True)
+    available_subjects_query = Subject.query.filter(
+        Subject.user_id.in_(teacher_ids),
+        Subject.is_shared == True  # Endast delade ämnen
+    ).all() if teacher_ids else []
+    
+    # Konvertera till dictionary för JSON serialization
     available_subjects = []
     for subject in available_subjects_query:
         available_subjects.append({
@@ -2775,7 +2779,7 @@ def schedule_generator():
         })
     
     if not available_subjects:
-        flash('Inga ämnen hittades. Se till att lärare har skapat ämnen innan du genererar scheman.', 'warning')
+        flash('Inga delade ämnen hittades. Se till att lärare har delat sina ämnen innan du genererar scheman.', 'warning')
     
     # Säkerställ att klassrum finns
     try:
