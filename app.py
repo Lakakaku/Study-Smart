@@ -1796,25 +1796,85 @@ class ImprovedScheduleGenerator:
         self.constraints = constraints or {}
         self.weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag']
         self.max_attempts = 100
+        self.min_break_minutes = 10  # Minst 10 minuter mellan lektioner
         
-    def generate_time_slots(self, start_time="08:00", end_time="15:00"):
-        """Generera tidsluckor baserat på start- och sluttid"""
-        from datetime import datetime, timedelta
+    def time_to_minutes(self, time_str):
+        """Konvertera tid (HH:MM) till minuter från midnatt"""
+        hours, minutes = map(int, time_str.split(':'))
+        return hours * 60 + minutes
+    
+    def minutes_to_time(self, minutes):
+        """Konvertera minuter från midnatt till tid (HH:MM)"""
+        hours = minutes // 60
+        mins = minutes % 60
+        return f"{hours:02d}:{mins:02d}"
+    
+    def generate_time_slots(self, start_time="08:00", end_time="15:00", lesson_duration=60):
+        """
+        Generera tidsluckor med 5-minutersintervall
         
-        start = datetime.strptime(start_time, "%H:%M")
-        end = datetime.strptime(end_time, "%H:%M")
+        Args:
+            start_time: Starttid för skoldagen (HH:MM)
+            end_time: Sluttid för skoldagen (HH:MM)
+            lesson_duration: Lektionslängd i minuter (default 60)
+        """
+        start_minutes = self.time_to_minutes(start_time)
+        end_minutes = self.time_to_minutes(end_time)
         
         slots = []
-        current = start
+        current_time = start_minutes
         
-        while current < end:
-            next_hour = current + timedelta(hours=1)
-            if next_hour <= end:
-                slot = f"{current.strftime('%H:%M')}-{next_hour.strftime('%H:%M')}"
-                slots.append(slot)
-            current = next_hour
+        while current_time + lesson_duration <= end_minutes:
+            slot_start = self.minutes_to_time(current_time)
+            slot_end = self.minutes_to_time(current_time + lesson_duration)
+            
+            slots.append({
+                'time_slot': f"{slot_start}-{slot_end}",
+                'start_time': slot_start,
+                'end_time': slot_end,
+                'start_minutes': current_time,
+                'end_minutes': current_time + lesson_duration
+            })
+            
+            # Nästa möjliga starttid (5-minutersintervall)
+            current_time += 5
             
         return slots
+    
+    def can_place_lesson(self, schedule_matrix, day, time_slot_info, subject_name):
+        """
+        Kontrollera om en lektion kan placeras på given tid
+        
+        Args:
+            schedule_matrix: Nuvarande schemamatris
+            day: Veckodag
+            time_slot_info: Information om tidsluckan
+            subject_name: Ämnesnamn
+        """
+        start_minutes = time_slot_info['start_minutes']
+        end_minutes = time_slot_info['end_minutes']
+        
+        # Kontrollera att tidsluckan är ledig
+        if schedule_matrix[day].get(time_slot_info['time_slot']):
+            return False
+        
+        # Kontrollera att klassen inte redan har detta ämne samma dag
+        for existing_slot, lesson_info in schedule_matrix[day].items():
+            if lesson_info and lesson_info['subject_name'] == subject_name:
+                return False  # Redan har detta ämne denna dag
+        
+        # Kontrollera 10-minuters paus mellan lektioner
+        for existing_slot, lesson_info in schedule_matrix[day].items():
+            if lesson_info:
+                existing_start = lesson_info['start_minutes']
+                existing_end = lesson_info['end_minutes']
+                
+                # Kontrollera om det finns överlappning eller för lite paus
+                if not (end_minutes + self.min_break_minutes <= existing_start or 
+                       start_minutes >= existing_end + self.min_break_minutes):
+                    return False  # För lite tid mellan lektioner
+        
+        return True
     
     def calculate_lessons_needed(self, subjects_hours):
         """Beräkna totalt antal lektioner som behövs"""
@@ -1830,6 +1890,12 @@ class ImprovedScheduleGenerator:
         if not rooms:
             errors.append("Inga klassrum specificerade")
         
+        # Kontrollera att inget ämne har fler än 5 lektioner per vecka
+        # (max 1 per dag * 5 dagar)
+        for subject_id, subject_name, hours in subjects_hours:
+            if hours > 5:
+                errors.append(f"Ämnet '{subject_name}' har {hours} timmar, men max 5 är tillåtet (1 per dag)")
+        
         total_hours = sum(hours for _, _, hours in subjects_hours)
         time_slots = self.generate_time_slots(start_time, end_time)
         total_available = len(time_slots) * len(self.weekdays)
@@ -1837,8 +1903,12 @@ class ImprovedScheduleGenerator:
         if total_hours > total_available:
             errors.append(f"För många timmar ({total_hours}) för tillgängliga tidsluckor ({total_available})")
         
-        if total_hours > total_available * 0.8:
-            errors.append("Varning: Schemat blir mycket tätt packat, detta kan påverka kvaliteten")
+        # Med den nya regeln om max 1 lektion per ämne per dag, 
+        # kontrollera att det finns tillräckligt med dagar
+        max_lessons_per_week = len(self.weekdays)  # 5 dagar
+        for subject_id, subject_name, hours in subjects_hours:
+            if hours > max_lessons_per_week:
+                errors.append(f"Ämnet '{subject_name}' behöver {hours} lektioner men max {max_lessons_per_week} är möjligt (1 per dag)")
         
         return errors
     
@@ -1857,29 +1927,42 @@ class ImprovedScheduleGenerator:
         best_schedule = None
         best_score = -1
         
-        for attempt in range(5):  # Prova 5 gånger och välj bästa
+        for attempt in range(10):  # Fler försök pga striktare regler
             result = self.generate_schedule(subjects_hours, rooms, start_time, end_time)
             if result['success']:
                 score = result['stats']['balance_score']
                 if score > best_score:
                     best_score = score
                     best_schedule = result
+                    
+                # Om vi får perfekt balans, använd det
+                if score >= 95:
+                    break
         
         return best_schedule or {
             'success': False,
-            'error': 'Kunde inte generera ett tillfredsställande schema efter flera försök'
+            'error': 'Kunde inte generera ett tillfredsställande schema efter flera försök. Minska antalet lektioner per ämne eller öka tidsramen.'
         }
     
     def generate_schedule(self, subjects_hours, rooms, start_time="08:00", end_time="15:00"):
-        """Generera schema (förbättrad version)"""
+        """Generera schema med nya regler"""
         try:
             time_slots = self.generate_time_slots(start_time, end_time)
-            lessons = self.distribute_subjects_improved(subjects_hours, time_slots, rooms)
+            lessons = self.distribute_subjects_with_constraints(subjects_hours, time_slots, rooms)
+            
+            if not lessons:
+                return {
+                    'success': False,
+                    'error': 'Kunde inte placera alla lektioner med givna begränsningar',
+                    'lessons': [],
+                    'time_slots': [slot['time_slot'] for slot in time_slots],
+                    'stats': {}
+                }
             
             return {
                 'success': True,
                 'lessons': lessons,
-                'time_slots': time_slots,
+                'time_slots': [slot['time_slot'] for slot in time_slots],
                 'stats': self.calculate_schedule_stats(lessons),
                 'quality_metrics': self.calculate_quality_metrics(lessons, time_slots)
             }
@@ -1892,59 +1975,99 @@ class ImprovedScheduleGenerator:
                 'stats': {}
             }
     
-    def distribute_subjects_improved(self, subjects_hours, time_slots, rooms):
-        """Förbättrad distribution av ämnen"""
+    def distribute_subjects_with_constraints(self, subjects_hours, time_slots, rooms):
+        """
+        Distribuera ämnen med de nya begränsningarna:
+        - Max 1 lektion per ämne per dag
+        - Minst 10 minuters paus mellan lektioner
+        """
         import random
         from collections import defaultdict
         
         lessons = []
         
-        # Skapa lektionspool
-        lessons_pool = []
+        # Skapa lektionspool - organiserad per ämne
+        lessons_by_subject = defaultdict(list)
         for subject_id, subject_name, hours in subjects_hours:
             for i in range(hours):
-                lessons_pool.append({
+                lessons_by_subject[subject_name].append({
                     'subject_id': subject_id,
                     'subject_name': subject_name,
-                    'priority': self.calculate_subject_priority(subject_name, i, hours)
+                    'lesson_number': i + 1,
+                    'total_lessons': hours
                 })
         
-        # Sortera efter prioritet
-        lessons_pool.sort(key=lambda x: x['priority'], reverse=True)
-        
-        # Skapa schemamatris
+        # Skapa schemamatris med detaljerad tidsinformation
         schedule_matrix = {}
         for day in self.weekdays:
             schedule_matrix[day] = {}
-            for slot in time_slots:
-                schedule_matrix[day][slot] = None
         
         # Statistik
         daily_counts = {day: 0 for day in self.weekdays}
-        subject_placements = defaultdict(list)
+        subject_daily_assignments = defaultdict(set)
         
-        # Placera lektioner
-        for lesson in lessons_pool:
-            best_slot = self.find_best_slot(
-                schedule_matrix, lesson, time_slots, 
-                daily_counts, subject_placements, rooms
-            )
+        # Placera lektioner ämne för ämne för att säkerställa spridning
+        for subject_name, subject_lessons in lessons_by_subject.items():
+            available_days = self.weekdays.copy()
+            random.shuffle(available_days)  # Randomisera för variation
             
-            if best_slot:
-                day, time_slot, room = best_slot
-                schedule_matrix[day][time_slot] = {
-                    'subject_id': lesson['subject_id'],
-                    'subject_name': lesson['subject_name'],
-                    'room': room
-                }
-                daily_counts[day] += 1
-                subject_placements[lesson['subject_name']].append((day, time_slot))
+            # Placera varje lektion för detta ämne
+            for lesson in subject_lessons:
+                placed = False
+                attempts = 0
+                max_attempts_per_lesson = 50
+                
+                # Prioritera dagar som har färre lektioner totalt
+                available_days.sort(key=lambda day: daily_counts[day])
+                
+                for day in available_days:
+                    # Kontrollera om ämnet redan är schemalagt denna dag
+                    if subject_name in subject_daily_assignments[day]:
+                        continue
+                    
+                    # Hitta lämpliga tidsluckor för denna dag
+                    suitable_slots = []
+                    for slot_info in time_slots:
+                        if self.can_place_lesson(schedule_matrix, day, slot_info, subject_name):
+                            suitable_slots.append(slot_info)
+                    
+                    if not suitable_slots:
+                        continue
+                    
+                    # Tillämpa morgonprioritet om aktiverat
+                    if self.constraints.get('morning_priority') and len(suitable_slots) > 1:
+                        morning_slots = [s for s in suitable_slots if s['start_minutes'] < 12 * 60]
+                        if morning_slots:
+                            suitable_slots = morning_slots
+                    
+                    # Välj en slumpmässig lämplig tidslucka
+                    chosen_slot = random.choice(suitable_slots)
+                    chosen_room = random.choice(rooms) if rooms else None
+                    
+                    # Placera lektionen
+                    schedule_matrix[day][chosen_slot['time_slot']] = {
+                        'subject_id': lesson['subject_id'],
+                        'subject_name': lesson['subject_name'],
+                        'room': chosen_room,
+                        'start_minutes': chosen_slot['start_minutes'],
+                        'end_minutes': chosen_slot['end_minutes']
+                    }
+                    
+                    # Uppdatera statistik
+                    daily_counts[day] += 1
+                    subject_daily_assignments[day].add(subject_name)
+                    placed = True
+                    break
+                
+                if not placed:
+                    print(f"Kunde inte placera lektion {lesson['lesson_number']} för {subject_name}")
+                    # Returnera None för att signalera misslyckande
+                    return None
         
-        # Konvertera till lista
+        # Konvertera schemamatris till lista av lektioner
         for day in self.weekdays:
-            for time_slot in time_slots:
-                if schedule_matrix[day][time_slot]:
-                    lesson_data = schedule_matrix[day][time_slot]
+            for time_slot, lesson_data in schedule_matrix[day].items():
+                if lesson_data:
                     lessons.append({
                         'day': day,
                         'time': time_slot,
@@ -1955,92 +2078,6 @@ class ImprovedScheduleGenerator:
         
         return lessons
     
-    def calculate_subject_priority(self, subject_name, lesson_number, total_hours):
-        """Beräkna prioritet för ett ämne"""
-        # Bas-prioritet
-        priority = 100
-        
-        # Vissa ämnen har högre prioritet för bra tidsluckor
-        high_priority_subjects = ['matematik', 'svenska', 'engelska']
-        if any(subj in subject_name.lower() for subj in high_priority_subjects):
-            priority += 20
-        
-        # Första lektionen i ett ämne har högre prioritet
-        if lesson_number == 0:
-            priority += 10
-        
-        return priority
-    
-    def find_best_slot(self, matrix, lesson, time_slots, daily_counts, subject_placements, rooms):
-        """Hitta bästa tidslucka för en lektion"""
-        import random
-        
-        best_score = -1
-        best_slot = None
-        
-        for day in self.weekdays:
-            for time_slot in time_slots:
-                if matrix[day][time_slot] is not None:
-                    continue
-                
-                # Beräkna poäng för denna placering
-                score = self.calculate_slot_score(
-                    day, time_slot, lesson, time_slots, 
-                    daily_counts, subject_placements, matrix
-                )
-                
-                if score > best_score:
-                    best_score = score
-                    room = random.choice(rooms) if rooms else None
-                    best_slot = (day, time_slot, room)
-        
-        return best_slot
-    
-    def calculate_slot_score(self, day, time_slot, lesson, time_slots, daily_counts, subject_placements, matrix):
-        """Beräkna poäng för en tidslucka"""
-        score = 100
-        
-        # Balansering: föredra dagar med färre lektioner
-        if self.constraints.get('balanced_days'):
-            min_count = min(daily_counts.values())
-            if daily_counts[day] == min_count:
-                score += 30
-            elif daily_counts[day] > min_count + 1:
-                score -= 20
-        
-        # Morgonprioritet
-        if self.constraints.get('morning_priority'):
-            hour = int(time_slot.split(':')[0])
-            if hour < 12:
-                score += 15
-        
-        # Undvik dubbellektioner
-        if self.constraints.get('no_double_lessons'):
-            if self.would_create_double_lesson(matrix, day, time_slot, lesson['subject_name'], time_slots):
-                score -= 50
-        
-        # Spridning av samma ämne över veckan
-        subject_days = [d for d, _ in subject_placements[lesson['subject_name']]]
-        if day not in subject_days:
-            score += 10  # Bonus för att sprida över fler dagar
-        
-        return score
-    
-    def would_create_double_lesson(self, matrix, day, time_slot, subject_name, time_slots):
-        """Kontrollera om placeringen skulle skapa dubbellektioner"""
-        current_index = time_slots.index(time_slot)
-        
-        # Kontrollera intilliggande tidsluckor
-        for offset in [-1, 1]:
-            check_index = current_index + offset
-            if 0 <= check_index < len(time_slots):
-                check_slot = time_slots[check_index]
-                if (matrix[day][check_slot] and 
-                    matrix[day][check_slot]['subject_name'] == subject_name):
-                    return True
-        
-        return False
-    
     def calculate_schedule_stats(self, lessons):
         """Beräkna statistik för schemat"""
         from collections import defaultdict
@@ -2048,19 +2085,37 @@ class ImprovedScheduleGenerator:
         daily_counts = defaultdict(int)
         subject_counts = defaultdict(int)
         room_usage = defaultdict(int)
+        subjects_per_day = defaultdict(set)
         
         for lesson in lessons:
             daily_counts[lesson['day']] += 1
             subject_counts[lesson['subject_name']] += 1
+            subjects_per_day[lesson['day']].add(lesson['subject_name'])
             if lesson['room']:
                 room_usage[lesson['room']] += 1
+        
+        # Kontrollera att regeln följs (max 1 ämne per dag)
+        constraint_violations = 0
+        for day, subjects in subjects_per_day.items():
+            # Här kontrollerar vi att varje ämne bara förekommer en gång per dag
+            # Detta borde alltid vara uppfyllt med vår nya logik
+            day_lessons = [l for l in lessons if l['day'] == day]
+            subject_count_per_day = defaultdict(int)
+            for lesson in day_lessons:
+                subject_count_per_day[lesson['subject_name']] += 1
+            
+            for subject, count in subject_count_per_day.items():
+                if count > 1:
+                    constraint_violations += 1
         
         return {
             'total_lessons': len(lessons),
             'daily_distribution': dict(daily_counts),
             'subject_distribution': dict(subject_counts),
             'room_usage': dict(room_usage),
-            'balance_score': self.calculate_balance_score(daily_counts)
+            'balance_score': self.calculate_balance_score(daily_counts),
+            'constraint_violations': constraint_violations,
+            'subjects_per_day': {day: len(subjects) for day, subjects in subjects_per_day.items()}
         }
     
     def calculate_balance_score(self, daily_counts):
@@ -2078,7 +2133,15 @@ class ImprovedScheduleGenerator:
         if max_val == 0:
             return 100
         
-        return round((1 - (max_val - min_val) / max_val) * 100)
+        # Förbättrad balansberäkning
+        variance = sum((x - sum(values) / len(values)) ** 2 for x in values) / len(values)
+        max_variance = ((max_val - sum(values) / len(values)) ** 2)
+        
+        if max_variance == 0:
+            return 100
+        
+        balance_score = max(0, 100 - (variance / max_variance) * 100)
+        return round(balance_score)
     
     def calculate_quality_metrics(self, lessons, time_slots):
         """Beräkna kvalitetsmått för schemat"""
@@ -2087,25 +2150,28 @@ class ImprovedScheduleGenerator:
         if not lessons:
             return {}
         
-        # Balansering över dagar
-        daily_counts = defaultdict(int)
+        # Kontrollera att inga ämnen har fler än 1 lektion per dag
+        subjects_per_day = defaultdict(lambda: defaultdict(int))
         for lesson in lessons:
-            daily_counts[lesson['day']] += 1
+            subjects_per_day[lesson['day']][lesson['subject_name']] += 1
         
-        balance_variance = self.calculate_variance(list(daily_counts.values()))
+        max_subject_per_day = 0
+        for day_subjects in subjects_per_day.values():
+            for count in day_subjects.values():
+                max_subject_per_day = max(max_subject_per_day, count)
         
-        # Ämnsspridning
-        subject_distribution = defaultdict(set)
+        # Kontrollera tidsfördelning
+        time_distribution = defaultdict(int)
         for lesson in lessons:
-            subject_distribution[lesson['subject_name']].add(lesson['day'])
-        
-        avg_subject_spread = sum(len(days) for days in subject_distribution.values()) / len(subject_distribution) if subject_distribution else 0
+            time_distribution[lesson['time']] += 1
         
         return {
-            'balance_variance': balance_variance,
-            'average_subject_spread': avg_subject_spread,
+            'max_subject_per_day': max_subject_per_day,  # Borde alltid vara 1
+            'constraint_compliance': max_subject_per_day <= 1,
             'total_lessons_placed': len(lessons),
-            'subjects_count': len(subject_distribution)
+            'unique_time_slots_used': len(time_distribution),
+            'average_lessons_per_day': len(lessons) / 5 if lessons else 0,
+            'time_slot_usage': dict(time_distribution)
         }
     
     def calculate_variance(self, values):
@@ -2115,6 +2181,8 @@ class ImprovedScheduleGenerator:
         
         mean = sum(values) / len(values)
         return sum((x - mean) ** 2 for x in values) / len(values)
+
+
 
 
 class Assignment(db.Model):
@@ -2781,7 +2849,7 @@ def schedule_generator():
     if not available_subjects:
         flash('Inga delade ämnen hittades. Se till att lärare har delat sina ämnen innan du genererar scheman.', 'warning')
     
-    # Säkerställ att klassrum finns
+    # Säkerställ att klassrum finns och är uppdaterade
     try:
         classrooms = json.loads(school.classrooms) if school.classrooms else []
     except (json.JSONDecodeError, TypeError):
@@ -2789,17 +2857,20 @@ def schedule_generator():
     
     if not classrooms:
         # Skapa standardklassrum om inga finns
-        default_rooms = ['Klassrum A', 'Klassrum B', 'Klassrum C', 'Biblioteket', 'Datasal']
+        default_rooms = ['Klassrum A', 'Klassrum B', 'Klassrum C', 'Biblioteket', 'Datasal', 'Musiksal', 'Naturvetenskapssal']
         school.classrooms = json.dumps(default_rooms)
         db.session.commit()
         classrooms = default_rooms
         flash('Standardklassrum har skapats. Du kan anpassa dessa i klassrumsinställningarna.', 'info')
     
+    # Debug: Logga klassrumsdata
+    print(f"📚 Skola {school.name} har {len(classrooms)} klassrum: {classrooms}")
+    
     return render_template('schedule_generator.html', 
                          classes=classes,
-                         available_subjects=available_subjects,  # Now a list of dicts
-                         school=school)
-
+                         available_subjects=available_subjects,
+                         school=school,  # This ensures school object with classrooms is passed
+                         classrooms=classrooms)  # Also pass classrooms directly for convenience
 
 
 @app.route('/school_admin/manage_classrooms', methods=['GET', 'POST'])
