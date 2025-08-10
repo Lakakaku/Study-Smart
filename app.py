@@ -2872,6 +2872,16 @@ def schedule_generator():
             'is_shared': subject.is_shared
         })
     
+    # LÄGG TILL: Skapa available_teachers lista från lärarna
+    available_teachers = []
+    for teacher in teachers:
+        available_teachers.append({
+            'id': teacher.id,
+            'name': teacher.get_full_name(),
+            'username': teacher.username,
+            'teacher_subjects': teacher.teacher_subjects.split(',') if teacher.teacher_subjects else []
+        })
+    
     if not available_subjects:
         flash('Inga delade ämnen hittades. Se till att lärare har delat sina ämnen innan du genererar scheman.', 'warning')
     
@@ -2895,8 +2905,10 @@ def schedule_generator():
     return render_template('schedule_generator.html', 
                          classes=[cls.to_dict() for cls in classes], 
                          available_subjects=available_subjects,
-                         school=school,  # This ensures school object with classrooms is passed
-                         classrooms=classrooms)  # Also pass classrooms directly for convenience
+                         available_teachers=available_teachers,  # LÄGG TILL denna rad
+                         school=school,
+                         classrooms=classrooms)
+
 
 
 @app.route('/school_admin/manage_classrooms', methods=['GET', 'POST'])
