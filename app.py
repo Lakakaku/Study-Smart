@@ -1104,16 +1104,24 @@ class School(db.Model):
         return f"School('{self.name}', code='{self.school_code}')"
     
     def to_dict(self):
-        """Konvertera StudentAttendance-objekt till dictionary"""
+        """Konvertera School-objekt till dictionary för JSON-serialisering"""
         return {
             'id': self.id,
-            'attendance_id': self.attendance_id,
-            'student_id': self.student_id,
-            'status': self.status,
-            'arrival_time': self.arrival_time.strftime('%H:%M') if self.arrival_time else None,
-            'notes': self.notes or '',
-            'marked_at': self.marked_at.isoformat() if self.marked_at else None,
-            'student_name': f"{self.student.first_name} {self.student.last_name}" if self.student else 'Okänd elev'
+            'name': self.name,
+            'address': self.address,
+            'city': self.city,
+            'postal_code': self.postal_code,
+            'phone': self.phone,
+            'email': self.email,
+            'school_code': self.school_code,
+            'school_type': self.school_type,
+            'principal_name': self.principal_name,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'classrooms': self.classrooms,
+            'class_count': len(self.classes) if self.classes else 0,
+            'user_count': len(self.users) if self.users else 0
         }
 
 
@@ -1221,6 +1229,24 @@ class SchoolClass(db.Model):
     def __repr__(self):
         return f"SchoolClass('{self.name}', school_id={self.school_id})"
     
+    def to_dict(self):
+        """Konvertera SchoolClass-objekt till dictionary för JSON-serialisering"""
+        return {
+            'id': self.id,
+            'school_id': self.school_id,
+            'name': self.name,
+            'year_level': self.year_level,
+            'class_code': self.class_code,
+            'description': self.description,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'homeroom_teacher_id': self.homeroom_teacher_id,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'student_count': len(self.users) if self.users else 0,
+            'homeroom_teacher_name': self.homeroom_teacher.get_full_name() if self.homeroom_teacher else None
+        }
 
 
 
@@ -2867,7 +2893,7 @@ def schedule_generator():
     print(f"📚 Skola {school.name} har {len(classrooms)} klassrum: {classrooms}")
     
     return render_template('schedule_generator.html', 
-                         classes=classes,
+                         classes=[cls.to_dict() for cls in classes], 
                          available_subjects=available_subjects,
                          school=school,  # This ensures school object with classrooms is passed
                          classrooms=classrooms)  # Also pass classrooms directly for convenience
