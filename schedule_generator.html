@@ -1355,14 +1355,12 @@
 
             const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
             
-            // Generera tidsluckor (visa var 15:e minut i tabellen)
-            const timeSlots = [];
-            for (let hour = 7; hour <= 18; hour++) {
-                for (let minute = 0; minute < 60; minute += 15) {
-                    if (hour === 18 && minute > 0) break;
-                    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                    timeSlots.push(timeStr);
-                }
+            // --- Bygg vänsterspalten: 07:00 -> 18:00 i 5-minuterssteg (ALLTID) ---
+            const times = [];
+            const startMinutesAll = 7 * 60;   // 07:00 i minuter
+            const endMinutesAll = 18 * 60;    // 18:00 i minuter
+            for (let m = startMinutesAll; m <= endMinutesAll; m += 5) {
+                times.push(minutesToTime(m));
             }
 
             let tableHTML = `
@@ -1377,82 +1375,40 @@
                     <tbody>
             `;
 
-            // Skapa karta över lektioner
+            // Skapa karta över lektioner per dag (för snabb uppslagning)
             const lessonMap = {};
             schedule.lessons.forEach(lesson => {
                 if (!lessonMap[lesson.day]) lessonMap[lesson.day] = [];
                 lessonMap[lesson.day].push(lesson);
             });
 
-            // Visa bara tider som har lektioner eller ligger inom skoldag
-            // ---- Ersätt motsvarande del i displayMultiClassSchedule med detta ----
-
-            // Visa bara tider som har lektioner eller ligger inom skoldag
-            const schoolStart = 8 * 60; // 08:00 i minuter
-            const schoolEnd = 16 * 60;   // 16:00 i minuter
-
-            // Bygg en set med tider vi vill visa:
-            // - alltid visa jämna timmar och halvtimmar (0 eller 30 minuter)
-            // - och visa ALLA lektioners starttider (så t.ex. 09:10 inkluderas)
-            const timesToShowSet = new Set();
-
-            // lägg till jämna timmar och halvtimmar (för läsbarhet)
-            for (let hour = 7; hour <= 18; hour++) {
-                [0, 30].forEach(min => {
-                    const minutes = hour * 60 + min;
-                    if (minutes >= schoolStart && minutes <= schoolEnd) {
-                        timesToShowSet.add(minutesToTime(minutes));
-                    }
-                });
-            }
-
-            // lägg till alla lektioners starttider
-            schedule.lessons.forEach(lesson => {
-                if (lesson.time && lesson.time.includes('-')) {
-                    const start = lesson.time.split('-')[0];
-                    const startMinutes = timeToMinutes(start);
-                    if (startMinutes >= schoolStart && startMinutes <= schoolEnd) {
-                        timesToShowSet.add(start);
-                    }
-                }
-            });
-
-            // konvertera set -> sorterad array (kronologisk)
-            const relevantTimeSlots = Array.from(timesToShowSet)
-                .map(t => ({ time: t, minutes: timeToMinutes(t) }))
-                .sort((a,b) => a.minutes - b.minutes)
-                .map(x => x.time);
-
-            // --- rendera rader baserat på relevantTimeSlots ---
-            relevantTimeSlots.forEach(currentTime => {
+            // Rendera varje tid (07:00 -> 18:00, var 5:e minut)
+            times.forEach(currentTime => {
                 const currentMinutes = timeToMinutes(currentTime);
-                
                 tableHTML += `<tr><td style="font-weight: 600; font-size: 0.8rem;">${currentTime}</td>`;
-                
+
                 weekdays.forEach(day => {
                     const dayLessons = lessonMap[day] || [];
                     let cellContent = '';
                     let cellClass = 'empty-cell';
-                    
-                    // Samla alla lektioner som pågår vid denna tid (även om de inte startar exakt här)
+
+                    // Hämta lektioner som är aktiva vid denna tid (start <= current < end)
                     const activeLessons = [];
-                    
                     for (const lesson of dayLessons) {
                         if (lesson.time && lesson.time.includes('-')) {
                             const [startTime, endTime] = lesson.time.split('-');
                             const startMinutes = timeToMinutes(startTime);
                             const endMinutes = timeToMinutes(endTime);
-                            
                             if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
                                 activeLessons.push(lesson);
                             }
                         }
                     }
-                    
+
                     if (activeLessons.length > 0) {
                         cellClass = 'lesson-cell';
-                        
-                        // Visa alla aktiva lektioner (både start och fortsättning)
+
+                        // Visa lektionens detaljer (ämne, klass och sal). Vi visar alla aktiva lektioner om flera finns.
                         cellContent = activeLessons.map(lesson => `
                             <div style="margin-bottom: 4px; padding: 4px; border-left: 3px solid ${lesson.color}; background: ${lesson.color}15;">
                                 <div class="lesson-subject">${lesson.subject_name}</div>
@@ -1460,7 +1416,7 @@
                             </div>
                         `).join('');
                     }
-                    
+
                     if (cellContent) {
                         tableHTML += `<td class="${cellClass}" style="padding: 0.3rem;">${cellContent}</td>`;
                     } else if (cellClass === 'lesson-cell') {
@@ -1469,14 +1425,13 @@
                         tableHTML += `<td class="${cellClass}">-</td>`;
                     }
                 });
-                
+
                 tableHTML += '</tr>';
             });
 
-
             tableHTML += '</tbody></table></div>';
-            
-            // Multi-klass statistik
+
+            // --- Statistik (samma som tidigare) ---
             const stats = schedule.stats;
             tableHTML += `
                 <div style="margin-top: 1rem; padding: 1rem; background: #f7fafc; border-radius: 6px;">
@@ -1520,6 +1475,7 @@
             preview.innerHTML = tableHTML;
             debugLog('Multi-class schedule displayed successfully');
         }
+
 
         function timeToMinutes(timeStr) {
             const [hours, minutes] = timeStr.split(':').map(Number);
