@@ -1104,6 +1104,27 @@ class SchoolSubject(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
+class TeacherSubjectQualification(db.Model):
+    """Modell för lärarens behörighet att undervisa i specifika ämnen"""
+    __tablename__ = 'teacher_subject_qualifications'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    school_subject_id = db.Column(db.Integer, db.ForeignKey('school_subjects.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationer
+    teacher = db.relationship('User', backref='subject_qualifications')
+    school_subject = db.relationship('SchoolSubject', backref='qualified_teachers')
+    
+    # Unique constraint för att förhindra dubbletter
+    __table_args__ = (db.UniqueConstraint('teacher_id', 'school_subject_id', name='unique_teacher_subject_qualification'),)
+    
+    def __repr__(self):
+        return f'<TeacherSubjectQualification teacher_id={self.teacher_id} subject_id={self.school_subject_id}>'
+
+
+
 class School(db.Model):
     """Skola-modell för att hantera olika skolor"""
     __tablename__ = 'schools'
@@ -2850,7 +2871,136 @@ def setup_default_school_data():
         print(f"✅ Uppdaterade {len(schools)} skolor med standardklassrum")
 
 
-
+@app.route('/api/teacher_qualifications/<int:subject_id>', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def manage_teacher_qualifications(subject_id):
+    """Hantera lärarens behörigheter för specifikt ämne"""
+    if not current_user.is_school_admin() or not current_user.school_id:
+        return jsonify({'success': False, 'error': 'Otillåten åtkomst'}), 403
+    
+    # Kontrollera att ämnet tillhör rätt skola
+    subject = SchoolSubject.query.filter_by(
+        id=subject_id, 
+        school_id=current_user.school_id
+    ).first()
+    
+    if not subject:
+        return jsonify({'success': False, 'error': 'Ämne hittades inte'}), 404
+    
+    if request.method == 'GET':
+        # Hämta alla kvalificerade lärare för detta ämne
+        qualifications = TeacherSubjectQualification.query.filter_by(
+            school_subject_id=subject_id
+        ).all()
+        
+        qualified_teachers = []
+        for qual in qualifications:
+            qualified_teachers.append({
+                'id': qual.teacher.id,
+                'name': qual.teacher.get_full_name(),
+                'username': qual.teacher.username,
+                'qualification_id': qual.id
+            })
+        
+        # Hämta alla tillgängliga lärare på skolan
+        all_teachers = User.query.filter_by(
+            school_id=current_user.school_id,
+            user_type='teacher',
+            is_active=True
+        ).all()
+        
+        available_teachers = []
+        for teacher in all_teachers:
+            available_teachers.append({
+                'id': teacher.id,
+                'name': teacher.get_full_name(),
+                'username': teacher.username,
+                'is_qualified': any(q.teacher_id == teacher.id for q in qualifications)
+            })
+        
+        return jsonify({
+            'success': True,
+            'qualified_teachers': qualified_teachers,
+            'available_teachers': available_teachers
+        })
+    
+    elif request.method == 'POST':
+        # Lägg till lärarens behörighet
+        data = request.get_json()
+        teacher_id = data.get('teacher_id')
+        
+        if not teacher_id:
+            return jsonify({'success': False, 'error': 'Lärare-ID saknas'}), 400
+        
+        # Kontrollera att läraren finns och tillhör rätt skola
+        teacher = User.query.filter_by(
+            id=teacher_id,
+            school_id=current_user.school_id,
+            user_type='teacher',
+            is_active=True
+        ).first()
+        
+        if not teacher:
+            return jsonify({'success': False, 'error': 'Lärare hittades inte'}), 404
+        
+        # Kontrollera om behörigheten redan finns
+        existing = TeacherSubjectQualification.query.filter_by(
+            teacher_id=teacher_id,
+            school_subject_id=subject_id
+        ).first()
+        
+        if existing:
+            return jsonify({'success': False, 'error': 'Läraren är redan behörig för detta ämne'}), 400
+        
+        # Skapa ny behörighet
+        qualification = TeacherSubjectQualification(
+            teacher_id=teacher_id,
+            school_subject_id=subject_id
+        )
+        
+        try:
+            db.session.add(qualification)
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': f'{teacher.get_full_name()} är nu behörig att undervisa i {subject.name}',
+                'qualification': {
+                    'id': qualification.id,
+                    'teacher_name': teacher.get_full_name(),
+                    'subject_name': subject.name
+                }
+            })
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': 'Fel vid sparande'}), 500
+    
+    elif request.method == 'DELETE':
+        # Ta bort lärarens behörighet
+        data = request.get_json()
+        teacher_id = data.get('teacher_id')
+        
+        if not teacher_id:
+            return jsonify({'success': False, 'error': 'Lärare-ID saknas'}), 400
+        
+        qualification = TeacherSubjectQualification.query.filter_by(
+            teacher_id=teacher_id,
+            school_subject_id=subject_id
+        ).first()
+        
+        if not qualification:
+            return jsonify({'success': False, 'error': 'Behörighet hittades inte'}), 404
+        
+        try:
+            teacher_name = qualification.teacher.get_full_name()
+            db.session.delete(qualification)
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': f'{teacher_name} är inte längre behörig att undervisa i {subject.name}'
+            })
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': 'Fel vid borttagning'}), 500
 
 @app.route('/school_admin/schedule_generator')
 @login_required
@@ -2859,7 +3009,7 @@ def schedule_generator():
     if not current_user.is_school_admin() or not current_user.school_id:
         flash('Du har inte behörighet att komma åt denna sida.', 'danger')
         return redirect(url_for('school_admin_index'))
-    
+        
     school = School.query.get(current_user.school_id)
     if not school:
         flash('Skola hittades inte.', 'danger')
@@ -2873,11 +3023,11 @@ def schedule_generator():
     if not classes:
         flash('Inga aktiva klasser hittades. Skapa klasser först innan du genererar scheman.', 'info')
 
-    # ÄNDRAT: Hämta skolans egna ämnen istället för lärarnas delade ämnen
+    # Hämta skolans egna ämnen
     school_subjects = SchoolSubject.query.filter_by(
         school_id=current_user.school_id
     ).order_by(SchoolSubject.name).all()
-    
+
     # Konvertera till dictionary för JSON serialization
     available_subjects = []
     for subject in school_subjects:
@@ -2887,18 +3037,27 @@ def schedule_generator():
             'created_at': subject.created_at.isoformat() if subject.created_at else None
         })
 
-    # Hämta lärare för lärarfilter i schemavisning
+    # Hämta lärare med deras ämnesbehörigheter
     teachers = User.query.filter_by(
         school_id=current_user.school_id,
         user_type='teacher',
+        is_active=True
     ).all()
     
     available_teachers = []
     for teacher in teachers:
+        # Hämta lärarens ämnesbehörigheter
+        qualifications = TeacherSubjectQualification.query.filter_by(
+            teacher_id=teacher.id
+        ).all()
+        
+        qualified_subject_ids = [q.school_subject_id for q in qualifications]
+        
         available_teachers.append({
             'id': teacher.id,
             'name': teacher.get_full_name(),
             'username': teacher.username,
+            'qualified_subjects': qualified_subject_ids  # Lista med ämnes-ID:n som läraren är behörig för
         })
 
     # Säkerställ att klassrum finns och är uppdaterade
@@ -2906,7 +3065,7 @@ def schedule_generator():
         classrooms = json.loads(school.classrooms) if school.classrooms else []
     except (json.JSONDecodeError, TypeError):
         classrooms = []
-    
+        
     if not classrooms:
         # Skapa standardklassrum om inga finns
         default_rooms = ['Klassrum A', 'Klassrum B', 'Klassrum C', 'Biblioteket', 'Datasal', 'Musiksal', 'Naturvetenskapssal']
@@ -2916,12 +3075,11 @@ def schedule_generator():
         flash('Standardklassrum har skapats. Du kan anpassa dessa i klassrumsinställningarna.', 'info')
 
     return render_template('schedule_generator.html',
-        classes=[cls.to_dict() for cls in classes],
-        available_subjects=available_subjects,
-        available_teachers=available_teachers,
-        school=school,
-        classrooms=classrooms)
-
+                         classes=[cls.to_dict() for cls in classes],
+                         available_subjects=available_subjects,
+                         available_teachers=available_teachers,
+                         school=school,
+                         classrooms=classrooms)
 
 # NYTT: API-endpoint för att hantera skolans ämnen
 @app.route('/api/school_subjects', methods=['GET', 'POST'])
