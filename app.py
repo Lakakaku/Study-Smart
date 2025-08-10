@@ -1076,7 +1076,33 @@ class StudentAttendance(db.Model):
         return f"StudentAttendance(student_id={self.student_id}, status='{self.status}')"
 
 
+# Lägg till denna modell i din models.py fil
 
+class SchoolSubject(db.Model):
+    """Modell för skolans egna ämnen som används i schemaläggning"""
+    __tablename__ = 'school_subjects'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    school_id = db.Column(db.Integer, db.ForeignKey('schools.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relation till skola
+    school = db.relationship('School', backref=db.backref('school_subjects', lazy=True, cascade='all, delete-orphan'))
+    
+    # Unique constraint för att förhindra dubbletter av samma ämne per skola
+    __table_args__ = (db.UniqueConstraint('name', 'school_id', name='unique_subject_per_school'),)
+    
+    def __repr__(self):
+        return f'<SchoolSubject {self.name} - {self.school.name if self.school else "No School"}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'school_id': self.school_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
 
 class School(db.Model):
     """Skola-modell för att hantera olika skolor"""
@@ -2838,7 +2864,7 @@ def schedule_generator():
     if not school:
         flash('Skola hittades inte.', 'danger')
         return redirect(url_for('school_admin_index'))
-    
+
     # Hämta skolans klasser
     classes = SchoolClass.query.filter_by(
         school_id=current_user.school_id,
@@ -2846,45 +2872,35 @@ def schedule_generator():
     
     if not classes:
         flash('Inga aktiva klasser hittades. Skapa klasser först innan du genererar scheman.', 'info')
+
+    # ÄNDRAT: Hämta skolans egna ämnen istället för lärarnas delade ämnen
+    school_subjects = SchoolSubject.query.filter_by(
+        school_id=current_user.school_id
+    ).order_by(SchoolSubject.name).all()
     
-    # Hämta endast DELADE ämnen från lärare på skolan
+    # Konvertera till dictionary för JSON serialization
+    available_subjects = []
+    for subject in school_subjects:
+        available_subjects.append({
+            'id': subject.id,
+            'name': subject.name,
+            'created_at': subject.created_at.isoformat() if subject.created_at else None
+        })
+
+    # Hämta lärare för lärarfilter i schemavisning
     teachers = User.query.filter_by(
         school_id=current_user.school_id,
         user_type='teacher',
     ).all()
     
-    teacher_ids = [t.id for t in teachers]
-    
-    # Filtrera för endast delade ämnen (is_shared=True)
-    available_subjects_query = Subject.query.filter(
-        Subject.user_id.in_(teacher_ids),
-        Subject.is_shared == True  # Endast delade ämnen
-    ).all() if teacher_ids else []
-    
-    # Konvertera till dictionary för JSON serialization
-    available_subjects = []
-    for subject in available_subjects_query:
-        available_subjects.append({
-            'id': subject.id,
-            'name': subject.name,
-            'user_id': subject.user_id,
-            'share_code': subject.share_code,
-            'is_shared': subject.is_shared
-        })
-    
-    # LÄGG TILL: Skapa available_teachers lista från lärarna
     available_teachers = []
     for teacher in teachers:
         available_teachers.append({
             'id': teacher.id,
             'name': teacher.get_full_name(),
             'username': teacher.username,
-            'teacher_subjects': teacher.teacher_subjects.split(',') if teacher.teacher_subjects else []
         })
-    
-    if not available_subjects:
-        flash('Inga delade ämnen hittades. Se till att lärare har delat sina ämnen innan du genererar scheman.', 'warning')
-    
+
     # Säkerställ att klassrum finns och är uppdaterade
     try:
         classrooms = json.loads(school.classrooms) if school.classrooms else []
@@ -2898,18 +2914,90 @@ def schedule_generator():
         db.session.commit()
         classrooms = default_rooms
         flash('Standardklassrum har skapats. Du kan anpassa dessa i klassrumsinställningarna.', 'info')
-    
-    # Debug: Logga klassrumsdata
-    print(f"📚 Skola {school.name} har {len(classrooms)} klassrum: {classrooms}")
-    
-    return render_template('schedule_generator.html', 
-                         classes=[cls.to_dict() for cls in classes], 
-                         available_subjects=available_subjects,
-                         available_teachers=available_teachers,  # LÄGG TILL denna rad
-                         school=school,
-                         classrooms=classrooms)
+
+    return render_template('schedule_generator.html',
+        classes=[cls.to_dict() for cls in classes],
+        available_subjects=available_subjects,
+        available_teachers=available_teachers,
+        school=school,
+        classrooms=classrooms)
 
 
+# NYTT: API-endpoint för att hantera skolans ämnen
+@app.route('/api/school_subjects', methods=['GET', 'POST'])
+@login_required
+def manage_school_subjects():
+    """API för att hantera skolans ämnen"""
+    if not current_user.is_school_admin() or not current_user.school_id:
+        return jsonify({'error': 'Behörighet saknas'}), 403
+
+    if request.method == 'GET':
+        # Hämta alla skolans ämnen
+        subjects = SchoolSubject.query.filter_by(
+            school_id=current_user.school_id
+        ).order_by(SchoolSubject.name).all()
+        
+        return jsonify({
+            'subjects': [{'id': s.id, 'name': s.name} for s in subjects]
+        })
+    
+    elif request.method == 'POST':
+        # Lägg till nytt ämne
+        data = request.get_json()
+        subject_name = data.get('name', '').strip()
+        
+        if not subject_name:
+            return jsonify({'error': 'Ämnesnamn krävs'}), 400
+        
+        # Kontrollera om ämnet redan finns
+        existing_subject = SchoolSubject.query.filter_by(
+            school_id=current_user.school_id,
+            name=subject_name
+        ).first()
+        
+        if existing_subject:
+            return jsonify({'error': 'Ämnet finns redan'}), 400
+        
+        # Skapa nytt ämne
+        new_subject = SchoolSubject(
+            name=subject_name,
+            school_id=current_user.school_id
+        )
+        
+        try:
+            db.session.add(new_subject)
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'subject': {'id': new_subject.id, 'name': new_subject.name}
+            })
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': 'Fel vid sparande'}), 500
+
+
+@app.route('/api/school_subjects/<int:subject_id>', methods=['DELETE'])
+@login_required
+def delete_school_subject(subject_id):
+    """Ta bort ett skolämne"""
+    if not current_user.is_school_admin() or not current_user.school_id:
+        return jsonify({'error': 'Behörighet saknas'}), 403
+    
+    subject = SchoolSubject.query.filter_by(
+        id=subject_id,
+        school_id=current_user.school_id
+    ).first()
+    
+    if not subject:
+        return jsonify({'error': 'Ämne hittades inte'}), 404
+    
+    try:
+        db.session.delete(subject)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Fel vid borttagning'}), 500
 
 @app.route('/school_admin/manage_classrooms', methods=['GET', 'POST'])
 @login_required
