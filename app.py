@@ -3269,14 +3269,14 @@ def save_multi_class_schedule():
     try:
         if not current_user.is_school_admin() or not current_user.school_id:
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': 'Du har inte behörighet att spara scheman'
             }), 403
 
         data = request.get_json()
         if not data or 'schedule' not in data or 'class_ids' not in data:
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': 'Ogiltig data struktur'
             }), 400
 
@@ -3285,11 +3285,11 @@ def save_multi_class_schedule():
 
         if not schedule.get('lessons') or not class_ids:
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': 'Ingen schema data att spara'
             }), 400
 
-        # Validera att alla klasser tillhör användaren skola
+        # Validera att alla klasser tillhör användarens skola
         valid_classes = SchoolClass.query.filter(
             SchoolClass.id.in_(class_ids),
             SchoolClass.school_id == current_user.school_id
@@ -3297,11 +3297,10 @@ def save_multi_class_schedule():
 
         if len(valid_classes) != len(class_ids):
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': 'En eller flera klasser är inte giltiga'
             }), 400
 
-        # Starta databastransaktion
         stats = {
             'lessons_saved': 0,
             'classes_updated': len(class_ids),
@@ -3310,42 +3309,52 @@ def save_multi_class_schedule():
 
         # Ta bort befintliga scheman för de valda klasserna
         for class_id in class_ids:
-            deleted_count = ClassSchedule.query.filter_by(
-                class_id=class_id
-            ).delete()
+            deleted_count = ClassSchedule.query.filter_by(class_id=class_id).delete()
             stats['classes_deleted_lessons'] += deleted_count
 
-        db.session.flush()  # Flush för att få bort gamla poster innan vi skapar nya
+        db.session.flush()
 
         # Spara nya lektioner
         for lesson in schedule['lessons']:
-            # Validera lesson data
-            if not all(key in lesson for key in ['day', 'time', 'class_id', 'subject_id']):
+            # Validera required-fält (tillåt frontend att skicka school_subject_id alternativt subject_id)
+            if not all(key in lesson for key in ['day', 'time', 'class_id']):
+                continue
+
+            # Bestäm school_subject_id (frontend kan ha skickat school_subject_id eller subject_id)
+            school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
+            if not school_subject_id:
+                print(f"Warning: lesson missing school_subject_id/subject_id, skipping: {lesson}")
                 continue
 
             # Parsa tid
-            time_parts = lesson['time'].split('-')
+            time_parts = str(lesson.get('time', '')).split('-')
             if len(time_parts) != 2:
+                print(f"Warning: invalid time format for lesson, skipping: {lesson}")
                 continue
 
             start_time = time_parts[0].strip()
             end_time = time_parts[1].strip()
 
-            # Hitta teacher_id baserat på teacher_name eller teacher_id från lesson
+            # Kontrollera att school_subject finns och tillhör skolan
+            school_subject = SchoolSubject.query.filter_by(
+                id=school_subject_id,
+                school_id=current_user.school_id
+            ).first()
+            if not school_subject:
+                print(f"Warning: School subject {school_subject_id} not found for school {current_user.school_id}, skipping lesson")
+                continue
+
+            # Hitta teacher_id baserat på teacher_id eller teacher_name från lesson (om möjligt)
             teacher_id = None
-            if 'teacher_id' in lesson and lesson['teacher_id']:
-                # Om teacher_id redan finns
-                teacher_id = lesson['teacher_id']
-                # Kontrollera att läraren tillhör skolan
-                teacher = User.query.filter_by(
-                    id=teacher_id,
+            if lesson.get('teacher_id'):
+                candidate = User.query.filter_by(
+                    id=lesson['teacher_id'],
                     school_id=current_user.school_id,
                     user_type='teacher'
                 ).first()
-                if not teacher:
-                    teacher_id = None
-            elif 'teacher_name' in lesson and lesson['teacher_name']:
-                # Försök hitta läraren baserat på namn
+                if candidate:
+                    teacher_id = candidate.id
+            elif lesson.get('teacher_name'):
                 teacher_name = lesson['teacher_name']
                 teacher = User.query.filter_by(
                     school_id=current_user.school_id,
@@ -3359,30 +3368,29 @@ def save_multi_class_schedule():
                 if teacher:
                     teacher_id = teacher.id
 
-            # Validera att school_subject_id tillhör skolan
-            school_subject = SchoolSubject.query.filter_by(
-                id=lesson['subject_id'],
-                school_id=current_user.school_id
-            ).first()
-            
-            if not school_subject:
-                print(f"Warning: School subject {lesson['subject_id']} not found for school {current_user.school_id}")
-                continue
+            # Försök hitta legacy Subject genom namn-match (case-insensitive)
+            legacy_subject_id = None
+            try:
+                legacy = Subject.query.filter(db.func.lower(Subject.name) == db.func.lower(school_subject.name)).first()
+                if legacy:
+                    legacy_subject_id = legacy.id
+            except Exception:
+                legacy_subject_id = None
 
-            # Skapa notes med information om schemat
+            # Bygg notes innan vi skapar ClassSchedule-instansen
             notes_parts = ['Auto-genererat schema']
-            if 'teacher_name' in lesson and lesson['teacher_name']:
-                notes_parts.append(f"Lärare: {lesson['teacher_name']}")
+            if lesson.get('teacher_name'):
+                notes_parts.append(f"Lärare: {lesson.get('teacher_name')}")
             notes = '. '.join(notes_parts)
 
-            # Skapa ny schedule post - använd school_subject_id istället för subject_id
+            # Skapa och spara schedule-objektet
             new_lesson = ClassSchedule(
                 class_id=lesson['class_id'],
                 weekday=lesson['day'],
                 start_time=start_time,
                 end_time=end_time,
-                school_subject_id=lesson['subject_id'],  # Använd school_subject_id
-                subject_id=None,  # Lämna den gamla som None
+                school_subject_id=school_subject.id,
+                subject_id=legacy_subject_id,
                 teacher_id=teacher_id,
                 room=lesson.get('room', 'Ej tilldelat'),
                 notes=notes,
@@ -3394,7 +3402,6 @@ def save_multi_class_schedule():
             db.session.add(new_lesson)
             stats['lessons_saved'] += 1
 
-        # Commit alla ändringar
         db.session.commit()
 
         return jsonify({
@@ -3947,9 +3954,12 @@ def generate_schedule_api_improved():
                 if hours <= 0:
                     continue
                     
-                subject = Subject.query.get(subject_id)
-                if subject:
-                    subjects_hours.append((subject_id, subject.name, hours))
+                school_subject = SchoolSubject.query.filter_by(
+                    id=int(subject_id),
+                    school_id=current_user.school_id
+                ).first()
+                if school_subject:
+                    subjects_hours.append((school_subject.id, school_subject.name, hours))
             except (ValueError, IndexError):
                 continue
         
@@ -4017,17 +4027,26 @@ def save_schedule_api():
         
         # Spara nya schemalektioner
         saved_count = 0
+        # --- ersätt loop-skapandet i save_schedule_api ---
         for lesson in schedule_data.get('lessons', []):
+            start, end = [t.strip() for t in lesson['time'].split('-')]
+            # Prioritera explicit school_subject_id från frontend, annars fallback till subject_id
+            school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
+            if school_subject_id:
+                school_subject_id = int(school_subject_id)
+
             schedule_item = ClassSchedule(
                 class_id=class_id,
                 weekday=lesson['day'],
-                start_time=lesson['time'].split('-')[0],
-                end_time=lesson['time'].split('-')[1],
-                subject_id=lesson.get('subject_id'),
+                start_time=start,
+                end_time=end,
+                school_subject_id=school_subject_id,
+                subject_id=None,  # behåll bakåtkompatibilitet men lämna None
                 room=lesson.get('room')
             )
             db.session.add(schedule_item)
             saved_count += 1
+
         
         db.session.commit()
         
