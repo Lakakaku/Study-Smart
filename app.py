@@ -3322,8 +3322,33 @@ def save_multi_class_schedule():
 
             # Bestäm school_subject_id (frontend kan ha skickat school_subject_id eller subject_id)
             school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
-            if not school_subject_id:
-                print(f"Warning: lesson missing school_subject_id/subject_id, skipping: {lesson}")
+            school_subject = None
+            raw_school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
+            school_subject = None
+
+            if raw_school_subject_id:
+                try:
+                    school_subject_id_int = int(raw_school_subject_id)
+                    school_subject = SchoolSubject.query.filter_by(
+                        id=school_subject_id_int,
+                        school_id=current_user.school_id
+                    ).first()
+                except (ValueError, TypeError):
+                    school_subject = None
+
+            # Fallback: försök matcha på lesson.subject_name om id inte gav resultat
+            if not school_subject and lesson.get('subject_name'):
+                try:
+                    name_to_match = lesson.get('subject_name').strip().lower()
+                    school_subject = SchoolSubject.query.filter(
+                        db.func.lower(SchoolSubject.name) == name_to_match,
+                        SchoolSubject.school_id == current_user.school_id
+                    ).first()
+                except Exception:
+                    school_subject = None
+
+            if not school_subject:
+                print(f"Warning: School subject {raw_school_subject_id} / {lesson.get('subject_name')} not found for school {current_user.school_id}, skipping lesson")
                 continue
 
             # Parsa tid
@@ -3335,16 +3360,7 @@ def save_multi_class_schedule():
             start_time = time_parts[0].strip()
             end_time = time_parts[1].strip()
 
-            # Kontrollera att school_subject finns och tillhör skolan
-            school_subject = SchoolSubject.query.filter_by(
-                id=school_subject_id,
-                school_id=current_user.school_id
-            ).first()
-            if not school_subject:
-                print(f"Warning: School subject {school_subject_id} not found for school {current_user.school_id}, skipping lesson")
-                continue
-
-            # Hitta teacher_id baserat på teacher_id eller teacher_name från lesson (om möjligt)
+            # Hitta teacher_id (oförändrat från din kod)
             teacher_id = None
             if lesson.get('teacher_id'):
                 candidate = User.query.filter_by(
@@ -3368,7 +3384,7 @@ def save_multi_class_schedule():
                 if teacher:
                     teacher_id = teacher.id
 
-            # Försök hitta legacy Subject genom namn-match (case-insensitive)
+            # Försök hitta legacy Subject genom namn-match (case-insensitive) — behåll om du behöver bakåtkompatibilitet
             legacy_subject_id = None
             try:
                 legacy = Subject.query.filter(db.func.lower(Subject.name) == db.func.lower(school_subject.name)).first()
@@ -3377,13 +3393,13 @@ def save_multi_class_schedule():
             except Exception:
                 legacy_subject_id = None
 
-            # Bygg notes innan vi skapar ClassSchedule-instansen
+            # Bygg notes
             notes_parts = ['Auto-genererat schema']
             if lesson.get('teacher_name'):
                 notes_parts.append(f"Lärare: {lesson.get('teacher_name')}")
             notes = '. '.join(notes_parts)
 
-            # Skapa och spara schedule-objektet
+            # Skapa och spara schedule-objektet — viktigt: använd school_subject.id här
             new_lesson = ClassSchedule(
                 class_id=lesson['class_id'],
                 weekday=lesson['day'],
@@ -3491,11 +3507,16 @@ def get_class_schedule_status(class_id):
                     lessons_by_day[day] = []
                 
                 subject_name = 'Okänt ämne'
-                if lesson.subject_id:
+                # Prioritera SchoolSubject (nya systemet)
+                if lesson.school_subject_id:
+                    ss = SchoolSubject.query.get(lesson.school_subject_id)
+                    if ss:
+                        subject_name = ss.name
+                # Fallback till legacy Subject om ingen SchoolSubject finns
+                elif lesson.subject_id:
                     subject = Subject.query.get(lesson.subject_id)
                     if subject:
                         subject_name = subject.name
-                
                 lessons_by_day[day].append({
                     'time': f"{lesson.start_time}-{lesson.end_time}",
                     'subject': subject_name,
