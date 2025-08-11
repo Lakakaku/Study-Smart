@@ -1188,7 +1188,7 @@ class ClassSchedule(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)  # NEW
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # NEW
-    
+    school_subject_id = db.Column(db.Integer, db.ForeignKey('school_subjects.id'), nullable=True)
     # Relationer
     school_class = db.relationship('SchoolClass', backref='schedule')
     subject = db.relationship('Subject')
@@ -2711,6 +2711,10 @@ def migrate_database():
 
 
 
+def mapSchoolSubjectToSubject(schoolSubjectId):
+    # Använd school_subject_id direkt istället för att mappa till subjects-tabellen
+    return schoolSubjectId
+
 
 
 # Användare loader för flask-login
@@ -3354,6 +3358,7 @@ def save_multi_class_schedule():
                 start_time=start_time,
                 end_time=end_time,
                 subject_id=lesson['subject_id'],
+                school_subject_id=lesson['subject_id'],
                 teacher_id=teacher_id,
                 room=lesson.get('room', 'Ej tilldelat'),
                 notes=notes,
