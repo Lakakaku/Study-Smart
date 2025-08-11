@@ -1498,6 +1498,8 @@
                 }
             }
 
+
+
             // Ta bort lärarbehörighet
             async function removeTeacherQualification(subjectId, teacherId, teacherName, subjectName) {
                 if (!confirm(`Är du säker på att du vill ta bort ${teacherName}s behörighet att undervisa i ${subjectName}?`)) {
@@ -1572,10 +1574,24 @@
 
 
             function getSubjectNameById(subjectId) {
-                if (!subjectId) return null;
-                const s = schoolSubjects.find(x => String(x.id) === String(subjectId));
-                return s ? s.name : null;
+                if (subjectId === null || subjectId === undefined) return null;
+                const idStr = String(subjectId);
+
+                // 1) Sök i schoolSubjects (primärt)
+                const fromSchool = (Array.isArray(schoolSubjects) ? schoolSubjects : []).find(x => String(x.id) === idStr);
+                if (fromSchool) return fromSchool.name;
+
+                // 2) Sök i availableSubjects (fallback / äldre tabell)
+                const fromAvailable = (Array.isArray(availableSubjects) ? availableSubjects : []).find(x => String(x.id) === idStr);
+                if (fromAvailable) return fromAvailable.name;
+
+                return null;
             }
+
+
+
+    
+
 
 
 
@@ -1639,6 +1655,30 @@
             }
 
 
+            function mapSchoolSubjectToSubject(schoolSubjectId) {
+                // This function should map from SchoolSubject ID to Subject ID
+                // You'll need to implement the mapping logic based on your database structure
+                
+                // Option 1: If you have a direct mapping in your backend data
+                // Look for a mapping table or field that connects SchoolSubject to Subject
+                
+                // Option 2: Match by name (if names are consistent)
+                const schoolSubject = schoolSubjects.find(s => String(s.id) === String(schoolSubjectId));
+                if (schoolSubject) {
+                    // Look for matching subject in main subjects table by name
+                    const matchingSubject = availableSubjects.find(s => s.name === schoolSubject.name);
+                    if (matchingSubject) {
+                        return matchingSubject.id;
+                    }
+                }
+                
+                // Option 3: Return the school subject ID if no mapping exists
+                // (This assumes your backend can handle school_subject_ids in the subject_id field)
+                return schoolSubjectId;
+            }
+
+
+
 
 
 
@@ -1688,7 +1728,17 @@
                     const items = classSubjectMap[cid] || [];
                     items.forEach(item => {
                         const subjectId = item.subject_id;
-                        const subjectName = availableSubjects.find(s => s.id == subjectId)?.name || `Ämne ${subjectId}`;
+                        // sjökfunktion (lägg högst upp i filen om du inte redan har den)
+                            function getSubjectNameById(subjectId) {
+                            if (subjectId === null || subjectId === undefined) return null;
+                            const s = (Array.isArray(schoolSubjects) ? schoolSubjects : []).find(x => String(x.id) === String(subjectId));
+                            return s ? s.name : null;
+                        }
+
+                            // sedan här:
+                        const subjectName = getSubjectNameById(subjectId) || (availableSubjects.find(s => String(s.id) === String(subjectId))?.name) || `Ämne ${subjectId}`;
+
+
                         const hoursPerWeek = parseInt(item.hours);
 
                         if (hoursPerWeek > 5) {
@@ -1878,14 +1928,18 @@
                                             time: timeSlot,
                                             class_id: lesson.class_id,
                                             class_name: lesson.class_name,
-                                            subject_id: lesson.subject_id,
-                                            subject_name: lesson.subject_name,
+                                            // Skicka både för säkerhets skull — backend använder school_subject_id
+                                            subject_id: lesson.subject_id || null,
+                                            school_subject_id: lesson.school_subject_id || lesson.subject_id || null,
+                                            subject_name: getSubjectNameById(lesson.subject_id) || lesson.subject_name || 'Okänt ämne',
                                             room: selectedRoom,
                                             teacher_id: teacherAssignment.teacher_id,
                                             teacher_name: teacherAssignment.teacher_name,
                                             color: lesson.color,
                                             start_minutes: timeToMinutes(timeSlot.split('-')[0])
                                         };
+
+
 
                                         // Place the lesson
                                         globalSchedule[day].push(lessonData);
@@ -2021,7 +2075,26 @@
                             return;
                         }
 
-                        items.push({ subject_id: subjVal, hours: hrsVal });
+                        // Försök tolka valt värde som ett SchoolSubject-id
+                        const schoolSubjectId = parseInt(subjVal, 10);
+
+                        // Hämta namn från schoolSubjects (fallback: availableSubjects)
+                        const subjectNameFromSchool = getSubjectNameById(schoolSubjectId);
+                        const subjectNameFromAvailable = (availableSubjects||[]).find(s => String(s.id) === String(schoolSubjectId))?.name;
+                        const resolvedSubjectName = subjectNameFromSchool || subjectNameFromAvailable || `Ämne ${schoolSubjectId}`;
+
+                        // Push med både school_subject_id och subject_id (bakåtkompatibilitet)
+                        items.push({
+                            subject_id: schoolSubjectId,          // backend-fallback (tidigare fält)
+                            school_subject_id: schoolSubjectId,   // uttryckligt school_subject id
+                            subject_name: resolvedSubjectName,
+                            hours: hrsVal
+                        });
+
+                        // Debug-logg (ta bort när det funkar)
+                        debugLog('Added subject item', { classId, schoolSubjectId, resolvedSubjectName, hours: hrsVal });
+
+
                     }
 
                     classSubjectMap[classId] = items;
@@ -2335,7 +2408,14 @@
                             // Skapa cellinnehåll för varje aktiv lektion (använd local variabel 'les' i map)
                             const cellContent = activeLessons.map(les => {
                             // säkra fält
-                            const subjectLabel = les.subject_name || getSubjectNameById(les.subject_id) || 'Okänt ämne';
+
+                            // Försök i denna ordning: explicit subject_name -> lookup via school_subject_id -> lookup via subject_id -> fallback
+                            const subjectLabel =
+                                les.subject_name
+                                || getSubjectNameById(les.school_subject_id)
+                                || getSubjectNameById(les.subject_id)
+                                || 'Okänt ämne';
+
                             const classLabel = les.class_name || les.class_id || '';
                             const room = les.room || '';
                             const teacher = les.teacher_name || les.teacher || '';
