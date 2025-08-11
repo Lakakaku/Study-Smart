@@ -806,7 +806,13 @@
             let availableSubjects = {{ available_subjects | tojson }};
             let availableClasses = {{ classes | tojson }};
             let selectedClasses = [];
+            // Lägg högst upp (efter att serverdata injicerats)
+            let schoolSubjects = (typeof availableSubjects !== 'undefined' && Array.isArray(availableSubjects))
+                ? availableSubjects.slice()   // kopiera så vi inte muterar originalet oväntat
+                : (window.schoolSubjects || []);
 
+            // och lägg gärna tillbaka på window om andra moduler förväntar sig det
+            window.schoolSubjects = schoolSubjects;
             // Class colors for visual distinction
             const classColors = ['#4299e1', '#48bb78', '#f56565', '#ed8936', '#9f7aea', '#38b2ac', '#ec407a', '#26c6da', '#ab47bc', '#66bb6a'];
 
@@ -881,39 +887,8 @@
             
             // JavaScript för ämneshantering - lägg till i <script>-sektionen
 
-            let schoolSubjects = {{ available_subjects | tojson | safe }} || [];
 
-            function renderSubjects() {
-                const container = document.getElementById('existingSubjects');
-                const noMessage = document.getElementById('noSubjectsMessage');
-                
-                if (schoolSubjects.length === 0) {
-                    noMessage.style.display = 'block';
-                    container.innerHTML = '<div style="color: #666; text-align: center;" id="noSubjectsMessage">Inga ämnen ännu. Lägg till ämnen ovan.</div>';
-                    return;
-                }
-                
-                noMessage.style.display = 'none';
-                
-                let html = '';
-                schoolSubjects.forEach(subject => {
-                    html += `
-                        <div class="subject-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid #e2e8f0;">
-                            <div>
-                                <strong style="color: #2d3748;">${subject.name}</strong>
-                            </div>
-                            <button type="button" class="remove-subject-btn" onclick="removeSubject(${subject.id})" style="background: #f56565; color: white; padding: 0.25rem 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
-                                Ta bort
-                            </button>
-                        </div>
-                    `;
-                });
-                
-                container.innerHTML = html;
-                
-                // Uppdatera ämnesdropdowns i formuläret
-                updateSubjectDropdowns();
-            }
+            
 
 
             function updateClassStatusIndicators(statusData) {
@@ -1131,18 +1106,24 @@
 
 
             function updateSubjectDropdowns() {
-                // Uppdatera alla ämnesdropdowns i formuläret
                 const subjectSelects = document.querySelectorAll('select[name^="subjects_"]');
                 subjectSelects.forEach(select => {
-                    const currentValue = select.value;
-                    
+                    // spara nuvarande val (kan vara string eller number)
+                    const currentValue = String(select.value);
+
+                    // bygg options från schoolSubjects
                     let optionsHtml = '<option value="">Välj ämne...</option>';
                     schoolSubjects.forEach(subject => {
-                        optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
+                    optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
                     });
-                    
+
                     select.innerHTML = optionsHtml;
-                    select.value = currentValue; // Behåll vald värde om möjligt
+
+                    // återställ tidigare värde (jämför som sträng för säkerhet)
+                    if (currentValue) {
+                    const optToSet = Array.from(select.options).find(o => String(o.value) === currentValue);
+                    if (optToSet) select.value = currentValue;
+                    }
                 });
             }
 
@@ -1155,30 +1136,15 @@
             };
 
             // Uppdatera createSubjectItem funktionen för att använda schoolSubjects
-            function createSubjectItem(classId) {
-                const item = document.createElement('div');
-                item.className = 'subject-item';
-
-                let optionsHtml = '<option value="">Välj ämne...</option>';
-                schoolSubjects.forEach(subject => {
-                    optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
-                });
-
-                item.innerHTML = `
-                    <select name="subjects_${classId}[]" required onchange="validateSubjectHours()">
-                        ${optionsHtml}
-                    </select>
-                    <input type="number" name="hours_${classId}[]" min="1" max="5" placeholder="Timmar/vecka (max 5)" required onchange="validateSubjectHours()">
-                    <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
-                `;
-
-                return item;
-            }
+           
 
             // Initiera ämneslistan när sidan laddas
             document.addEventListener('DOMContentLoaded', function() {
                 renderSubjects();
             });
+
+
+            
             
 
 
@@ -1247,6 +1213,17 @@
                 const classVal = classSel && classSel.value !== 'all' ? classSel.value : null;
                 const teacherVal = teacherSel && teacherSel.value !== 'all' ? teacherSel.value : null;
                 if (currentSchedule) displayMultiClassSchedule(currentSchedule, classVal, teacherVal);
+            }
+
+            // Efter att currentSchedule deklarerats:
+            window.currentSchedule = window.currentSchedule || null;
+            window.multiClassSchedule = window.multiClassSchedule || window.currentSchedule;
+
+            // När du uppdaterar schemat, håll båda synkade:
+            function setCurrentSchedule(schedule) {
+            currentSchedule = schedule;
+            window.currentSchedule = schedule;
+            window.multiClassSchedule = schedule;
             }
 
 
@@ -1568,27 +1545,39 @@
 
 
 
-            function createSubjectItem(classId) {
-                // Create a subject-row element for classId
+            function createSubjectItem(classId, selectedSubjectId = '') {
                 const item = document.createElement('div');
                 item.className = 'subject-item';
 
                 let optionsHtml = '<option value="">Välj ämne...</option>';
-                availableSubjects.forEach(subject => {
+                schoolSubjects.forEach(subject => {
                     optionsHtml += `<option value="${subject.id}">${subject.name}</option>`;
                 });
 
-                // Note: name attributes include class id so they are per-class
                 item.innerHTML = `
                     <select name="subjects_${classId}[]" required onchange="validateSubjectHours()">
-                        ${optionsHtml}
+                    ${optionsHtml}
                     </select>
                     <input type="number" name="hours_${classId}[]" min="1" max="5" placeholder="Timmar/vecka (max 5)" required onchange="validateSubjectHours()">
                     <button type="button" class="remove-subject-btn" onclick="removeSubject(this)">Ta bort</button>
                 `;
 
+                // sätt valt ämne om det skickats in
+                if (selectedSubjectId) {
+                    item.querySelector('select').value = String(selectedSubjectId);
+                }
+
                 return item;
             }
+
+
+            function getSubjectNameById(subjectId) {
+                if (!subjectId) return null;
+                const s = schoolSubjects.find(x => String(x.id) === String(subjectId));
+                return s ? s.name : null;
+            }
+
+
 
             function addSubjectForClass(classId) {
                 const list = document.getElementById(`class_subject_list_${classId}`);
@@ -2280,116 +2269,103 @@
 
             // classFilter: null eller classId
             // teacherFilter: null eller teacherId/name
+            function escapeHtml(str) {
+                if (str === null || str === undefined) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+            function timeToMinutes(t) { const [hh, mm] = String(t).split(':').map(Number); return hh*60 + (mm||0); }
+
+                // Robust display-funktion (ersätt befintlig)
             function displayMultiClassSchedule(schedule, classFilter = null, teacherFilter = null) {
-                debugLog('Displaying schedule with filters', { classFilter, teacherFilter });
-
-                const preview = document.getElementById('schedulePreview');
-                if (!schedule || !schedule.lessons) {
-                    preview.innerHTML = '<p>Inget multi-klass schema att visa</p>';
-                    return;
-                }
-
-                const weekdays = ['måndag','tisdag','onsdag','torsdag','fredag'];
-
-                // Vänsterspalten 07:00 -> 18:00 i 5-minuterssteg
-                const times = [];
-                for (let m = 7*60; m <= 18*60; m += 5) times.push(minutesToTime(m));
-
-                // Bygg lessonMap med filter: lesson matchar om (classFilter === null || lesson.class_id == classFilter)
-                // OCH (teacherFilter === null || lesson.teacher_id == teacherFilter || lesson.teacher_name == teacherFilter)
-                const lessonMap = {};
-                schedule.lessons.forEach(lesson => {
-                    // Filter-check:
-                    if (classFilter && String(lesson.class_id) !== String(classFilter)) return;
-                    if (teacherFilter) {
-                        const tId = lesson.teacher_id ?? null;
-                        const tName = lesson.teacher_name ?? lesson.teacher ?? null;
-                        if (!(String(tId) === String(teacherFilter) || String(tName) === String(teacherFilter))) return;
+                    const preview = document.getElementById('schedulePreview');
+                    if (!preview) {
+                        console.warn('displayMultiClassSchedule: schedulePreview saknas i DOM');
+                        return;
+                    }
+                    if (!schedule || !Array.isArray(schedule.lessons)) {
+                        preview.innerHTML = '<div style="text-align:center;color:#666;">Inget schema att visa</div>';
+                        return;
                     }
 
-                    if (!lessonMap[lesson.day]) lessonMap[lesson.day] = [];
-                    lessonMap[lesson.day].push(lesson);
-                });
-
-                // If we filtered by teacher but teacher-select had no options initially, ensure options include teachers from schedule
-                if ((!document.getElementById('teacherFilter').querySelectorAll('option[data-generated]').length) ) {
-                    populateTeacherFilterFromSchedule(schedule);
-                }
-
-                let tableHTML = `<div style="overflow-x:auto;"><table class="schedule-table"><thead><tr><th style="min-width:60px;">Tid</th>${weekdays.map(d=>`<th>${d.charAt(0).toUpperCase()+d.slice(1)}</th>`).join('')}</tr></thead><tbody>`;
-
-                times.forEach(currentTime => {
-                    const currentMinutes = timeToMinutes(currentTime);
-                    tableHTML += `<tr><td style="font-weight:600; font-size:0.8rem;">${currentTime}</td>`;
-
-                    weekdays.forEach(day => {
-                        const dayLessons = lessonMap[day] || [];
-                        let cellContent = '';
-                        let cellClass = 'empty-cell';
-
-                        const activeLessons = [];
-                        for (const lesson of dayLessons) {
-                            if (lesson.time && lesson.time.includes('-')) {
-                                const [startTime, endTime] = lesson.time.split('-');
-                                const startMinutes = timeToMinutes(startTime);
-                                const endMinutes = timeToMinutes(endTime);
-                                if (currentMinutes >= startMinutes && currentMinutes < endMinutes) activeLessons.push(lesson);
-                            }
-                        }
-
-                        if (activeLessons.length > 0) {
-                            cellClass = 'lesson-cell';
-                            cellContent = activeLessons.map(lesson => `
-                                <div style="margin-bottom:4px;padding:4px;border-left:3px solid ${lesson.color};background:${lesson.color}15;">
-                                    <div class="lesson-subject">${lesson.subject_name}</div>
-                                    <div class="lesson-class">${lesson.class_name} • <span style="font-size:0.75rem;color:#718096">${lesson.room}</span></div>
-                                    ${lesson.teacher_name || lesson.teacher ? `<div style="font-size:0.75rem;color:#4a5568">Lärare: ${lesson.teacher_name || lesson.teacher}</div>` : ''}
-                                </div>
-                            `).join('');
-                        }
-
-                        if (cellContent) {
-                            tableHTML += `<td class="${cellClass}" style="padding:0.3rem;">${cellContent}</td>`;
-                        } else {
-                            tableHTML += `<td class="${cellClass}">${cellClass === 'empty-cell' ? '-' : ''}</td>`;
-                        }
+                    // Bygg lessonMap per dag för snabbare uppslag
+                    const lessonMap = {};
+                    schedule.lessons.forEach(ls => {
+                        // ls är säkert definierad här
+                        const day = ls.day || 'okänd';
+                        if (!lessonMap[day]) lessonMap[day] = [];
+                        lessonMap[day].push(ls);
                     });
 
-                    tableHTML += '</tr>';
-                });
+                    // times: använd schedule.time_slots om tillgänglig, annars fallback
+                    const times = Array.isArray(schedule.time_slots) && schedule.time_slots.length > 0
+                        ? schedule.time_slots.slice()
+                        : (typeof generateTimeSlots === 'function' ? generateTimeSlots('08:00','15:00', 60) : ['08:00-09:00']);
 
-                tableHTML += '</tbody></table></div>';
+                    const weekdays = ['måndag','tisdag','onsdag','torsdag','fredag'];
 
-                // Statistik (lite förenklad om filter används)
-                const stats = schedule.stats;
-                if (classFilter || teacherFilter) {
-                    tableHTML += `<div style="margin-top:1rem;padding:1rem;background:#f7fafc;border-radius:6px;">
-                        <h4 style="margin:0 0 0.5rem 0;">Filtrerad vy</h4>
-                        <div style="font-size:0.95rem;">
-                            Visade lektioner: ${Object.values(lessonMap).reduce((a,b)=>a+b.length,0)}<br>
-                            ${classFilter ? `Klass: ${ (availableClasses.find(c=>String(c.id)===String(classFilter))||{name:classFilter}).name }<br>` : ''}
-                            ${teacherFilter ? `Lärare: ${teacherFilter}<br>` : ''}
-                        </div>
-                    </div>`;
-                } else {
-                    // befintlig full statistik (oförändrad)
-                    tableHTML += `
-                        <div style="margin-top: 1rem; padding: 1rem; background: #f7fafc; border-radius: 6px;">
-                            <h4 style="margin: 0 0 0.5rem 0;">Multi-klass Schemastatistik</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.9rem;">
-                                <div>📚 Totalt lektioner: ${stats.total_lessons}</div>
-                                <div>👥 Klasser: ${schedule.classes.length}</div>
-                                <div>🏫 Rum använda: ${stats.rooms_used.length}</div>
-                                <div>⚖️ Balans: ${stats.balance_score}%</div>
-                                <div>🚫 Rumskonflikter: ${stats.room_conflicts.length}</div>
-                                <div>✅ Regelefterlevnad: ${stats.constraint_violations === 0 ? 'Perfekt' : `${stats.constraint_violations} fel`}</div>
-                            </div>
-                        </div>
-                    `;
-                }
+                    // Bygg HTML-tabell
+                    let html = '<div style="overflow-x:auto;"><table class="schedule-table" style="width:100%; border-collapse:collapse;">';
+                    html += '<thead><tr><th style="min-width:70px; text-align:left; padding:6px;">Tid</th>';
+                    weekdays.forEach(d => html += `<th style="text-align:left; padding:6px;">${d.charAt(0).toUpperCase()+d.slice(1)}</th>`);
+                    html += '</tr></thead><tbody>';
 
-                preview.innerHTML = tableHTML;
-                debugLog('Multi-class schedule displayed (with teacher filter)', { classFilter, teacherFilter });
+                    times.forEach(currentTime => {
+                        html += `<tr><td style="padding:6px; font-weight:600; vertical-align:top;">${escapeHtml(currentTime)}</td>`;
+
+                        weekdays.forEach(day => {
+                        const dayLessons = lessonMap[day] || [];
+                        // Hitta lektioner som täcker currentTime
+                        const activeLessons = dayLessons.filter(l => {
+                            if (!l.time) return false;
+                            const parts = String(l.time).split('-');
+                            if (parts.length !== 2) return false;
+                            const start = parts[0].trim(), end = parts[1].trim();
+                            const cur = timeToMinutes(currentTime.split('-')[0]);
+                            return cur >= timeToMinutes(start) && cur < timeToMinutes(end);
+                        });
+
+                        if (activeLessons.length === 0) {
+                            html += '<td class="empty-cell" style="padding:6px; color:#a0aec0;">-</td>';
+                        } else {
+                            // Skapa cellinnehåll för varje aktiv lektion (använd local variabel 'les' i map)
+                            const cellContent = activeLessons.map(les => {
+                            // säkra fält
+                            const subjectLabel = les.subject_name || getSubjectNameById(les.subject_id) || 'Okänt ämne';
+                            const classLabel = les.class_name || les.class_id || '';
+                            const room = les.room || '';
+                            const teacher = les.teacher_name || les.teacher || '';
+                            const color = les.color || '#9f7aea';
+
+                            return `
+                                <div style="margin-bottom:6px; padding:6px; border-left:4px solid ${escapeHtml(color)}; background: ${escapeHtml(color)}15; border-radius:6px;">
+                                <div style="font-weight:700;">${escapeHtml(subjectLabel)}</div>
+                                <div style="font-size:0.9rem; color:#4a5568;">${escapeHtml(classLabel)} • <span style="font-size:0.8rem; color:#718096">${escapeHtml(room)}</span></div>
+                                ${teacher ? `<div style="font-size:0.85rem; color:#4a5568;">Lärare: ${escapeHtml(teacher)}</div>` : ''}
+                                </div>
+                            `;
+                            }).join('');
+                            html += `<td class="lesson-cell" style="padding:6px; vertical-align:top;">${cellContent}</td>`;
+                        }
+                        });
+
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table></div>';
+
+                    preview.innerHTML = html;
+
+                    // Visa generationControls (om vi har ett schema att visa)
+                    const controls = document.getElementById('generationControls');
+                    if (controls) controls.style.display = '';
+                    
+                    // Fyll teacher-filter om tomt
+                    populateTeacherFilterFromSchedule(schedule);
             }
 
 
