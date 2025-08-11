@@ -1173,26 +1173,33 @@ class School(db.Model):
 
 
 class ClassSchedule(db.Model):
-    """Enhanced ClassSchedule model with teacher support"""
+    """Enhanced ClassSchedule model with teacher support and SchoolSubject"""
     __tablename__ = 'class_schedule'
     
     id = db.Column(db.Integer, primary_key=True)
     class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id', ondelete='CASCADE'), nullable=False)
-    weekday = db.Column(db.String(20), nullable=False)  # 'måndag', 'tisdag' …
+    weekday = db.Column(db.String(20), nullable=False)  # 'måndag', 'tisdag' ...
     start_time = db.Column(db.String(5), nullable=False)  # '08:00'
     end_time = db.Column(db.String(5), nullable=False)  # '09:00'
+    
+    # Gamla subject_id behålls för bakåtkompatibilitet men används inte längre
     subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # NEW
-    room = db.Column(db.String(50), nullable=True)
-    notes = db.Column(db.Text, nullable=True)  # NEW
-    is_active = db.Column(db.Boolean, default=True, nullable=False)  # NEW
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # NEW
+    
+    # Ny school_subject_id som används för schemaläggning
     school_subject_id = db.Column(db.Integer, db.ForeignKey('school_subjects.id'), nullable=True)
+    
+    teacher_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    room = db.Column(db.String(50), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
     # Relationer
     school_class = db.relationship('SchoolClass', backref='schedule')
-    subject = db.relationship('Subject')
-    teacher = db.relationship('User', foreign_keys=[teacher_id], backref='taught_schedule_items')  # NEW
+    subject = db.relationship('Subject')  # Behålls för bakåtkompatibilitet
+    school_subject = db.relationship('SchoolSubject', backref='class_schedules')  # Ny relation
+    teacher = db.relationship('User', foreign_keys=[teacher_id], backref='taught_schedule_items')
     
     def get_students_for_lesson(self):
         """Hämta alla elever som ska gå på denna lektion (baserat på class_id)"""
@@ -1220,10 +1227,18 @@ class ClassSchedule(db.Model):
         return 'Ingen lärare tilldelad'
     
     def get_subject_name(self):
-        """Hämta ämnesnamn"""
-        if self.subject:
+        """Hämta ämnesnamn - prioriterar school_subject över subject"""
+        if self.school_subject:
+            return self.school_subject.name
+        elif self.subject:
             return self.subject.name
         return 'Inget ämne'
+    
+    def get_subject_id(self):
+        """Hämta ämnes-ID - prioriterar school_subject_id över subject_id"""
+        if self.school_subject_id:
+            return self.school_subject_id
+        return self.subject_id
     
     def to_dict(self):
         """Konvertera till dictionary för JSON serialisering"""
@@ -1235,7 +1250,8 @@ class ClassSchedule(db.Model):
             'start_time': self.start_time,
             'end_time': self.end_time,
             'time_range': f"{self.start_time}-{self.end_time}",
-            'subject_id': self.subject_id,
+            'subject_id': self.get_subject_id(),  # Använd den föredragna ID:n
+            'school_subject_id': self.school_subject_id,
             'subject_name': self.get_subject_name(),
             'teacher_id': self.teacher_id,
             'teacher_name': self.get_teacher_name(),
@@ -1248,8 +1264,6 @@ class ClassSchedule(db.Model):
     
     def __repr__(self):
         return f"<ClassSchedule(class={self.class_id}, {self.weekday} {self.start_time}-{self.end_time})>"
-
-
 # Add these utility functions to your app
 
 def get_schedule_conflicts(class_ids, start_date=None, end_date=None):
@@ -3345,20 +3359,30 @@ def save_multi_class_schedule():
                 if teacher:
                     teacher_id = teacher.id
 
+            # Validera att school_subject_id tillhör skolan
+            school_subject = SchoolSubject.query.filter_by(
+                id=lesson['subject_id'],
+                school_id=current_user.school_id
+            ).first()
+            
+            if not school_subject:
+                print(f"Warning: School subject {lesson['subject_id']} not found for school {current_user.school_id}")
+                continue
+
             # Skapa notes med information om schemat
             notes_parts = ['Auto-genererat schema']
             if 'teacher_name' in lesson and lesson['teacher_name']:
                 notes_parts.append(f"Lärare: {lesson['teacher_name']}")
             notes = '. '.join(notes_parts)
 
-            # Skapa ny schedule post
+            # Skapa ny schedule post - använd school_subject_id istället för subject_id
             new_lesson = ClassSchedule(
                 class_id=lesson['class_id'],
                 weekday=lesson['day'],
                 start_time=start_time,
                 end_time=end_time,
-                subject_id=lesson['subject_id'],
-                school_subject_id=lesson['subject_id'],
+                school_subject_id=lesson['subject_id'],  # Använd school_subject_id
+                subject_id=None,  # Lämna den gamla som None
                 teacher_id=teacher_id,
                 room=lesson.get('room', 'Ej tilldelat'),
                 notes=notes,
@@ -3388,8 +3412,6 @@ def save_multi_class_schedule():
             'success': False,
             'error': f'Serverfel vid sparning: {str(e)}'
         }), 500
-
-
 
 @app.route('/api/class_schedule/reset/<int:class_id>', methods=['DELETE'])
 @login_required
@@ -3627,7 +3649,140 @@ def schedule_generator():
                          classrooms=classrooms)
 
 
+@app.route('/api/multi_class_schedule/status', methods=['POST'])
+@login_required
+def multi_class_schedule_status():
+    """Hämta status för multi-klass scheman"""
+    try:
+        if not current_user.is_school_admin() or not current_user.school_id:
+            return jsonify({
+                'success': False,
+                'error': 'Du har inte behörighet'
+            }), 403
 
+        data = request.get_json()
+        if not data or 'class_ids' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Inga klass-IDs angivna'
+            }), 400
+
+        class_ids = data['class_ids']
+        
+        # Validera att alla klasser tillhör användaren skola
+        valid_classes = SchoolClass.query.filter(
+            SchoolClass.id.in_(class_ids),
+            SchoolClass.school_id == current_user.school_id
+        ).all()
+
+        classes_status = []
+        total_lessons = 0
+        classes_with_schedule = 0
+
+        for school_class in valid_classes:
+            # Räkna lektioner för denna klass
+            lesson_count = ClassSchedule.query.filter_by(
+                class_id=school_class.id,
+                is_active=True
+            ).count()
+            
+            has_schedule = lesson_count > 0
+            if has_schedule:
+                classes_with_schedule += 1
+                total_lessons += lesson_count
+
+            classes_status.append({
+                'class_id': school_class.id,
+                'class_name': school_class.name,
+                'has_schedule': has_schedule,
+                'lesson_count': lesson_count
+            })
+
+        # Sammanfattning
+        summary = {
+            'total_classes': len(valid_classes),
+            'classes_with_schedule': classes_with_schedule,
+            'total_lessons': total_lessons,
+            'all_classes_have_schedule': classes_with_schedule == len(valid_classes)
+        }
+
+        return jsonify({
+            'success': True,
+            'classes_status': classes_status,
+            'summary': summary
+        })
+
+    except Exception as e:
+        print(f"Error getting multi-class schedule status: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Serverfel: {str(e)}'
+        }), 500
+
+
+@app.route('/api/class_schedule/status/<int:class_id>')
+@login_required
+def class_schedule_status(class_id):
+    """Hämta detaljerad status för en specifik klass"""
+    try:
+        # Validera att klassen tillhör användaren skola
+        school_class = SchoolClass.query.filter_by(
+            id=class_id,
+            school_id=current_user.school_id
+        ).first()
+
+        if not school_class:
+            return jsonify({
+                'success': False,
+                'error': 'Klass hittades inte'
+            }), 404
+
+        # Hämta alla lektioner för klassen
+        lessons = ClassSchedule.query.filter_by(
+            class_id=class_id,
+            is_active=True
+        ).order_by(
+            ClassSchedule.weekday,
+            ClassSchedule.start_time
+        ).all()
+
+        has_schedule = len(lessons) > 0
+
+        # Gruppera lektioner per dag
+        lessons_by_day = {
+            'måndag': [],
+            'tisdag': [],
+            'onsdag': [],
+            'torsdag': [],
+            'fredag': []
+        }
+
+        for lesson in lessons:
+            day_lessons = {
+                'time': f"{lesson.start_time}-{lesson.end_time}",
+                'subject': lesson.get_subject_name(),  # Detta använder den uppdaterade metoden
+                'room': lesson.room or 'Inget rum',
+                'teacher': lesson.get_teacher_name(),
+                'notes': lesson.notes
+            }
+            if lesson.weekday in lessons_by_day:
+                lessons_by_day[lesson.weekday].append(day_lessons)
+
+        return jsonify({
+            'success': True,
+            'class_id': class_id,
+            'class_name': school_class.name,
+            'has_schedule': has_schedule,
+            'lesson_count': len(lessons),
+            'lessons_by_day': lessons_by_day
+        })
+
+    except Exception as e:
+        print(f"Error getting class schedule status for {class_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Serverfel: {str(e)}'
+        }), 500
 
 # NYTT: API-endpoint för att hantera skolans ämnen
 @app.route('/api/school_subjects', methods=['GET', 'POST'])
