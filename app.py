@@ -1227,11 +1227,23 @@ class ClassSchedule(db.Model):
         return 'Ingen lärare tilldelad'
     
     def get_subject_name(self):
-        """Hämta ämnesnamn - prioriterar school_subject över subject"""
-        if self.school_subject:
+        """Hämta ämnesnamn - prioriterar school_subject över subject (UPPDATERAD)"""
+        # Prioritera SchoolSubject (det nya systemet)
+        if self.school_subject_id and self.school_subject:
             return self.school_subject.name
-        elif self.subject:
+        # Fallback till gamla Subject-systemet
+        elif self.subject_id and self.subject:
             return self.subject.name
+        # Om relationen inte är laddad, gör explicit query
+        elif self.school_subject_id:
+            school_subject = SchoolSubject.query.get(self.school_subject_id)
+            if school_subject:
+                return school_subject.name
+        elif self.subject_id:
+            subject = Subject.query.get(self.subject_id)
+            if subject:
+                return subject.name
+        
         return 'Inget ämne'
     
     def get_subject_id(self):
@@ -1252,7 +1264,7 @@ class ClassSchedule(db.Model):
             'time_range': f"{self.start_time}-{self.end_time}",
             'subject_id': self.get_subject_id(),  # Använd den föredragna ID:n
             'school_subject_id': self.school_subject_id,
-            'subject_name': self.get_subject_name(),
+            'subject_name': self.get_subject_name(),  # Nu korrekt från SchoolSubject
             'teacher_id': self.teacher_id,
             'teacher_name': self.get_teacher_name(),
             'room': self.room,
@@ -1264,7 +1276,9 @@ class ClassSchedule(db.Model):
     
     def __repr__(self):
         return f"<ClassSchedule(class={self.class_id}, {self.weekday} {self.start_time}-{self.end_time})>"
-# Add these utility functions to your app
+
+
+
 
 def get_schedule_conflicts(class_ids, start_date=None, end_date=None):
     """
@@ -2769,66 +2783,87 @@ def get_schedule_for_date(date):
         weekday_swe = weekday_mapping.get(weekday_eng, weekday_eng)
         
         if current_user.is_teacher():
-            # LÄRARE: Hämta alla lektioner där läraren undervisar
-            # Först, skapa en mapping av ämnets namn till de ämnen läraren undervisar
-            teacher_subjects_list = []
-            if current_user.teacher_subjects:
-                # Antag att teacher_subjects är en kommaseparerad sträng
-                teacher_subjects_list = [s.strip() for s in current_user.teacher_subjects.split(',')]
-            
-            # Hämta alla subjects som läraren äger (skapade)
-            owned_subjects = Subject.query.filter_by(user_id=current_user.id).all()
-            owned_subject_names = [s.name for s in owned_subjects]
-            
-            # Kombinera båda listorna
-            all_teacher_subjects = list(set(teacher_subjects_list + owned_subject_names))
-            
-            print(f"[DEBUG] Teacher {current_user.username} teaches: {all_teacher_subjects}")
-            
-            # Hämta schema för läraren baserat på skola och ämnen
+            # LÄRARE: Hämta lektioner där läraren undervisar
             schedule_items = []
             
-            # Metod 1: Baserat på subjects som läraren äger/undervisar
-            for subject_name in all_teacher_subjects:
-                # Hitta subject objekt
-                subject_obj = Subject.query.filter_by(name=subject_name).first()
-                if subject_obj:
-                    # Hämta schemalagda lektioner för detta ämne
-                    schedule_query = db.session.query(ClassSchedule).filter(
-                        ClassSchedule.weekday == weekday_swe,
-                        ClassSchedule.subject_id == subject_obj.id
-                    ).order_by(ClassSchedule.start_time).all()
-                    
-                    for item in schedule_query:
-                        school_class = SchoolClass.query.get(item.class_id)
-                        if school_class and school_class.school_id == current_user.school_id:
-                            schedule_items.append({
-                                'id': item.id,
-                                'start_time': item.start_time,
-                                'end_time': item.end_time,
-                                'subject': subject_name,
-                                'room': item.room or 'Okänt rum',
-                                'weekday': item.weekday,
-                                'class_name': school_class.name,
-                                'type': 'teaching'
-                            })
+            # Hämta alla schemalagda lektioner för lärarens skola på denna veckodag
+            schedule_query = db.session.query(ClassSchedule).join(
+                SchoolClass, ClassSchedule.class_id == SchoolClass.id
+            ).filter(
+                ClassSchedule.weekday == weekday_swe,
+                SchoolClass.school_id == current_user.school_id,
+                SchoolClass.is_active == True
+            ).order_by(ClassSchedule.start_time).all()
             
-            # Metod 2: Om inga specifika ämnen, visa alla lektioner på skolan (fallback)
-            if not schedule_items and current_user.school_id and current_user.school_id > 0:
-                print(f"[DEBUG] No subject-specific lessons found, showing all school lessons as fallback")
+            # Hämta lärarens ämnesbehörigheter från teacher_subject_qualifications
+            teacher_qualifications = TeacherSubjectQualification.query.filter_by(
+                teacher_id=current_user.id
+            ).all()
+            qualified_school_subject_ids = [q.school_subject_id for q in teacher_qualifications]
+            
+            print(f"[DEBUG] Teacher {current_user.username} qualified for school subjects: {qualified_school_subject_ids}")
+            
+            for item in schedule_query:
+                school_class = SchoolClass.query.get(item.class_id)
+                if not school_class:
+                    continue
                 
-                schedule_query = db.session.query(ClassSchedule).join(
-                    SchoolClass, ClassSchedule.class_id == SchoolClass.id
-                ).filter(
-                    ClassSchedule.weekday == weekday_swe,
-                    SchoolClass.school_id == current_user.school_id,
-                    SchoolClass.is_active == True
-                ).order_by(ClassSchedule.start_time).all()
+                # Hämta ämnesnamn från SchoolSubject (INTE Subject)
+                subject_name = "Okänt ämne"  # Default
+                should_include = False
+                
+                # Prioritera school_subject_id (det nya systemet)
+                if item.school_subject_id:
+                    school_subject = SchoolSubject.query.get(item.school_subject_id)
+                    if school_subject:
+                        subject_name = school_subject.name
+                        # Kontrollera om läraren är behörig för detta SchoolSubject
+                        if item.school_subject_id in qualified_school_subject_ids:
+                            should_include = True
+                        # Eller om läraren är explicit tilldelad för denna lektion
+                        elif item.teacher_id == current_user.id:
+                            should_include = True
+                
+                # Fallback för gamla lektioner som fortfarande använder subject_id
+                elif item.subject_id:
+                    subject = Subject.query.get(item.subject_id)
+                    if subject:
+                        subject_name = subject.name
+                        # För äldre system, visa alla lektioner (eller implementera annan logik)
+                        should_include = True
+                
+                # Lägg till lektion om läraren ska se den
+                if should_include:
+                    schedule_items.append({
+                        'id': item.id,
+                        'start_time': item.start_time,
+                        'end_time': item.end_time,
+                        'subject': subject_name,
+                        'room': item.room or 'Okänt rum',
+                        'weekday': item.weekday,
+                        'class_name': school_class.name,
+                        'type': 'teaching',
+                        'school_subject_id': item.school_subject_id,
+                        'teacher_assigned': item.teacher_id == current_user.id
+                    })
+            
+            # Om inga behörighetsbaserade lektioner hittades, visa alla lektioner som fallback
+            if not schedule_items and qualified_school_subject_ids:
+                print(f"[DEBUG] No qualified lessons found, showing all school lessons as fallback")
                 
                 for item in schedule_query:
                     school_class = SchoolClass.query.get(item.class_id)
-                    subject_name = "Matematik"  # Default
-                    if item.subject_id:
+                    if not school_class:
+                        continue
+                    
+                    # Använd SchoolSubject för att hämta ämnesnamn
+                    subject_name = "Okänt ämne"
+                    if item.school_subject_id:
+                        school_subject = SchoolSubject.query.get(item.school_subject_id)
+                        if school_subject:
+                            subject_name = school_subject.name
+                    elif item.subject_id:
+                        # Fallback för gamla poster
                         subject = Subject.query.get(item.subject_id)
                         if subject:
                             subject_name = subject.name
@@ -2840,40 +2875,10 @@ def get_schedule_for_date(date):
                         'subject': subject_name,
                         'room': item.room or 'Okänt rum',
                         'weekday': item.weekday,
-                        'class_name': school_class.name if school_class else "Okänd klass",
-                        'type': 'teaching'
+                        'class_name': school_class.name,
+                        'type': 'fallback',
+                        'school_subject_id': item.school_subject_id
                     })
-            
-            # Metod 3: Om läraren är klassföreståndare, visa även klassens schema
-            homeroom_classes = SchoolClass.query.filter_by(homeroom_teacher_id=current_user.id).all()
-            for class_obj in homeroom_classes:
-                class_schedule = db.session.query(ClassSchedule).filter(
-                    ClassSchedule.class_id == class_obj.id,
-                    ClassSchedule.weekday == weekday_swe
-                ).order_by(ClassSchedule.start_time).all()
-                
-                for item in class_schedule:
-                    # Kontrollera om vi redan har denna lektion (undvik duplicering)
-                    existing = any(
-                        s['id'] == item.id for s in schedule_items
-                    )
-                    if not existing:
-                        subject_name = "Matematik"  # Default
-                        if item.subject_id:
-                            subject = Subject.query.get(item.subject_id)
-                            if subject:
-                                subject_name = subject.name
-                        
-                        schedule_items.append({
-                            'id': item.id,
-                            'start_time': item.start_time,
-                            'end_time': item.end_time,
-                            'subject': subject_name,
-                            'room': item.room or 'Okänt rum',
-                            'weekday': item.weekday,
-                            'class_name': class_obj.name,
-                            'type': 'homeroom'
-                        })
             
             # Sortera efter tid
             schedule_items.sort(key=lambda x: x['start_time'])
@@ -2888,14 +2893,13 @@ def get_schedule_for_date(date):
                 'user_type': 'teacher',
                 'school_name': current_user.get_school_name() if hasattr(current_user, 'get_school_name') else 'Okänd skola',
                 'debug_info': {
-                    'teacher_subjects': all_teacher_subjects,
-                    'school_id': current_user.school_id,
-                    'homeroom_classes': [c.name for c in homeroom_classes]
+                    'qualified_school_subjects': qualified_school_subject_ids,
+                    'school_id': current_user.school_id
                 }
             })
         
         else:
-            # ELEV: Befintlig logik (fungerar redan)
+            # ELEV: Hämta schema för elevens klass
             if not current_user.class_id or current_user.class_id == 0:
                 return jsonify({
                     'status': 'success',
@@ -2904,7 +2908,7 @@ def get_schedule_for_date(date):
                     'user_type': 'student'
                 })
             
-            # Hämta schema från databasen
+            # Hämta schema från databasen för elevens klass
             schedule_query = db.session.query(ClassSchedule).filter_by(
                 class_id=current_user.class_id,
                 weekday=weekday_swe
@@ -2912,9 +2916,17 @@ def get_schedule_for_date(date):
             
             schedule_items = []
             for item in schedule_query:
-                # Hämta ämnesnamn om subject_id finns
-                subject_name = "Matematik"  # Default för test
-                if item.subject_id:
+                # Använd SchoolSubject för att hämta ämnesnamn (INTE Subject)
+                subject_name = "Okänt ämne"  # Default
+                
+                # Prioritera school_subject_id (det nya systemet)
+                if item.school_subject_id:
+                    school_subject = SchoolSubject.query.get(item.school_subject_id)
+                    if school_subject:
+                        subject_name = school_subject.name
+                
+                # Fallback för gamla lektioner som fortfarande använder subject_id
+                elif item.subject_id:
                     subject = Subject.query.get(item.subject_id)
                     if subject:
                         subject_name = subject.name
@@ -2923,10 +2935,11 @@ def get_schedule_for_date(date):
                     'id': item.id,
                     'start_time': item.start_time,
                     'end_time': item.end_time,
-                    'subject': subject_name,
+                    'subject': subject_name,  # Nu kommer detta från SchoolSubject
                     'room': item.room or 'Okänt rum',
                     'weekday': item.weekday,
-                    'type': 'lesson'
+                    'type': 'lesson',
+                    'school_subject_id': item.school_subject_id
                 })
             
             return jsonify({
@@ -2950,6 +2963,7 @@ def get_schedule_for_date(date):
             'message': 'Kunde inte hämta schema',
             'error_details': str(e)
         }), 500
+
 
 
 # Also add this helper route to test teacher schedule setup
@@ -3474,55 +3488,50 @@ def reset_class_schedule(class_id):
         }), 500
 
 
+# Uppdatera även get_class_schedule_status för konsistens
 @app.route('/api/class_schedule/status/<int:class_id>')
 @login_required
 def get_class_schedule_status(class_id):
     """Hämta status för en klass schema (antal lektioner, etc.)"""
     if not current_user.is_school_admin() or not current_user.school_id:
         return jsonify({'success': False, 'error': 'Ingen behörighet'}), 403
-    
+
     try:
         # Kontrollera att klassen tillhör skolan
         school_class = SchoolClass.query.filter_by(
             id=class_id,
             school_id=current_user.school_id
         ).first()
-        
+
         if not school_class:
             return jsonify({'success': False, 'error': 'Klassen hittades inte'}), 404
-        
+
         # Räkna befintliga schemalektioner
         lesson_count = ClassSchedule.query.filter_by(class_id=class_id).count()
-        
+
         # Hämta schema-detaljer om de finns
         lessons_by_day = {}
         if lesson_count > 0:
             lessons = ClassSchedule.query.filter_by(class_id=class_id).order_by(
                 ClassSchedule.weekday, ClassSchedule.start_time
             ).all()
-            
+
             for lesson in lessons:
                 day = lesson.weekday
                 if day not in lessons_by_day:
                     lessons_by_day[day] = []
+
+                # Använd get_subject_name() metoden som prioriterar SchoolSubject
+                subject_name = lesson.get_subject_name()
                 
-                subject_name = 'Okänt ämne'
-                # Prioritera SchoolSubject (nya systemet)
-                if lesson.school_subject_id:
-                    ss = SchoolSubject.query.get(lesson.school_subject_id)
-                    if ss:
-                        subject_name = ss.name
-                # Fallback till legacy Subject om ingen SchoolSubject finns
-                elif lesson.subject_id:
-                    subject = Subject.query.get(lesson.subject_id)
-                    if subject:
-                        subject_name = subject.name
                 lessons_by_day[day].append({
                     'time': f"{lesson.start_time}-{lesson.end_time}",
                     'subject': subject_name,
-                    'room': lesson.room or 'Inget rum'
+                    'room': lesson.room or 'Inget rum',
+                    'school_subject_id': lesson.school_subject_id,
+                    'subject_id': lesson.subject_id  # För bakåtkompatibilitet
                 })
-        
+
         return jsonify({
             'success': True,
             'class_id': class_id,
@@ -3532,14 +3541,13 @@ def get_class_schedule_status(class_id):
             'lessons_by_day': lessons_by_day,
             'last_updated': school_class.updated_at.isoformat() if school_class.updated_at else None
         })
-        
+
     except Exception as e:
         print(f"Error getting class schedule status: {str(e)}")
         return jsonify({
             'success': False,
             'error': f'Fel vid hämtning av schemastatus: {str(e)}'
         }), 500
-
 
 
 @app.route('/api/multi_class_schedule/status', methods=['POST'])
@@ -4048,27 +4056,39 @@ def save_schedule_api():
         
         # Spara nya schemalektioner
         saved_count = 0
-        # --- ersätt loop-skapandet i save_schedule_api ---
         for lesson in schedule_data.get('lessons', []):
             start, end = [t.strip() for t in lesson['time'].split('-')]
-            # Prioritera explicit school_subject_id från frontend, annars fallback till subject_id
+            
+            # Prioritera school_subject_id över subject_id
             school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
             if school_subject_id:
                 school_subject_id = int(school_subject_id)
+                
+                # Validera att school_subject_id tillhör rätt skola
+                school_subject = SchoolSubject.query.filter_by(
+                    id=school_subject_id,
+                    school_id=current_user.school_id
+                ).first()
+                
+                if not school_subject:
+                    print(f"Warning: school_subject_id {school_subject_id} does not belong to school {current_user.school_id}")
+                    continue  # Hoppa över denna lektion om ämnet inte tillhör skolan
 
+            # Skapa schema-objekt med ENDAST school_subject_id (inte subject_id)
             schedule_item = ClassSchedule(
                 class_id=class_id,
                 weekday=lesson['day'],
                 start_time=start,
                 end_time=end,
-                school_subject_id=school_subject_id,
-                subject_id=None,  # behåll bakåtkompatibilitet men lämna None
-                room=lesson.get('room')
+                school_subject_id=school_subject_id,  # Använd SchoolSubject
+                subject_id=None,  # Lämna tom för att tvinga användning av SchoolSubject
+                room=lesson.get('room'),
+                teacher_id=lesson.get('teacher_id'),  # Om tillgängligt från frontend
+                notes=f"Auto-genererat schema. Lärare: {lesson.get('teacher_name', 'Ej tilldelad')}"
             )
             db.session.add(schedule_item)
             saved_count += 1
 
-        
         db.session.commit()
         
         return jsonify({
