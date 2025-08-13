@@ -3012,6 +3012,427 @@ def setup_teacher_schedule():
 
 # Lägg till dessa routes i din Flask app
 
+
+
+
+@app.route('/api/schedule/check_conflicts', methods=['POST'])
+@login_required
+def check_schedule_conflicts():
+    """Check for conflicts when moving a lesson"""
+    try:
+        data = request.get_json()
+        lesson_id = data.get('lesson_id')
+        new_day = data.get('new_day')
+        new_time = data.get('new_time')
+        class_id = data.get('class_id')
+        
+        if not all([lesson_id, new_day, new_time, class_id]):
+            return jsonify({
+                'success': False,
+                'canMove': False,
+                'reason': 'Saknade parametrar'
+            }), 400
+        
+        # Get the lesson being moved
+        lesson = ClassSchedule.query.get(lesson_id)
+        if not lesson:
+            return jsonify({
+                'success': False,
+                'canMove': False,
+                'reason': 'Lektion finns inte'
+            }), 404
+        
+        # Parse new time
+        try:
+            start_time, end_time = new_time.split('-')
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'canMove': False,
+                'reason': 'Ogiltigt tidsformat'
+            }), 400
+        
+        conflicts = []
+        
+        # Check for room conflicts (if lesson has a room)
+        if lesson.room:
+            room_conflict = ClassSchedule.query.filter(
+                ClassSchedule.id != lesson_id,
+                ClassSchedule.room == lesson.room,
+                ClassSchedule.weekday == new_day,
+                ClassSchedule.start_time == start_time,
+                ClassSchedule.is_active == True
+            ).first()
+            
+            if room_conflict:
+                conflicts.append(f"Klassrum {lesson.room} är redan bokat av {room_conflict.school_class.name if room_conflict.school_class else 'annan klass'}")
+        
+        # Check for teacher conflicts (if lesson has a teacher)
+        if lesson.teacher_id:
+            teacher_conflict = ClassSchedule.query.filter(
+                ClassSchedule.id != lesson_id,
+                ClassSchedule.teacher_id == lesson.teacher_id,
+                ClassSchedule.weekday == new_day,
+                ClassSchedule.start_time == start_time,
+                ClassSchedule.is_active == True
+            ).first()
+            
+            if teacher_conflict:
+                teacher_name = lesson.teacher.get_full_name() if lesson.teacher else 'Läraren'
+                conflicts.append(f"{teacher_name} undervisar redan {teacher_conflict.school_class.name if teacher_conflict.school_class else 'annan klass'}")
+        
+        # Check for class conflicts (same class can't have multiple lessons at same time)
+        class_conflict = ClassSchedule.query.filter(
+            ClassSchedule.id != lesson_id,
+            ClassSchedule.class_id == class_id,
+            ClassSchedule.weekday == new_day,
+            ClassSchedule.start_time == start_time,
+            ClassSchedule.is_active == True
+        ).first()
+        
+        if class_conflict:
+            conflicts.append(f"Klassen har redan en lektion i {class_conflict.get_subject_name()} denna tid")
+        
+        # Check if same subject already exists on this day for this class
+        subject_conflict = None
+        if lesson.school_subject_id:
+            subject_conflict = ClassSchedule.query.filter(
+                ClassSchedule.id != lesson_id,
+                ClassSchedule.class_id == class_id,
+                ClassSchedule.school_subject_id == lesson.school_subject_id,
+                ClassSchedule.weekday == new_day,
+                ClassSchedule.is_active == True
+            ).first()
+        elif lesson.subject_id:  # Fallback to old subject system
+            subject_conflict = ClassSchedule.query.filter(
+                ClassSchedule.id != lesson_id,
+                ClassSchedule.class_id == class_id,
+                ClassSchedule.subject_id == lesson.subject_id,
+                ClassSchedule.weekday == new_day,
+                ClassSchedule.is_active == True
+            ).first()
+        
+        if subject_conflict:
+            conflicts.append(f"Klassen har redan en lektion i {lesson.get_subject_name()} på {new_day}")
+        
+        can_move = len(conflicts) == 0
+        reason = '; '.join(conflicts) if conflicts else None
+        
+        return jsonify({
+            'success': True,
+            'canMove': can_move,
+            'reason': reason,
+            'conflicts': conflicts,
+            'details': {
+                'lesson_id': lesson_id,
+                'current_day': lesson.weekday,
+                'current_time': f"{lesson.start_time}-{lesson.end_time}",
+                'new_day': new_day,
+                'new_time': new_time,
+                'room': lesson.room,
+                'teacher': lesson.get_teacher_name(),
+                'subject': lesson.get_subject_name()
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error checking schedule conflicts: {str(e)}")
+        return jsonify({
+            'success': False,
+            'canMove': False,
+            'reason': f'Serverfel: {str(e)}'
+        }), 500
+
+
+@app.route('/api/schedule/move_lesson/<int:lesson_id>', methods=['PUT'])
+@login_required
+def move_lesson(lesson_id):
+    """Move a lesson to a new day/time"""
+    try:
+        data = request.get_json()
+        new_weekday = data.get('weekday')
+        new_start_time = data.get('start_time')
+        new_end_time = data.get('end_time')
+        
+        if not all([new_weekday, new_start_time, new_end_time]):
+            return jsonify({
+                'success': False,
+                'error': 'Saknade parametrar för flytt'
+            }), 400
+        
+        # Get the lesson
+        lesson = ClassSchedule.query.get(lesson_id)
+        if not lesson:
+            return jsonify({
+                'success': False,
+                'error': 'Lektion finns inte'
+            }), 404
+        
+        # Verify user has permission to edit this schedule
+        if not current_user.is_admin and not current_user.is_teacher:
+            return jsonify({
+                'success': False,
+                'error': 'Ingen behörighet att redigera scheman'
+            }), 403
+        
+        # Store original values for logging
+        original_weekday = lesson.weekday
+        original_start_time = lesson.start_time
+        original_end_time = lesson.end_time
+        
+        # Validate new time format
+        try:
+            # Basic time validation
+            start_hour, start_min = map(int, new_start_time.split(':'))
+            end_hour, end_min = map(int, new_end_time.split(':'))
+            
+            if not (0 <= start_hour <= 23 and 0 <= start_min <= 59):
+                raise ValueError("Invalid start time")
+            if not (0 <= end_hour <= 23 and 0 <= end_min <= 59):
+                raise ValueError("Invalid end time")
+                
+            # Ensure end time is after start time
+            start_minutes = start_hour * 60 + start_min
+            end_minutes = end_hour * 60 + end_min
+            if end_minutes <= start_minutes:
+                raise ValueError("End time must be after start time")
+                
+        except ValueError as e:
+            return jsonify({
+                'success': False,
+                'error': f'Ogiltigt tidsformat: {str(e)}'
+            }), 400
+        
+        # Validate weekday
+        valid_weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag']
+        if new_weekday not in valid_weekdays:
+            return jsonify({
+                'success': False,
+                'error': 'Ogiltig veckodag'
+            }), 400
+        
+        # Final conflict check before moving
+        conflicts = []
+        
+        # Room conflict check
+        if lesson.room:
+            room_conflict = ClassSchedule.query.filter(
+                ClassSchedule.id != lesson_id,
+                ClassSchedule.room == lesson.room,
+                ClassSchedule.weekday == new_weekday,
+                ClassSchedule.start_time == new_start_time,
+                ClassSchedule.is_active == True
+            ).first()
+            
+            if room_conflict:
+                conflicts.append(f"Klassrum {lesson.room} är redan bokat")
+        
+        # Teacher conflict check
+        if lesson.teacher_id:
+            teacher_conflict = ClassSchedule.query.filter(
+                ClassSchedule.id != lesson_id,
+                ClassSchedule.teacher_id == lesson.teacher_id,
+                ClassSchedule.weekday == new_weekday,
+                ClassSchedule.start_time == new_start_time,
+                ClassSchedule.is_active == True
+            ).first()
+            
+            if teacher_conflict:
+                conflicts.append(f"Läraren är redan bokad")
+        
+        # Class conflict check
+        class_conflict = ClassSchedule.query.filter(
+            ClassSchedule.id != lesson_id,
+            ClassSchedule.class_id == lesson.class_id,
+            ClassSchedule.weekday == new_weekday,
+            ClassSchedule.start_time == new_start_time,
+            ClassSchedule.is_active == True
+        ).first()
+        
+        if class_conflict:
+            conflicts.append(f"Klassen har redan en lektion denna tid")
+        
+        if conflicts:
+            return jsonify({
+                'success': False,
+                'error': 'Konflikter upptäckta: ' + '; '.join(conflicts),
+                'conflicts': conflicts
+            }), 409
+        
+        # Perform the move
+        try:
+            lesson.weekday = new_weekday
+            lesson.start_time = new_start_time
+            lesson.end_time = new_end_time
+            lesson.updated_at = datetime.utcnow()
+            
+            db.session.commit()
+            
+            # Log the change
+            app.logger.info(f"Lesson {lesson_id} moved by {current_user.username}: "
+                          f"{original_weekday} {original_start_time}-{original_end_time} -> "
+                          f"{new_weekday} {new_start_time}-{new_end_time}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Lektion flyttad framgångsrikt',
+                'lesson': lesson.to_dict(),
+                'changes': {
+                    'from': {
+                        'weekday': original_weekday,
+                        'start_time': original_start_time,
+                        'end_time': original_end_time
+                    },
+                    'to': {
+                        'weekday': new_weekday,
+                        'start_time': new_start_time,
+                        'end_time': new_end_time
+                    }
+                }
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error moving lesson {lesson_id}: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'Databasfel vid flytt: {str(e)}'
+            }), 500
+        
+    except Exception as e:
+        app.logger.error(f"Error in move_lesson endpoint: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Serverfel: {str(e)}'
+        }), 500
+
+
+@app.route('/api/schedule/validate_move', methods=['POST'])
+@login_required
+def validate_schedule_move():
+    """Validate a potential lesson move without actually moving it"""
+    try:
+        data = request.get_json()
+        lesson_id = data.get('lesson_id')
+        new_day = data.get('new_day')
+        new_time = data.get('new_time')
+        
+        if not all([lesson_id, new_day, new_time]):
+            return jsonify({
+                'success': False,
+                'valid': False,
+                'reason': 'Saknade parametrar'
+            }), 400
+        
+        lesson = ClassSchedule.query.get(lesson_id)
+        if not lesson:
+            return jsonify({
+                'success': False,
+                'valid': False,
+                'reason': 'Lektion finns inte'
+            }), 404
+        
+        start_time, end_time = new_time.split('-')
+        
+        # Comprehensive validation
+        validation_results = {
+            'valid': True,
+            'warnings': [],
+            'errors': [],
+            'suggestions': []
+        }
+        
+        # Check all potential conflicts
+        room_conflicts = ClassSchedule.query.filter(
+            ClassSchedule.id != lesson_id,
+            ClassSchedule.room == lesson.room,
+            ClassSchedule.weekday == new_day,
+            ClassSchedule.start_time == start_time,
+            ClassSchedule.is_active == True
+        ).all() if lesson.room else []
+        
+        teacher_conflicts = ClassSchedule.query.filter(
+            ClassSchedule.id != lesson_id,
+            ClassSchedule.teacher_id == lesson.teacher_id,
+            ClassSchedule.weekday == new_day,
+            ClassSchedule.start_time == start_time,
+            ClassSchedule.is_active == True
+        ).all() if lesson.teacher_id else []
+        
+        class_conflicts = ClassSchedule.query.filter(
+            ClassSchedule.id != lesson_id,
+            ClassSchedule.class_id == lesson.class_id,
+            ClassSchedule.weekday == new_day,
+            ClassSchedule.start_time == start_time,
+            ClassSchedule.is_active == True
+        ).all()
+        
+        # Process conflicts
+        if room_conflicts:
+            validation_results['errors'].append(f"Klassrum {lesson.room} är upptaget")
+            validation_results['valid'] = False
+        
+        if teacher_conflicts:
+            validation_results['errors'].append(f"Läraren är upptagen")
+            validation_results['valid'] = False
+        
+        if class_conflicts:
+            validation_results['errors'].append(f"Klassen har redan en lektion")
+            validation_results['valid'] = False
+        
+        # Add suggestions for better times if current move is invalid
+        if not validation_results['valid']:
+            # Find alternative time slots on the same day
+            all_times = [f"{h:02d}:00-{h+1:02d}:00" for h in range(8, 16)]
+            available_times = []
+            
+            for time_slot in all_times:
+                slot_start = time_slot.split('-')[0]
+                conflicts = ClassSchedule.query.filter(
+                    ClassSchedule.id != lesson_id,
+                    ClassSchedule.weekday == new_day,
+                    ClassSchedule.start_time == slot_start,
+                    ClassSchedule.is_active == True,
+                    db.or_(
+                        ClassSchedule.room == lesson.room if lesson.room else False,
+                        ClassSchedule.teacher_id == lesson.teacher_id if lesson.teacher_id else False,
+                        ClassSchedule.class_id == lesson.class_id
+                    )
+                ).first()
+                
+                if not conflicts:
+                    available_times.append(time_slot)
+            
+            if available_times:
+                validation_results['suggestions'] = available_times[:3]  # Top 3 suggestions
+        
+        return jsonify({
+            'success': True,
+            **validation_results
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error validating schedule move: {str(e)}")
+        return jsonify({
+            'success': False,
+            'valid': False,
+            'reason': f'Serverfel: {str(e)}'
+        }), 500
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @app.route('/api/lunch_menu')
 @login_required
 def get_lunch_menu():
