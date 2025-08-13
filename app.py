@@ -3160,26 +3160,15 @@ def move_lesson(lesson_id):
                 'error': 'Saknade parametrar för flytt'
             }), 400
         
-        # Handle both integer IDs and temporary string IDs from edit mode
-        lesson = None
-        if lesson_id.isdigit():
-            # Real database ID
-            lesson = ClassSchedule.query.get(int(lesson_id))
-        else:
-            # Temporary ID from edit mode - need to find by other means
-            # Extract class info from the current edit session
-            if not hasattr(current_user, '_editing_class_id'):
-                return jsonify({
-                    'success': False,
-                    'error': 'Ingen aktiv redigeringssession'
-                }), 400
-            
-            # Find lesson by matching original position from drag data
-            # This is a fallback - we'll improve the ID system
-            return jsonify({
-                'success': False,
-                'error': 'Ogiltigt lesson ID format'
-            }), 400
+        # Parse times to minutes for overlap checking
+        def time_to_minutes(time_str):
+            hours, minutes = map(int, time_str.split(':'))
+            return hours * 60 + minutes
+        
+        new_start_minutes = time_to_minutes(new_start_time)
+        new_end_minutes = time_to_minutes(new_end_time)
+        
+        lesson = ClassSchedule.query.get(int(lesson_id)) if lesson_id.isdigit() else None
         
         if not lesson:
             return jsonify({
@@ -3194,47 +3183,57 @@ def move_lesson(lesson_id):
                 'error': 'Du har inte behörighet att redigera denna lektion'
             }), 403
         
-        # Enhanced conflict checking
+        # Enhanced conflict checking with TIME OVERLAP detection
         conflicts = []
         
-        # Room conflict check (strict - no double booking)
+        # Room conflict check - Check for ANY time overlap, not just exact matches
         if lesson.room:
-            room_conflict = ClassSchedule.query.filter(
+            room_conflicts = ClassSchedule.query.filter(
                 ClassSchedule.id != lesson.id,
                 ClassSchedule.room == lesson.room,
                 ClassSchedule.weekday == new_weekday,
-                ClassSchedule.start_time == new_start_time,
                 ClassSchedule.is_active == True
-            ).first()
+            ).all()
             
-            if room_conflict:
-                conflicts.append(f"Klassrum {lesson.room} är redan bokat av {room_conflict.school_class.name}")
+            for conflict_lesson in room_conflicts:
+                conflict_start = time_to_minutes(conflict_lesson.start_time)
+                conflict_end = time_to_minutes(conflict_lesson.end_time)
+                
+                # Check for time overlap: lessons overlap if new_start < conflict_end AND new_end > conflict_start
+                if new_start_minutes < conflict_end and new_end_minutes > conflict_start:
+                    conflicts.append(f"Klassrum {lesson.room} är redan bokat av {conflict_lesson.school_class.name} ({conflict_lesson.start_time}-{conflict_lesson.end_time})")
         
-        # Teacher conflict check (strict - no double booking)
+        # Teacher conflict check with overlap detection
         if lesson.teacher_id:
-            teacher_conflict = ClassSchedule.query.filter(
+            teacher_conflicts = ClassSchedule.query.filter(
                 ClassSchedule.id != lesson.id,
                 ClassSchedule.teacher_id == lesson.teacher_id,
                 ClassSchedule.weekday == new_weekday,
-                ClassSchedule.start_time == new_start_time,
                 ClassSchedule.is_active == True
-            ).first()
+            ).all()
             
-            if teacher_conflict:
-                teacher_name = lesson.teacher.get_full_name() if lesson.teacher else 'Läraren'
-                conflicts.append(f"{teacher_name} undervisar redan {teacher_conflict.school_class.name}")
+            for conflict_lesson in teacher_conflicts:
+                conflict_start = time_to_minutes(conflict_lesson.start_time)
+                conflict_end = time_to_minutes(conflict_lesson.end_time)
+                
+                if new_start_minutes < conflict_end and new_end_minutes > conflict_start:
+                    teacher_name = lesson.teacher.get_full_name() if lesson.teacher else 'Läraren'
+                    conflicts.append(f"{teacher_name} undervisar redan {conflict_lesson.school_class.name} ({conflict_lesson.start_time}-{conflict_lesson.end_time})")
         
-        # Class conflict check
-        class_conflict = ClassSchedule.query.filter(
+        # Class conflict check with overlap detection
+        class_conflicts = ClassSchedule.query.filter(
             ClassSchedule.id != lesson.id,
             ClassSchedule.class_id == lesson.class_id,
             ClassSchedule.weekday == new_weekday,
-            ClassSchedule.start_time == new_start_time,
             ClassSchedule.is_active == True
-        ).first()
+        ).all()
         
-        if class_conflict:
-            conflicts.append(f"Klassen har redan en lektion denna tid")
+        for conflict_lesson in class_conflicts:
+            conflict_start = time_to_minutes(conflict_lesson.start_time)
+            conflict_end = time_to_minutes(conflict_lesson.end_time)
+            
+            if new_start_minutes < conflict_end and new_end_minutes > conflict_start:
+                conflicts.append(f"Klassen har redan en lektion denna tid ({conflict_lesson.start_time}-{conflict_lesson.end_time})")
         
         if conflicts:
             return jsonify({
