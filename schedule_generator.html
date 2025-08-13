@@ -3938,29 +3938,35 @@
             /**
              * Move lesson in database
              */
+            // Uppdatera moveLesson funktionen för att använda riktig API
             async function moveLesson(lessonId, newDay, newTime) {
-                // Simulera flytt genom att returnera success
-                // I riktigt system skulle detta anropa backend API
-                console.log(`Moving lesson ${lessonId} to ${newDay} ${newTime}`);
-                
-                // Uppdatera currentSchedule med nya positioner
-                if (currentSchedule && currentSchedule.lessons) {
-                    const lessonIndex = currentSchedule.lessons.findIndex(l => 
-                        l.id === lessonId || `temp-${lessonId}` === l.id
-                    );
+                try {
+                    const [startTime, endTime] = newTime.split('-');
                     
-                    if (lessonIndex !== -1) {
-                        const [startTime, endTime] = newTime.split('-');
-                        currentSchedule.lessons[lessonIndex].day = newDay;
-                        currentSchedule.lessons[lessonIndex].time = newTime;
-                        currentSchedule.lessons[lessonIndex].start_time = startTime;
-                        currentSchedule.lessons[lessonIndex].end_time = endTime;
-                        
-                        markScheduleAsUnsaved();
+                    const response = await fetch(`/api/schedule/move_lesson/${lessonId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            weekday: newDay,
+                            start_time: startTime,
+                            end_time: endTime
+                        })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || 'Kunde inte flytta lektion');
                     }
+
+                    return result;
+
+                } catch (error) {
+                    console.error('Error moving lesson:', error);
+                    throw error;
                 }
-                
-                return { success: true };
             }
 
             /**
@@ -4219,6 +4225,7 @@
              */
             // Enhanced save function for edited schedules
             // 6. Förenkla save-funktionen för editerat schema
+            // Uppdatera saveEditedSchedule för att använda rätt API
             async function saveEditedSchedule() {
                 if (!confirm('Spara alla ändringar i schemat?')) {
                     return;
@@ -4230,39 +4237,18 @@
                 saveButton.textContent = '💾 Sparar...';
                 
                 try {
-                    // Get current schedule state from UI
-                    const currentLessons = Array.from(document.querySelectorAll('.draggable-lesson')).map(lessonEl => {
-                        const cell = lessonEl.closest('.schedule-cell');
-                        const [startTime, endTime] = cell.dataset.time.split('-');
-                        
-                        return {
-                            id: lessonEl.dataset.lessonId,
-                            day: cell.dataset.day,
-                            time: cell.dataset.time,
-                            start_time: startTime,
-                            end_time: endTime,
-                            subject: lessonEl.dataset.subject,
-                            room: lessonEl.dataset.room,
-                            class_id: editingClassId,
-                            class_name: editingClassName
-                        };
-                    });
+                    // För redigeringsläge, spara direkt via database-uppdatering
+                    // Ändringarna har redan gjorts via moveLesson API-anrop
                     
-                    // Update currentSchedule
-                    if (currentSchedule) {
-                        currentSchedule.lessons = currentLessons;
-                        markScheduleAsUnsaved();
-                    }
+                    showSuccessToast('✅ Alla ändringar sparade i databasen!');
+                    debugLog('Schedule changes saved successfully');
                     
-                    showSuccessToast(`✅ ${currentLessons.length} lektioner uppdaterade!`);
-                    debugLog('Schedule changes saved locally', { lessons: currentLessons.length });
-                    
-                    // Exit edit mode
+                    // Exit edit mode och visa uppdaterat schema
                     setTimeout(() => {
                         exitEditMode();
-                        // Visa det uppdaterade schemat
-                        if (currentSchedule) {
-                            displayMultiClassSchedule(currentSchedule);
+                        // Ladda om schemat från databasen för att visa uppdateringarna
+                        if (editingClassId) {
+                            editClassSchedule(editingClassId, editingClassName);
                         }
                     }, 1000);
                     
