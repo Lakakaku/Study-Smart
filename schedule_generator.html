@@ -3672,12 +3672,16 @@
              * Display schedule in editable format with drag-and-drop
              */
             // 4. Förbättra displayEditableSchedule för att hantera lesson data korrekt
+            // Uppdatera displayEditableSchedule för att använda riktiga lesson IDs
             function displayEditableSchedule(scheduleData) {
                 const preview = document.getElementById('schedulePreview');
                 
                 // Build schedule grid with drag-and-drop support
                 const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
                 const timeSlots = generateTimeSlots('08:00', '15:00', 60);
+                
+                // Store lesson data for lookup
+                window.editModeLessons = {};
                 
                 let html = '<div style="overflow-x: auto;"><table class="editable-schedule-table" style="width: 100%; border-collapse: collapse; user-select: none;">';
                 html += '<thead><tr><th style="min-width: 70px; padding: 8px; background: #f7fafc; border: 1px solid #e2e8f0;">Tid</th>';
@@ -3708,12 +3712,9 @@
                                     style="padding: 4px; border: 1px solid #e2e8f0; min-height: 60px; position: relative; vertical-align: top;">`;
                         
                         if (lesson) {
-                            // Skapa lesson objekt med ID om det saknas
-                            const lessonWithId = {
-                                ...lesson,
-                                id: lesson.id || `lesson-${day}-${timeSlot.replace(':', '')}-${Math.random().toString(36).substr(2, 4)}`
-                            };
-                            html += createEditableLessonBlock(lessonWithId, day, timeSlot);
+                            // Store lesson data for drag operations
+                            window.editModeLessons[lesson.id] = lesson;
+                            html += createEditableLessonBlock(lesson, day, timeSlot);
                         }
                         
                         html += '</td>';
@@ -3730,7 +3731,7 @@
                 
                 preview.innerHTML = headerHtml + html;
                 
-                debugLog('Editable schedule displayed with drag-and-drop support');
+                debugLog('Editable schedule displayed with real lesson IDs');
             }
 
 
@@ -3738,9 +3739,9 @@
              * Create draggable lesson block for editing
              */
             // 1. Fix för createEditableLessonBlock - lägg till korrekt lesson ID
+            // Uppdatera createEditableLessonBlock för att använda riktiga lesson IDs
             function createEditableLessonBlock(lesson, day, timeSlot) {
-                // Skapa unikt lesson ID om det saknas
-                const lessonId = lesson.id || `temp-${Math.random().toString(36).substr(2, 9)}`;
+                const lessonId = lesson.id; // Use real database ID
                 
                 return `
                     <div id="lesson-${lessonId}" 
