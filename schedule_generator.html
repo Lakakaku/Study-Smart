@@ -808,6 +808,10 @@
             let selectedClasses = [];
 
 
+            let scheduleScrollContainer = null;
+            let autoScrollInterval = null;
+            let dragScrollBounds = null;
+
             let isEditMode = false;
             let editingClassId = null;
             let editingClassName = null;
@@ -3671,22 +3675,42 @@
             /**
              * Display schedule in editable format with drag-and-drop
              */
-            // 4. Förbättra displayEditableSchedule för att hantera lesson data korrekt
-            // Uppdatera displayEditableSchedule för att använda riktiga lesson IDs
-            function displayEditableSchedule(scheduleData) {
+            // Förbättrad displayEditableSchedule med scroll-container
+            function displayEditableScheduleWithAutoScroll(scheduleData) {
                 const preview = document.getElementById('schedulePreview');
                 
-                // Build schedule grid with drag-and-drop support
+                // Skapa scroll-container
+                const scrollContainer = document.createElement('div');
+                scrollContainer.id = 'scheduleScrollContainer';
+                scrollContainer.style.cssText = `
+                    max-height: 70vh;
+                    overflow: auto;
+                    position: relative;
+                    border: 2px solid #e2e8f0;
+                    border-radius: 0.5rem;
+                    background: white;
+                    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+                `;
+
+                // Build schedule grid med förbättrad layout
                 const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
                 const timeSlots = generateTimeSlots('08:00', '15:00', 60);
                 
-                // Store lesson data for lookup
+                // Store lesson data för lookup
                 window.editModeLessons = {};
                 
-                let html = '<div style="overflow-x: auto;"><table class="editable-schedule-table" style="width: 100%; border-collapse: collapse; user-select: none;">';
-                html += '<thead><tr><th style="min-width: 70px; padding: 8px; background: #f7fafc; border: 1px solid #e2e8f0;">Tid</th>';
+                let html = `<table class="editable-schedule-table" style="
+                    width: 100%; 
+                    border-collapse: collapse; 
+                    user-select: none;
+                    min-width: 800px;
+                ">`;
+                
+                // Table header
+                html += '<thead><tr style="position: sticky; top: 0; background: white; z-index: 50;">';
+                html += '<th style="min-width: 80px; padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; font-weight: 600;">Tid</th>';
                 weekdays.forEach(day => {
-                    html += `<th style="padding: 8px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
+                    html += `<th style="min-width: 160px; padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center; font-weight: 600;">
                         ${day.charAt(0).toUpperCase() + day.slice(1)}
                     </th>`;
                 });
@@ -3694,7 +3718,16 @@
                 
                 // Build time slot rows
                 timeSlots.forEach(timeSlot => {
-                    html += `<tr><td style="padding: 8px; font-weight: 600; background: #f7fafc; border: 1px solid #e2e8f0;">${timeSlot}</td>`;
+                    html += `<tr><td style="
+                        padding: 8px 12px; 
+                        font-weight: 600; 
+                        background: #f9fafb; 
+                        border: 1px solid #e2e8f0;
+                        white-space: nowrap;
+                        position: sticky;
+                        left: 0;
+                        z-index: 10;
+                    ">${timeSlot}</td>`;
                     
                     weekdays.forEach(day => {
                         const lessons = scheduleData.lessons_by_day[day] || [];
@@ -3709,10 +3742,19 @@
                                     data-time="${timeSlot}"
                                     ondrop="handleLessonDrop(event)" 
                                     ondragover="handleDragOver(event)"
-                                    style="padding: 4px; border: 1px solid #e2e8f0; min-height: 60px; position: relative; vertical-align: top;">`;
+                                    ondragenter="handleDragEnter(event)"
+                                    ondragleave="handleDragLeave(event)"
+                                    style="
+                                        padding: 6px; 
+                                        border: 1px solid #e2e8f0; 
+                                        min-height: 70px; 
+                                        position: relative; 
+                                        vertical-align: top;
+                                        transition: all 0.2s ease;
+                                    ">`;
                         
                         if (lesson) {
-                            // Store lesson data for drag operations
+                            // Store lesson data
                             window.editModeLessons[lesson.id] = lesson;
                             html += createEditableLessonBlock(lesson, day, timeSlot);
                         }
@@ -3723,15 +3765,36 @@
                     html += '</tr>';
                 });
                 
-                html += '</tbody></table></div>';
+                html += '</tbody></table>';
                 
-                // Add existing edit header if present, then schedule
+                // Set content
+                scrollContainer.innerHTML = html;
+                
+                // Preserve existing edit header
                 const existingHeader = document.getElementById('editModeHeader');
                 const headerHtml = existingHeader ? existingHeader.outerHTML : '';
                 
-                preview.innerHTML = headerHtml + html;
+                preview.innerHTML = headerHtml;
+                preview.appendChild(scrollContainer);
                 
-                debugLog('Editable schedule displayed with real lesson IDs');
+                // Store reference för auto-scroll
+                scheduleScrollContainer = scrollContainer;
+                
+                // Setup scroll bounds för auto-scroll
+                setupAutoScrollBounds();
+                
+                debugLog('Enhanced editable schedule displayed with auto-scroll');
+            }
+
+            function displayEditableSchedule(scheduleData) {
+                return displayEditableScheduleWithAutoScroll(scheduleData);
+            }
+
+            /**
+             * Create draggable lesson block for editing (backward compatibility)
+             */
+            function createEditableLessonBlock(lesson, day, timeSlot) {
+                return createEditableLessonBlockEnhanced(lesson, day, timeSlot);
             }
 
 
@@ -3739,16 +3802,16 @@
              * Create draggable lesson block for editing
              */
             // 1. Fix för createEditableLessonBlock - lägg till korrekt lesson ID
-            // Uppdatera createEditableLessonBlock för att använda riktiga lesson IDs
-            function createEditableLessonBlock(lesson, day, timeSlot) {
-                const lessonId = lesson.id; // Use real database ID
+            // Uppdatera lesson block creation för att använda enhanced handlers
+            function createEditableLessonBlockEnhanced(lesson, day, timeSlot) {
+                const lessonId = lesson.id;
                 
                 return `
                     <div id="lesson-${lessonId}" 
                         class="draggable-lesson" 
                         draggable="true"
-                        ondragstart="handleLessonDragStart(event)"
-                        ondragend="handleLessonDragEnd(event)"
+                        ondragstart="handleLessonDragStartEnhanced(event)"
+                        ondragend="handleLessonDragEndEnhanced(event)"
                         data-lesson-id="${lessonId}"
                         data-subject="${lesson.subject}"
                         data-room="${lesson.room}"
@@ -3757,34 +3820,43 @@
                         style="
                             background: linear-gradient(135deg, #4299e1, #3182ce);
                             color: white;
-                            padding: 8px;
-                            border-radius: 6px;
+                            padding: 10px;
+                            border-radius: 8px;
                             cursor: move;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            box-shadow: 0 3px 6px rgba(0,0,0,0.15);
                             transition: all 0.2s ease;
                             border: 2px solid transparent;
+                            position: relative;
                         "
-                        onmouseenter="this.style.transform='scale(1.02)'"
-                        onmouseleave="this.style.transform='scale(1)'">
-                        <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 2px;">
+                        onmouseenter="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 12px rgba(0,0,0,0.2)'"
+                        onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 3px 6px rgba(0,0,0,0.15)'">
+                        <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 4px;">
                             ${escapeHtml(lesson.subject)}
                         </div>
-                        <div style="font-size: 0.8rem; opacity: 0.9;">
-                            ${escapeHtml(lesson.room || 'Inget rum')}
+                        <div style="font-size: 0.8rem; opacity: 0.9; margin-bottom: 2px;">
+                            📍 ${escapeHtml(lesson.room || 'Inget rum')}
                         </div>
                         <div class="drag-handle" style="
                             position: absolute;
-                            top: 2px;
-                            right: 2px;
-                            width: 12px;
-                            height: 12px;
+                            top: 4px;
+                            right: 4px;
+                            width: 16px;
+                            height: 16px;
                             background: rgba(255,255,255,0.3);
-                            border-radius: 2px;
+                            border-radius: 3px;
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            font-size: 8px;
+                            font-size: 10px;
+                            cursor: grab;
                         ">⋮⋮</div>
+                        <div style="
+                            position: absolute;
+                            bottom: 2px;
+                            right: 4px;
+                            font-size: 0.7rem;
+                            opacity: 0.7;
+                        ">🕒 5min buffer</div>
                     </div>
                 `;
             }
@@ -3793,7 +3865,8 @@
              * Handle drag start for lessons
              */
             // Add enhanced drag visual feedback
-            function handleLessonDragStart(event) {
+            // Förbättrad drag start med auto-scroll setup
+            function handleLessonDragStartEnhanced(event) {
                 draggedLesson = {
                     element: event.target,
                     lessonId: event.target.dataset.lessonId,
@@ -3807,20 +3880,22 @@
                 event.target.style.transform = 'rotate(5deg)';
                 event.target.style.zIndex = '1000';
                 
-                // Add visual feedback to valid drop zones
+                // Enhanced visual feedback
                 document.querySelectorAll('.schedule-cell').forEach(cell => {
                     if (!cell.classList.contains('occupied') || cell.contains(event.target)) {
                         cell.classList.add('drop-zone');
                         cell.style.background = 'rgba(66, 153, 225, 0.1)';
                         cell.style.border = '2px dashed #4299e1';
                     } else {
-                        // Mark occupied cells as invalid
                         cell.style.background = 'rgba(245, 101, 101, 0.05)';
                         cell.style.border = '2px dashed #f56565';
                     }
                 });
                 
-                debugLog('Enhanced drag started', draggedLesson);
+                // Start auto-scroll monitoring
+                startAutoScroll();
+                
+                debugLog('Enhanced drag started with auto-scroll', draggedLesson);
             }
 
             /**
@@ -3911,12 +3986,14 @@
                 const [hours, minutes] = timeStr.split(':').map(Number);
                 return hours * 60 + (minutes || 0);
             }
-            
-            async function checkMoveConflicts(lesson, newDay, newTime) {
-                // Parse the new time slot
+
+            // Förbättrad checkMoveConflicts med 5-minuters buffer för klassrum
+            function checkMoveConflicts(lesson, newDay, newTime) {
                 const [newStartTime, newEndTime] = newTime.split('-');
                 const newStartMinutes = timeToMinutes(newStartTime);
                 const newEndMinutes = timeToMinutes(newEndTime);
+                
+                const ROOM_BUFFER_MINUTES = 5; // 5 minuter mellan lektioner i samma klassrum
                 
                 const currentLessons = Array.from(document.querySelectorAll('.draggable-lesson')).map(lessonEl => {
                     const cell = lessonEl.closest('.schedule-cell');
@@ -3934,22 +4011,49 @@
                     };
                 });
 
-                // Check for time overlaps instead of exact matches
-                const overlappingLessons = currentLessons.filter(l => 
+                // Kontrollera klassrums-konflikter MED 5-minuters buffer
+                const roomConflicts = currentLessons.filter(l => 
                     l.day === newDay && 
                     l.id !== lesson.lessonId &&
-                    // Time overlap condition: newStart < lessonEnd AND newEnd > lessonStart
+                    l.room === lesson.room && // Samma klassrum
+                    // Kontrollera överlappning MED buffer - lektioner måste ha minst 5 min mellanrum
+                    (newStartMinutes < l.endMinutes + ROOM_BUFFER_MINUTES && 
+                    newEndMinutes + ROOM_BUFFER_MINUTES > l.startMinutes)
+                );
+
+                if (roomConflicts.length > 0) {
+                    const conflictDetails = roomConflicts.map(l => {
+                        let bufferInfo = "";
+                        if (Math.abs(newEndMinutes - l.startMinutes) < ROOM_BUFFER_MINUTES || 
+                            Math.abs(newStartMinutes - l.endMinutes) < ROOM_BUFFER_MINUTES) {
+                            bufferInfo = " (behöver 5 min mellanrum)";
+                        }
+                        return `${l.subject} (${l.time})${bufferInfo}`;
+                    }).join(', ');
+                    
+                    return { 
+                        canMove: false, 
+                        reason: `Klassrumskonflikt med ${ROOM_BUFFER_MINUTES}-min buffer: ${conflictDetails}` 
+                    };
+                }
+
+                // Kontrollera övriga tidskonflikter (utan buffer för lärare och klass)
+                const timeConflicts = currentLessons.filter(l => 
+                    l.day === newDay && 
+                    l.id !== lesson.lessonId &&
+                    (l.room !== lesson.room) && // Inte samma klassrum (det har vi redan kollat)
+                    // Vanlig tidsöverlappning utan buffer
                     newStartMinutes < l.endMinutes && newEndMinutes > l.startMinutes
                 );
 
-                if (overlappingLessons.length > 0) {
-                    const conflictDetails = overlappingLessons.map(l => 
+                if (timeConflicts.length > 0) {
+                    const conflictDetails = timeConflicts.map(l => 
                         `${l.subject} (${l.time})`
                     ).join(', ');
                     
                     return { 
                         canMove: false, 
-                        reason: `Tidskonflikt med: ${conflictDetails}` 
+                        reason: `Tidskonflikt: ${conflictDetails}` 
                     };
                 }
 
@@ -4187,6 +4291,37 @@
                         </ul>
                     </div>
                 `;
+            }
+
+            function handleDragLeave(event) {
+                const cell = event.currentTarget;
+                if (cell.classList.contains('drop-zone')) {
+                    cell.style.background = 'rgba(66, 153, 225, 0.1)';
+                    cell.style.borderColor = '#4299e1';
+                }
+                cell.title = '';
+            }
+
+            // Förbättrade drag handlers
+            function handleDragEnter(event) {
+                event.preventDefault();
+                if (!draggedLesson) return;
+                
+                const cell = event.currentTarget;
+                const day = cell.dataset.day;
+                const time = cell.dataset.time;
+                
+                // Quick conflict check för visuell feedback
+                const conflictCheck = checkMoveConflicts(draggedLesson, day, time);
+                
+                if (conflictCheck.canMove) {
+                    cell.style.background = 'rgba(72, 187, 120, 0.2)';
+                    cell.style.borderColor = '#48bb78';
+                } else {
+                    cell.style.background = 'rgba(245, 101, 101, 0.2)';
+                    cell.style.borderColor = '#f56565';
+                    cell.title = conflictCheck.reason;
+                }
             }
 
 
@@ -4443,6 +4578,164 @@
                     saveButton.disabled = false;
                     saveButton.textContent = originalText;
                 }
+            }
+
+            document.addEventListener('mousemove', function(e) {
+                window.currentMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            // Stop auto-scroll
+            function stopAutoScroll() {
+                if (autoScrollInterval) {
+                    clearInterval(autoScrollInterval);
+                    autoScrollInterval = null;
+                }
+            }
+
+
+            // Auto-scroll funktionalitet
+            function startAutoScroll() {
+                if (autoScrollInterval) {
+                    clearInterval(autoScrollInterval);
+                }
+                
+                autoScrollInterval = setInterval(() => {
+                    if (!draggedLesson || !scheduleScrollContainer) return;
+                    
+                    const mousePos = window.currentMousePosition;
+                    if (!mousePos) return;
+                    
+                    const scrollSpeed = 5;
+                    const bounds = dragScrollBounds;
+                    
+                    if (!bounds) return;
+                    
+                    // Vertikal scroll
+                    if (mousePos.y < bounds.top) {
+                        // Scroll upp
+                        scheduleScrollContainer.scrollTop -= scrollSpeed;
+                    } else if (mousePos.y > bounds.bottom) {
+                        // Scroll ner
+                        scheduleScrollContainer.scrollTop += scrollSpeed;
+                    }
+                    
+                    // Horizontal scroll
+                    if (mousePos.x < bounds.left) {
+                        // Scroll vänster
+                        scheduleScrollContainer.scrollLeft -= scrollSpeed;
+                    } else if (mousePos.x > bounds.right) {
+                        // Scroll höger
+                        scheduleScrollContainer.scrollLeft += scrollSpeed;
+                    }
+                    
+                }, 16); // ~60 FPS
+            }
+
+            // Förbättrat visuell feedback system
+            const enhancedStyles = `
+                .schedule-cell.drop-zone {
+                    border: 2px dashed #4299e1 !important;
+                    background: rgba(66, 153, 225, 0.1) !important;
+                }
+                
+                .schedule-cell.invalid-drop-zone {
+                    border: 2px dashed #f56565 !important;
+                    background: rgba(245, 101, 101, 0.1) !important;
+                }
+                
+                .draggable-lesson:active {
+                    cursor: grabbing !important;
+                }
+                
+                .schedule-cell:hover {
+                    background: rgba(0, 0, 0, 0.02);
+                }
+                
+                #scheduleScrollContainer::-webkit-scrollbar {
+                    width: 8px;
+                    height: 8px;
+                }
+                
+                #scheduleScrollContainer::-webkit-scrollbar-track {
+                    background: #f1f1f1;
+                    border-radius: 4px;
+                }
+                
+                #scheduleScrollContainer::-webkit-scrollbar-thumb {
+                    background: #c1c1c1;
+                    border-radius: 4px;
+                }
+                
+                #scheduleScrollContainer::-webkit-scrollbar-thumb:hover {
+                    background: #a8a8a8;
+                }
+                
+                .buffer-indicator {
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    height: 2px;
+                    background: linear-gradient(90deg, transparent, #ffd700, transparent);
+                    opacity: 0.8;
+                }
+            `;
+
+
+            window.addEventListener('resize', setupAutoScrollBounds);
+
+            // Cleanup vid page unload
+            window.addEventListener('beforeunload', function() {
+                stopAutoScroll();
+            });
+
+            // Förbättrad drag end
+            function handleLessonDragEndEnhanced(event) {
+                event.target.style.opacity = '1';
+                event.target.style.transform = 'scale(1)';
+                event.target.style.zIndex = '';
+                
+                // Stop auto-scroll
+                stopAutoScroll();
+                
+                // Remove visual feedback
+                document.querySelectorAll('.drop-zone, .invalid-drop-zone').forEach(cell => {
+                    cell.classList.remove('drop-zone', 'invalid-drop-zone');
+                    cell.style.background = '';
+                    cell.style.border = '';
+                });
+                
+                debugLog('Enhanced drag ended');
+            }
+
+            // Lägg till styles
+            if (!document.getElementById('enhanced-schedule-styles')) {
+                const styleElement = document.createElement('style');
+                styleElement.id = 'enhanced-schedule-styles';
+                styleElement.textContent = enhancedStyles;
+                document.head.appendChild(styleElement);
+            }
+
+
+            // Ersätt befintliga funktioner med förbättrade versioner
+            window.displayEditableSchedule = displayEditableScheduleWithAutoScroll;
+            window.createEditableLessonBlock = createEditableLessonBlockEnhanced;
+            window.handleLessonDragStart = handleLessonDragStartEnhanced;
+            window.handleLessonDragEnd = handleLessonDragEndEnhanced;
+
+            debugLog('Enhanced drag-and-drop schedule editor loaded with 5-minute room buffer and auto-scroll');
+
+
+            function setupAutoScrollBounds() {
+                if (!scheduleScrollContainer) return;
+                
+                const rect = scheduleScrollContainer.getBoundingClientRect();
+                dragScrollBounds = {
+                    top: rect.top + 30,        // 30px från toppen
+                    bottom: rect.bottom - 30,  // 30px från botten
+                    left: rect.left + 30,      // 30px från vänster
+                    right: rect.right - 30     // 30px från höger
+                };
             }
 
 
