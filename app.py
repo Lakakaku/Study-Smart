@@ -3147,7 +3147,7 @@ def check_schedule_conflicts():
 @app.route('/api/schedule/move_lesson/<int:lesson_id>', methods=['PUT'])
 @login_required
 def move_lesson(lesson_id):
-    """Move a lesson to a new day/time"""
+    """Move a lesson to a new day/time with enhanced conflict checking"""
     try:
         data = request.get_json()
         new_weekday = data.get('weekday')
@@ -3168,53 +3168,22 @@ def move_lesson(lesson_id):
                 'error': 'Lektion finns inte'
             }), 404
         
-        # Verify user has permission to edit this schedule
-        if not current_user.is_admin and not current_user.is_teacher:
+        # Verify school ownership
+        if lesson.school_class.school_id != current_user.school_id:
             return jsonify({
                 'success': False,
-                'error': 'Ingen behörighet att redigera scheman'
+                'error': 'Du har inte behörighet att redigera denna lektion'
             }), 403
         
-        # Store original values for logging
+        # Store original values
         original_weekday = lesson.weekday
         original_start_time = lesson.start_time
         original_end_time = lesson.end_time
         
-        # Validate new time format
-        try:
-            # Basic time validation
-            start_hour, start_min = map(int, new_start_time.split(':'))
-            end_hour, end_min = map(int, new_end_time.split(':'))
-            
-            if not (0 <= start_hour <= 23 and 0 <= start_min <= 59):
-                raise ValueError("Invalid start time")
-            if not (0 <= end_hour <= 23 and 0 <= end_min <= 59):
-                raise ValueError("Invalid end time")
-                
-            # Ensure end time is after start time
-            start_minutes = start_hour * 60 + start_min
-            end_minutes = end_hour * 60 + end_min
-            if end_minutes <= start_minutes:
-                raise ValueError("End time must be after start time")
-                
-        except ValueError as e:
-            return jsonify({
-                'success': False,
-                'error': f'Ogiltigt tidsformat: {str(e)}'
-            }), 400
-        
-        # Validate weekday
-        valid_weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag']
-        if new_weekday not in valid_weekdays:
-            return jsonify({
-                'success': False,
-                'error': 'Ogiltig veckodag'
-            }), 400
-        
-        # Final conflict check before moving
+        # Enhanced conflict checking
         conflicts = []
         
-        # Room conflict check
+        # Room conflict check (strict - no double booking)
         if lesson.room:
             room_conflict = ClassSchedule.query.filter(
                 ClassSchedule.id != lesson_id,
@@ -3225,9 +3194,9 @@ def move_lesson(lesson_id):
             ).first()
             
             if room_conflict:
-                conflicts.append(f"Klassrum {lesson.room} är redan bokat")
+                conflicts.append(f"Klassrum {lesson.room} är redan bokat av {room_conflict.school_class.name}")
         
-        # Teacher conflict check
+        # Teacher conflict check (strict - no double booking)
         if lesson.teacher_id:
             teacher_conflict = ClassSchedule.query.filter(
                 ClassSchedule.id != lesson_id,
@@ -3238,7 +3207,8 @@ def move_lesson(lesson_id):
             ).first()
             
             if teacher_conflict:
-                conflicts.append(f"Läraren är redan bokad")
+                teacher_name = lesson.teacher.get_full_name() if lesson.teacher else 'Läraren'
+                conflicts.append(f"{teacher_name} undervisar redan {teacher_conflict.school_class.name}")
         
         # Class conflict check
         class_conflict = ClassSchedule.query.filter(
@@ -3260,47 +3230,22 @@ def move_lesson(lesson_id):
             }), 409
         
         # Perform the move
-        try:
-            lesson.weekday = new_weekday
-            lesson.start_time = new_start_time
-            lesson.end_time = new_end_time
-            lesson.updated_at = datetime.utcnow()
-            
-            db.session.commit()
-            
-            # Log the change
-            app.logger.info(f"Lesson {lesson_id} moved by {current_user.username}: "
-                          f"{original_weekday} {original_start_time}-{original_end_time} -> "
-                          f"{new_weekday} {new_start_time}-{new_end_time}")
-            
-            return jsonify({
-                'success': True,
-                'message': 'Lektion flyttad framgångsrikt',
-                'lesson': lesson.to_dict(),
-                'changes': {
-                    'from': {
-                        'weekday': original_weekday,
-                        'start_time': original_start_time,
-                        'end_time': original_end_time
-                    },
-                    'to': {
-                        'weekday': new_weekday,
-                        'start_time': new_start_time,
-                        'end_time': new_end_time
-                    }
-                }
-            })
-            
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error moving lesson {lesson_id}: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': f'Databasfel vid flytt: {str(e)}'
-            }), 500
+        lesson.weekday = new_weekday
+        lesson.start_time = new_start_time
+        lesson.end_time = new_end_time
+        lesson.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Lektion flyttad framgångsrikt',
+            'lesson': lesson.to_dict()
+        })
         
     except Exception as e:
-        app.logger.error(f"Error in move_lesson endpoint: {str(e)}")
+        db.session.rollback()
+        app.logger.error(f"Error moving lesson {lesson_id}: {str(e)}")
         return jsonify({
             'success': False,
             'error': f'Serverfel: {str(e)}'
@@ -3696,7 +3641,6 @@ def manage_teacher_qualifications(subject_id):
 
 
 # Add these routes to your Flask app
-
 @app.route('/api/multi_class_schedule/save', methods=['POST'])
 @login_required
 def save_multi_class_schedule():
@@ -3705,167 +3649,149 @@ def save_multi_class_schedule():
         if not current_user.is_school_admin() or not current_user.school_id:
             return jsonify({
                 'success': False,
-                'error': 'Du har inte behörighet att spara scheman'
+                'error': 'Du har inte behörighet'
             }), 403
 
         data = request.get_json()
-        if not data or 'schedule' not in data or 'class_ids' not in data:
+        schedule = data.get('schedule')
+        class_ids = data.get('class_ids')
+
+        if not schedule or not class_ids:
             return jsonify({
                 'success': False,
-                'error': 'Ogiltig data struktur'
+                'error': 'Saknade schemaläggningsdata'
             }), 400
 
-        schedule = data['schedule']
-        class_ids = data['class_ids']
-
-        if not schedule.get('lessons') or not class_ids:
+        lessons = schedule.get('lessons', [])
+        if not lessons:
             return jsonify({
                 'success': False,
-                'error': 'Ingen schema data att spara'
+                'error': 'Inga lektioner att spara'
             }), 400
 
-        # Validera att alla klasser tillhör användarens skola
+        # Validera att alla klasser tillhör användaren skola
         valid_classes = SchoolClass.query.filter(
             SchoolClass.id.in_(class_ids),
             SchoolClass.school_id == current_user.school_id
         ).all()
 
-        if len(valid_classes) != len(class_ids):
-            return jsonify({
-                'success': False,
-                'error': 'En eller flera klasser är inte giltiga'
-            }), 400
-
-        stats = {
-            'lessons_saved': 0,
-            'classes_updated': len(class_ids),
-            'classes_deleted_lessons': 0
-        }
-
+        valid_class_ids = [cls.id for cls in valid_classes]
+        
         # Ta bort befintliga scheman för de valda klasserna
-        for class_id in class_ids:
-            deleted_count = ClassSchedule.query.filter_by(class_id=class_id).delete()
-            stats['classes_deleted_lessons'] += deleted_count
-
-        db.session.flush()
+        deleted_count = ClassSchedule.query.filter(
+            ClassSchedule.class_id.in_(valid_class_ids),
+            ClassSchedule.is_active == True
+        ).delete(synchronize_session=False)
 
         # Spara nya lektioner
-        for lesson in schedule['lessons']:
-            # Validera required-fält (tillåt frontend att skicka school_subject_id alternativt subject_id)
-            if not all(key in lesson for key in ['day', 'time', 'class_id']):
+        lessons_saved = 0
+        classes_updated = set()
+
+        for lesson in lessons:
+            class_id = lesson.get('class_id')
+            if not class_id or int(class_id) not in valid_class_ids:
                 continue
 
-            # Bestäm school_subject_id (frontend kan ha skickat school_subject_id eller subject_id)
-            school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
-            school_subject = None
-            raw_school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
-            school_subject = None
-
-            if raw_school_subject_id:
-                try:
-                    school_subject_id_int = int(raw_school_subject_id)
-                    school_subject = SchoolSubject.query.filter_by(
-                        id=school_subject_id_int,
-                        school_id=current_user.school_id
-                    ).first()
-                except (ValueError, TypeError):
-                    school_subject = None
-
-            # Fallback: försök matcha på lesson.subject_name om id inte gav resultat
-            if not school_subject and lesson.get('subject_name'):
-                try:
-                    name_to_match = lesson.get('subject_name').strip().lower()
-                    school_subject = SchoolSubject.query.filter(
-                        db.func.lower(SchoolSubject.name) == name_to_match,
-                        SchoolSubject.school_id == current_user.school_id
-                    ).first()
-                except Exception:
-                    school_subject = None
-
-            if not school_subject:
-                print(f"Warning: School subject {raw_school_subject_id} / {lesson.get('subject_name')} not found for school {current_user.school_id}, skipping lesson")
-                continue
-
-            # Parsa tid
-            time_parts = str(lesson.get('time', '')).split('-')
-            if len(time_parts) != 2:
-                print(f"Warning: invalid time format for lesson, skipping: {lesson}")
-                continue
-
-            start_time = time_parts[0].strip()
-            end_time = time_parts[1].strip()
-
-            # Hitta teacher_id (oförändrat från din kod)
-            teacher_id = None
-            if lesson.get('teacher_id'):
-                candidate = User.query.filter_by(
-                    id=lesson['teacher_id'],
-                    school_id=current_user.school_id,
-                    user_type='teacher'
-                ).first()
-                if candidate:
-                    teacher_id = candidate.id
-            elif lesson.get('teacher_name'):
-                teacher_name = lesson['teacher_name']
-                teacher = User.query.filter_by(
-                    school_id=current_user.school_id,
-                    user_type='teacher'
-                ).filter(
-                    db.or_(
-                        db.func.lower(db.func.concat(User.first_name, ' ', User.last_name)) == teacher_name.lower(),
-                        db.func.lower(User.username) == teacher_name.lower()
-                    )
-                ).first()
-                if teacher:
-                    teacher_id = teacher.id
-
-            # Försök hitta legacy Subject genom namn-match (case-insensitive) — behåll om du behöver bakåtkompatibilitet
-            legacy_subject_id = None
+            # Parse tid
             try:
-                legacy = Subject.query.filter(db.func.lower(Subject.name) == db.func.lower(school_subject.name)).first()
-                if legacy:
-                    legacy_subject_id = legacy.id
-            except Exception:
-                legacy_subject_id = None
+                time_range = lesson.get('time')
+                if not time_range or '-' not in time_range:
+                    continue
+                start_time, end_time = [t.strip() for t in time_range.split('-')]
+            except ValueError:
+                continue
 
-            # Bygg notes
-            notes_parts = ['Auto-genererat schema']
-            if lesson.get('teacher_name'):
-                notes_parts.append(f"Lärare: {lesson.get('teacher_name')}")
-            notes = '. '.join(notes_parts)
+            # Hämta school_subject_id
+            school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
+            if school_subject_id:
+                school_subject_id = int(school_subject_id)
+                
+                # Validera att ämnet tillhör skolan
+                school_subject = SchoolSubject.query.filter_by(
+                    id=school_subject_id,
+                    school_id=current_user.school_id
+                ).first()
+                
+                if not school_subject:
+                    continue
 
-            # Skapa och spara schedule-objektet — viktigt: använd school_subject.id här
-            new_lesson = ClassSchedule(
-                class_id=lesson['class_id'],
-                weekday=lesson['day'],
+            # Validera lärare om angiven
+            teacher_id = lesson.get('teacher_id')
+            if teacher_id and teacher_id != 'fallback':
+                teacher = User.query.filter_by(
+                    id=teacher_id,
+                    school_id=current_user.school_id,
+                    user_type='teacher',
+                    is_active=True
+                ).first()
+                if not teacher:
+                    teacher_id = None
+
+            # Kontrollera konflikter innan sparning
+            weekday = lesson.get('day')
+            room = lesson.get('room')
+            
+            # Rum-konflikt
+            if room:
+                room_conflict = ClassSchedule.query.filter_by(
+                    weekday=weekday,
+                    start_time=start_time,
+                    room=room,
+                    is_active=True
+                ).first()
+                if room_conflict:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Rumkonflikt: {room} är redan bokat {weekday} {start_time}'
+                    }), 409
+
+            # Lärar-konflikt
+            if teacher_id:
+                teacher_conflict = ClassSchedule.query.filter_by(
+                    weekday=weekday,
+                    start_time=start_time,
+                    teacher_id=teacher_id,
+                    is_active=True
+                ).first()
+                if teacher_conflict:
+                    teacher_name = lesson.get('teacher_name', 'Läraren')
+                    return jsonify({
+                        'success': False,
+                        'error': f'Lärarkonflikt: {teacher_name} är redan bokad {weekday} {start_time}'
+                    }), 409
+
+            # Skapa ny schedule item
+            schedule_item = ClassSchedule(
+                class_id=int(class_id),
+                weekday=weekday,
                 start_time=start_time,
                 end_time=end_time,
-                school_subject_id=school_subject.id,
-                subject_id=legacy_subject_id,
+                school_subject_id=school_subject_id,
                 teacher_id=teacher_id,
-                room=lesson.get('room', 'Ej tilldelat'),
-                notes=notes,
+                room=room,
+                notes=f"Multi-klass schema. Lärare: {lesson.get('teacher_name', 'Ej tilldelad')}",
                 is_active=True,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )
-
-            db.session.add(new_lesson)
-            stats['lessons_saved'] += 1
+            
+            db.session.add(schedule_item)
+            lessons_saved += 1
+            classes_updated.add(int(class_id))
 
         db.session.commit()
 
         return jsonify({
             'success': True,
-            'message': 'Schema sparat framgångsrikt',
-            'lessons_saved': stats['lessons_saved'],
-            'classes_updated': stats['classes_updated'],
-            'classes_deleted_lessons': stats['classes_deleted_lessons']
+            'lessons_saved': lessons_saved,
+            'classes_updated': len(classes_updated),
+            'classes_deleted_lessons': deleted_count,
+            'message': f'Schema sparat! {lessons_saved} lektioner för {len(classes_updated)} klasser.'
         })
 
     except Exception as e:
         db.session.rollback()
-        print(f"Error saving multi-class schedule: {e}")
+        app.logger.error(f"Error saving multi-class schedule: {str(e)}")
         return jsonify({
             'success': False,
             'error': f'Serverfel vid sparning: {str(e)}'
