@@ -3147,7 +3147,7 @@ def check_schedule_conflicts():
 @app.route('/api/schedule/move_lesson/<lesson_id>', methods=['PUT'])
 @login_required
 def move_lesson(lesson_id):
-    """Move a lesson to a new day/time with enhanced conflict checking"""
+    """Move a lesson to a new day/time with enhanced conflict checking including 5-minute room buffer"""
     try:
         data = request.get_json()
         new_weekday = data.get('weekday')
@@ -3183,10 +3183,11 @@ def move_lesson(lesson_id):
                 'error': 'Du har inte behörighet att redigera denna lektion'
             }), 403
         
-        # Enhanced conflict checking with TIME OVERLAP detection
+        # Enhanced conflict checking with 5-minute room buffer
         conflicts = []
+        ROOM_BUFFER_MINUTES = 5  # 5 minutes between lessons in same room
         
-        # Room conflict check - Check for ANY time overlap, not just exact matches
+        # Room conflict check with 5-minute buffer
         if lesson.room:
             room_conflicts = ClassSchedule.query.filter(
                 ClassSchedule.id != lesson.id,
@@ -3199,11 +3200,20 @@ def move_lesson(lesson_id):
                 conflict_start = time_to_minutes(conflict_lesson.start_time)
                 conflict_end = time_to_minutes(conflict_lesson.end_time)
                 
-                # Check for time overlap: lessons overlap if new_start < conflict_end AND new_end > conflict_start
-                if new_start_minutes < conflict_end and new_end_minutes > conflict_start:
-                    conflicts.append(f"Klassrum {lesson.room} är redan bokat av {conflict_lesson.school_class.name} ({conflict_lesson.start_time}-{conflict_lesson.end_time})")
+                # Check for overlap WITH 5-minute buffer
+                # New lesson needs buffer before existing lessons and after existing lessons
+                if (new_start_minutes < conflict_end + ROOM_BUFFER_MINUTES and 
+                    new_end_minutes + ROOM_BUFFER_MINUTES > conflict_start):
+                    
+                    buffer_info = ""
+                    if new_end_minutes == conflict_start:
+                        buffer_info = " (behöver 5 min mellanrum)"
+                    elif new_start_minutes == conflict_end:
+                        buffer_info = " (behöver 5 min mellanrum)"
+                    
+                    conflicts.append(f"Klassrum {lesson.room} är inte tillgängligt - konflikt med {conflict_lesson.school_class.name} ({conflict_lesson.start_time}-{conflict_lesson.end_time}){buffer_info}")
         
-        # Teacher conflict check with overlap detection
+        # Teacher conflict check (no buffer needed for teachers)
         if lesson.teacher_id:
             teacher_conflicts = ClassSchedule.query.filter(
                 ClassSchedule.id != lesson.id,
@@ -3220,7 +3230,7 @@ def move_lesson(lesson_id):
                     teacher_name = lesson.teacher.get_full_name() if lesson.teacher else 'Läraren'
                     conflicts.append(f"{teacher_name} undervisar redan {conflict_lesson.school_class.name} ({conflict_lesson.start_time}-{conflict_lesson.end_time})")
         
-        # Class conflict check with overlap detection
+        # Class conflict check (no buffer needed)
         class_conflicts = ClassSchedule.query.filter(
             ClassSchedule.id != lesson.id,
             ClassSchedule.class_id == lesson.class_id,
@@ -3263,7 +3273,6 @@ def move_lesson(lesson_id):
             'success': False,
             'error': f'Serverfel: {str(e)}'
         }), 500
-
 
 @app.route('/api/schedule/validate_move', methods=['POST'])
 @login_required
