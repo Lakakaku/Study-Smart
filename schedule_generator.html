@@ -3769,6 +3769,40 @@
                 
                 // Set content
                 scrollContainer.innerHTML = html;
+
+
+
+                // Lägg till scroll-indikatorer
+                // Lägg till detta efter scrollContainer.innerHTML = html; i displayEditableScheduleWithAutoScroll
+
+                // Lägg till scroll-indikatorer
+                const scrollIndicators = document.createElement('div');
+                scrollIndicators.innerHTML = `
+                    <div style="position: absolute; top: 0; left: 0; right: 0; height: 40px; 
+                                background: linear-gradient(to bottom, rgba(66,153,225,0.1), transparent);
+                                pointer-events: none; z-index: 100; border-radius: 0.5rem 0.5rem 0 0;">
+                        <div style="text-align: center; padding: 10px; font-size: 12px; color: #4299e1;">▲ Dra hit för att scrolla upp</div>
+                    </div>
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 40px; 
+                                background: linear-gradient(to top, rgba(66,153,225,0.1), transparent);
+                                pointer-events: none; z-index: 100; border-radius: 0 0 0.5rem 0.5rem;">
+                        <div style="text-align: center; padding: 10px; font-size: 12px; color: #4299e1;">▼ Dra hit för att scrolla ner</div>
+                    </div>
+                    <div style="position: absolute; left: 0; top: 40px; bottom: 40px; width: 40px; 
+                                background: linear-gradient(to right, rgba(66,153,225,0.1), transparent);
+                                pointer-events: none; z-index: 100;">
+                        <div style="writing-mode: vertical-lr; text-align: center; padding: 10px; font-size: 12px; color: #4299e1; transform: rotate(180deg);">◄ Scrolla vänster</div>
+                    </div>
+                    <div style="position: absolute; right: 0; top: 40px; bottom: 40px; width: 40px; 
+                                background: linear-gradient(to left, rgba(66,153,225,0.1), transparent);
+                                pointer-events: none; z-index: 100;">
+                        <div style="writing-mode: vertical-lr; text-align: center; padding: 10px; font-size: 12px; color: #4299e1;">► Scrolla höger</div>
+                    </div>
+                `;
+                scrollIndicators.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s;';
+                scrollIndicators.id = 'scroll-indicators';
+
+                scrollContainer.appendChild(scrollIndicators);
                 
                 // Preserve existing edit header
                 const existingHeader = document.getElementById('editModeHeader');
@@ -3782,6 +3816,8 @@
                 
                 // Setup scroll bounds för auto-scroll
                 setupAutoScrollBounds();
+
+                attachScrollListeners();
                 
                 debugLog('Enhanced editable schedule displayed with auto-scroll');
             }
@@ -3896,6 +3932,11 @@
                 startAutoScroll();
                 
                 debugLog('Enhanced drag started with auto-scroll', draggedLesson);
+
+                const scrollIndicators = document.getElementById('scroll-indicators');
+                if (scrollIndicators) {
+                    scrollIndicators.style.opacity = '1';
+                }
             }
 
             /**
@@ -4593,39 +4634,94 @@
             }
 
 
-            // Auto-scroll funktionalitet
+            // Lägg till detta efter displayEditableScheduleWithAutoScroll funktionen
+            function attachScrollListeners() {
+                if (scheduleScrollContainer) {
+                    scheduleScrollContainer.addEventListener('scroll', function() {
+                        if (draggedLesson) {
+                            setupAutoScrollBounds();
+                        }
+                    });
+                    
+                    scheduleScrollContainer.addEventListener('mouseenter', function() {
+                        if (isEditMode) {
+                            setupAutoScrollBounds();
+                        }
+                    });
+                }
+            }
+
+
             function startAutoScroll() {
                 if (autoScrollInterval) {
                     clearInterval(autoScrollInterval);
                 }
                 
                 autoScrollInterval = setInterval(() => {
-                    if (!draggedLesson || !scheduleScrollContainer) return;
-                    
-                    const mousePos = window.currentMousePosition;
-                    if (!mousePos) return;
-                    
-                    const scrollSpeed = 5;
-                    const bounds = dragScrollBounds;
-                    
-                    if (!bounds) return;
-                    
-                    // Vertikal scroll
-                    if (mousePos.y < bounds.top) {
-                        // Scroll upp
-                        scheduleScrollContainer.scrollTop -= scrollSpeed;
-                    } else if (mousePos.y > bounds.bottom) {
-                        // Scroll ner
-                        scheduleScrollContainer.scrollTop += scrollSpeed;
+                    if (!draggedLesson || !scheduleScrollContainer || !window.currentMousePosition) {
+                        return;
                     }
                     
-                    // Horizontal scroll
-                    if (mousePos.x < bounds.left) {
+                    const mousePos = window.currentMousePosition;
+                    const containerRect = scheduleScrollContainer.getBoundingClientRect();
+                    
+                    // Kolla om musen är inom scroll-containern
+                    const mouseInContainer = mousePos.x >= containerRect.left && 
+                                            mousePos.x <= containerRect.right && 
+                                            mousePos.y >= containerRect.top && 
+                                            mousePos.y <= containerRect.bottom;
+                    
+                    if (!mouseInContainer) return;
+                    
+                    const scrollSpeed = 15;
+                    const edgeZone = 40; // Större zon för lättare scroll
+                    let didScroll = false;
+                    
+                    // Vertikal scroll - när musen är nära övre eller nedre kanten av containern
+                    const distanceFromTop = mousePos.y - containerRect.top;
+                    const distanceFromBottom = containerRect.bottom - mousePos.y;
+                    
+                    if (distanceFromTop < edgeZone && scheduleScrollContainer.scrollTop > 0) {
+                        // Scroll upp
+                        const scrollAmount = Math.max(5, scrollSpeed * (edgeZone - distanceFromTop) / edgeZone);
+                        scheduleScrollContainer.scrollTop -= scrollAmount;
+                        didScroll = true;
+                    } else if (distanceFromBottom < edgeZone) {
+                        // Scroll ner
+                        const maxScroll = scheduleScrollContainer.scrollHeight - scheduleScrollContainer.clientHeight;
+                        if (scheduleScrollContainer.scrollTop < maxScroll) {
+                            const scrollAmount = Math.max(5, scrollSpeed * (edgeZone - distanceFromBottom) / edgeZone);
+                            scheduleScrollContainer.scrollTop += scrollAmount;
+                            didScroll = true;
+                        }
+                    }
+                    
+                    // Horizontal scroll - när musen är nära vänster eller höger kanten
+                    const distanceFromLeft = mousePos.x - containerRect.left;
+                    const distanceFromRight = containerRect.right - mousePos.x;
+                    
+                    if (distanceFromLeft < edgeZone && scheduleScrollContainer.scrollLeft > 0) {
                         // Scroll vänster
-                        scheduleScrollContainer.scrollLeft -= scrollSpeed;
-                    } else if (mousePos.x > bounds.right) {
+                        const scrollAmount = Math.max(5, scrollSpeed * (edgeZone - distanceFromLeft) / edgeZone);
+                        scheduleScrollContainer.scrollLeft -= scrollAmount;
+                        didScroll = true;
+                    } else if (distanceFromRight < edgeZone) {
                         // Scroll höger
-                        scheduleScrollContainer.scrollLeft += scrollSpeed;
+                        const maxScrollLeft = scheduleScrollContainer.scrollWidth - scheduleScrollContainer.clientWidth;
+                        if (scheduleScrollContainer.scrollLeft < maxScrollLeft) {
+                            const scrollAmount = Math.max(5, scrollSpeed * (edgeZone - distanceFromRight) / edgeZone);
+                            scheduleScrollContainer.scrollLeft += scrollAmount;
+                            didScroll = true;
+                        }
+                    }
+                    
+                    if (didScroll) {
+                        debugLog('Auto-scrolled container', {
+                            scrollTop: scheduleScrollContainer.scrollTop,
+                            scrollLeft: scheduleScrollContainer.scrollLeft,
+                            mousePos: mousePos,
+                            containerRect: containerRect
+                        });
                     }
                     
                 }, 16); // ~60 FPS
@@ -4684,6 +4780,12 @@
 
             window.addEventListener('resize', setupAutoScrollBounds);
 
+            window.addEventListener('resize', function() {
+                if (scheduleScrollContainer) {
+                    setupAutoScrollBounds();
+                }
+            });
+
             // Cleanup vid page unload
             window.addEventListener('beforeunload', function() {
                 stopAutoScroll();
@@ -4706,6 +4808,11 @@
                 });
                 
                 debugLog('Enhanced drag ended');
+
+                const scrollIndicators = document.getElementById('scroll-indicators');
+                if (scrollIndicators) {
+                    scrollIndicators.style.opacity = '0';
+                }
             }
 
             // Lägg till styles
@@ -4730,12 +4837,22 @@
                 if (!scheduleScrollContainer) return;
                 
                 const rect = scheduleScrollContainer.getBoundingClientRect();
+                
                 dragScrollBounds = {
-                    top: rect.top + 30,        // 30px från toppen
-                    bottom: rect.bottom - 30,  // 30px från botten
-                    left: rect.left + 30,      // 30px från vänster
-                    right: rect.right - 30     // 30px från höger
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    left: rect.left,
+                    right: rect.right,
+                    containerRect: rect
                 };
+                
+                debugLog('Auto-scroll bounds updated:', {
+                    bounds: dragScrollBounds,
+                    scrollHeight: scheduleScrollContainer.scrollHeight,
+                    clientHeight: scheduleScrollContainer.clientHeight,
+                    scrollWidth: scheduleScrollContainer.scrollWidth,
+                    clientWidth: scheduleScrollContainer.clientWidth
+                });
             }
 
 
