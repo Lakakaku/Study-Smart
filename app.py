@@ -3144,7 +3144,7 @@ def check_schedule_conflicts():
         }), 500
 
 
-@app.route('/api/schedule/move_lesson/<int:lesson_id>', methods=['PUT'])
+@app.route('/api/schedule/move_lesson/<lesson_id>', methods=['PUT'])
 @login_required
 def move_lesson(lesson_id):
     """Move a lesson to a new day/time with enhanced conflict checking"""
@@ -3160,8 +3160,27 @@ def move_lesson(lesson_id):
                 'error': 'Saknade parametrar för flytt'
             }), 400
         
-        # Get the lesson
-        lesson = ClassSchedule.query.get(lesson_id)
+        # Handle both integer IDs and temporary string IDs from edit mode
+        lesson = None
+        if lesson_id.isdigit():
+            # Real database ID
+            lesson = ClassSchedule.query.get(int(lesson_id))
+        else:
+            # Temporary ID from edit mode - need to find by other means
+            # Extract class info from the current edit session
+            if not hasattr(current_user, '_editing_class_id'):
+                return jsonify({
+                    'success': False,
+                    'error': 'Ingen aktiv redigeringssession'
+                }), 400
+            
+            # Find lesson by matching original position from drag data
+            # This is a fallback - we'll improve the ID system
+            return jsonify({
+                'success': False,
+                'error': 'Ogiltigt lesson ID format'
+            }), 400
+        
         if not lesson:
             return jsonify({
                 'success': False,
@@ -3175,18 +3194,13 @@ def move_lesson(lesson_id):
                 'error': 'Du har inte behörighet att redigera denna lektion'
             }), 403
         
-        # Store original values
-        original_weekday = lesson.weekday
-        original_start_time = lesson.start_time
-        original_end_time = lesson.end_time
-        
         # Enhanced conflict checking
         conflicts = []
         
         # Room conflict check (strict - no double booking)
         if lesson.room:
             room_conflict = ClassSchedule.query.filter(
-                ClassSchedule.id != lesson_id,
+                ClassSchedule.id != lesson.id,
                 ClassSchedule.room == lesson.room,
                 ClassSchedule.weekday == new_weekday,
                 ClassSchedule.start_time == new_start_time,
@@ -3199,7 +3213,7 @@ def move_lesson(lesson_id):
         # Teacher conflict check (strict - no double booking)
         if lesson.teacher_id:
             teacher_conflict = ClassSchedule.query.filter(
-                ClassSchedule.id != lesson_id,
+                ClassSchedule.id != lesson.id,
                 ClassSchedule.teacher_id == lesson.teacher_id,
                 ClassSchedule.weekday == new_weekday,
                 ClassSchedule.start_time == new_start_time,
@@ -3212,7 +3226,7 @@ def move_lesson(lesson_id):
         
         # Class conflict check
         class_conflict = ClassSchedule.query.filter(
-            ClassSchedule.id != lesson_id,
+            ClassSchedule.id != lesson.id,
             ClassSchedule.class_id == lesson.class_id,
             ClassSchedule.weekday == new_weekday,
             ClassSchedule.start_time == new_start_time,
@@ -3835,67 +3849,73 @@ def reset_class_schedule(class_id):
         }), 500
 
 
-# Uppdatera även get_class_schedule_status för konsistens
 @app.route('/api/class_schedule/status/<int:class_id>')
 @login_required
 def get_class_schedule_status(class_id):
-    """Hämta status för en klass schema (antal lektioner, etc.)"""
-    if not current_user.is_school_admin() or not current_user.school_id:
-        return jsonify({'success': False, 'error': 'Ingen behörighet'}), 403
-
+    """Get detailed schedule status for a specific class with real lesson IDs"""
     try:
-        # Kontrollera att klassen tillhör skolan
+        if not current_user.is_school_admin() or not current_user.school_id:
+            return jsonify({
+                'success': False,
+                'error': 'Du har inte behörighet'
+            }), 403
+
+        # Get class and verify ownership
         school_class = SchoolClass.query.filter_by(
             id=class_id,
             school_id=current_user.school_id
         ).first()
-
+        
         if not school_class:
-            return jsonify({'success': False, 'error': 'Klassen hittades inte'}), 404
+            return jsonify({
+                'success': False,
+                'error': 'Klass finns inte'
+            }), 404
 
-        # Räkna befintliga schemalektioner
-        lesson_count = ClassSchedule.query.filter_by(class_id=class_id).count()
+        # Get active lessons for this class
+        lessons = ClassSchedule.query.filter_by(
+            class_id=class_id,
+            is_active=True
+        ).order_by(
+            ClassSchedule.weekday,
+            ClassSchedule.start_time
+        ).all()
 
-        # Hämta schema-detaljer om de finns
+        # Group lessons by day with real IDs
         lessons_by_day = {}
-        if lesson_count > 0:
-            lessons = ClassSchedule.query.filter_by(class_id=class_id).order_by(
-                ClassSchedule.weekday, ClassSchedule.start_time
-            ).all()
-
-            for lesson in lessons:
-                day = lesson.weekday
-                if day not in lessons_by_day:
-                    lessons_by_day[day] = []
-
-                # Använd get_subject_name() metoden som prioriterar SchoolSubject
-                subject_name = lesson.get_subject_name()
-                
-                lessons_by_day[day].append({
+        weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag']
+        
+        for day in weekdays:
+            lessons_by_day[day] = []
+        
+        for lesson in lessons:
+            if lesson.weekday in lessons_by_day:
+                lessons_by_day[lesson.weekday].append({
+                    'id': lesson.id,  # Real database ID
                     'time': f"{lesson.start_time}-{lesson.end_time}",
-                    'subject': subject_name,
+                    'subject': lesson.get_subject_name(),
                     'room': lesson.room or 'Inget rum',
-                    'school_subject_id': lesson.school_subject_id,
-                    'subject_id': lesson.subject_id  # För bakåtkompatibilitet
+                    'teacher': lesson.get_teacher_name(),
+                    'start_time': lesson.start_time,
+                    'end_time': lesson.end_time
                 })
 
         return jsonify({
             'success': True,
             'class_id': class_id,
             'class_name': school_class.name,
-            'has_schedule': lesson_count > 0,
-            'lesson_count': lesson_count,
+            'has_schedule': len(lessons) > 0,
+            'lesson_count': len(lessons),
             'lessons_by_day': lessons_by_day,
-            'last_updated': school_class.updated_at.isoformat() if school_class.updated_at else None
+            'total_lessons_per_week': len(lessons)
         })
 
     except Exception as e:
-        print(f"Error getting class schedule status: {str(e)}")
+        app.logger.error(f"Error getting class schedule status: {str(e)}")
         return jsonify({
             'success': False,
-            'error': f'Fel vid hämtning av schemastatus: {str(e)}'
+            'error': f'Serverfel: {str(e)}'
         }), 500
-
 
 @app.route('/api/multi_class_schedule/status', methods=['POST'])
 @login_required
