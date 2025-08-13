@@ -3905,30 +3905,51 @@
              * Check for conflicts when moving a lesson
              */
             // 2. Förenkla conflict checking - ta bort API-anrop som inte finns
+            // Uppdatera checkMoveConflicts funktionen
+
+            function timeToMinutes(timeStr) {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + (minutes || 0);
+            }
+            
             async function checkMoveConflicts(lesson, newDay, newTime) {
-                // Eftersom API:t inte finns, gör enkel client-side validering
+                // Parse the new time slot
+                const [newStartTime, newEndTime] = newTime.split('-');
+                const newStartMinutes = timeToMinutes(newStartTime);
+                const newEndMinutes = timeToMinutes(newEndTime);
+                
                 const currentLessons = Array.from(document.querySelectorAll('.draggable-lesson')).map(lessonEl => {
                     const cell = lessonEl.closest('.schedule-cell');
+                    const lessonTime = cell.dataset.time;
+                    const [startTime, endTime] = lessonTime.split('-');
+                    
                     return {
                         id: lessonEl.dataset.lessonId,
                         day: cell.dataset.day,
-                        time: cell.dataset.time,
+                        time: lessonTime,
+                        startMinutes: timeToMinutes(startTime),
+                        endMinutes: timeToMinutes(endTime),
                         subject: lessonEl.dataset.subject,
                         room: lessonEl.dataset.room
                     };
                 });
 
-                // Kontrollera om tiden redan är upptagen av en annan lektion
-                const conflictingLesson = currentLessons.find(l => 
+                // Check for time overlaps instead of exact matches
+                const overlappingLessons = currentLessons.filter(l => 
                     l.day === newDay && 
-                    l.time === newTime && 
-                    l.id !== lesson.lessonId
+                    l.id !== lesson.lessonId &&
+                    // Time overlap condition: newStart < lessonEnd AND newEnd > lessonStart
+                    newStartMinutes < l.endMinutes && newEndMinutes > l.startMinutes
                 );
 
-                if (conflictingLesson) {
+                if (overlappingLessons.length > 0) {
+                    const conflictDetails = overlappingLessons.map(l => 
+                        `${l.subject} (${l.time})`
+                    ).join(', ');
+                    
                     return { 
                         canMove: false, 
-                        reason: `Tiden är redan upptagen av ${conflictingLesson.subject}` 
+                        reason: `Tidskonflikt med: ${conflictDetails}` 
                     };
                 }
 
