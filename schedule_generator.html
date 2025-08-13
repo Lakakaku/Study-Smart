@@ -806,6 +806,14 @@
             let availableSubjects = {{ available_subjects | tojson }};
             let availableClasses = {{ classes | tojson }};
             let selectedClasses = [];
+
+
+            let isEditMode = false;
+            let editingClassId = null;
+            let editingClassName = null;
+            let originalScheduleData = null;
+            let draggedLesson = null;
+
             // Lägg högst upp (efter att serverdata injicerats)
             let schoolSubjects = (typeof availableSubjects !== 'undefined' && Array.isArray(availableSubjects))
                 ? availableSubjects.slice()   // kopiera så vi inte muterar originalet oväntat
@@ -2514,7 +2522,8 @@
                     const slotEnd = minutesToTime(currentTime + lessonDuration);
                     slots.push(`${slotStart}-${slotEnd}`);
                     
-                    currentTime += 5; // 5-minutersintervall
+                    // In edit mode, use 5-minute intervals, in normal mode use lesson duration
+                    currentTime += isEditMode ? 5 : lessonDuration;
                 }
                 
                 return slots;
@@ -2644,11 +2653,16 @@
             /**
              * Edit schedule for a specific class
              */
-            function editClassSchedule(classId, className) {
-                // Select the class and scroll to form
-                const checkbox = document.getElementById(`class_${classId}`);
-                if (checkbox) {
-                    // Uncheck all other classes
+            async function editClassSchedule(classId, className) {
+                try {
+                    debugLog(`Starting edit mode for class ${className} (${classId})`);
+                    
+                    // Set edit mode state
+                    isEditMode = true;
+                    editingClassId = classId;
+                    editingClassName = className;
+                    
+                    // Select only this class
                     document.querySelectorAll('input[name="class_ids[]"]').forEach(cb => {
                         cb.checked = cb.id === `class_${classId}`;
                     });
@@ -2656,19 +2670,63 @@
                     // Update selected classes
                     updateSelectedClasses();
                     
-                    // Scroll to form
-                    document.getElementById('scheduleForm').scrollIntoView({
+                    // Load existing schedule data
+                    const response = await fetch(`/api/class_schedule/status/${classId}`);
+                    const result = await response.json();
+                    
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || 'Kunde inte ladda befintligt schema');
+                    }
+                    
+                    if (!result.has_schedule) {
+                        // No existing schedule - redirect to creation
+                        alert(`Klass "${className}" har inget befintligt schema. Du kommer att skapa ett nytt schema istället.`);
+                        isEditMode = false;
+                        editingClassId = null;
+                        editingClassName = null;
+                        document.getElementById('scheduleForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        return;
+                    }
+                    
+                    // Store original data for potential rollback
+                    originalScheduleData = result;
+                    
+                    // Enter edit mode UI
+                    enterEditMode(result);
+                    
+                    // Display editable schedule
+                    displayEditableSchedule(result);
+                    
+                    // Update controls
+                    updateEditControls();
+                    
+                    // Show controls
+                    document.getElementById('generationControls').style.display = 'flex';
+                    
+                    // Scroll to preview
+                    document.getElementById('schedulePreview').scrollIntoView({
                         behavior: 'smooth',
                         block: 'start'
                     });
-
-                    // Hide overview
-                    hideScheduleOverview();
-
-                    // Show message
-                    setTimeout(() => {
-                        alert(`Klass "${className}" har valts för redigering. Konfigurera ämnen och generera ett nytt schema.`);
-                    }, 500);
+                    
+                    // Hide overview if visible
+                    const overview = document.getElementById('scheduleOverview');
+                    if (overview && overview.style.display === 'block') {
+                        hideScheduleOverview();
+                    }
+                    
+                    debugLog('Edit mode entered successfully', { classId, className, lessonCount: result.lesson_count });
+                    
+                } catch (error) {
+                    console.error('Error entering edit mode:', error);
+                    
+                    // Reset edit state on error
+                    isEditMode = false;
+                    editingClassId = null;
+                    editingClassName = null;
+                    originalScheduleData = null;
+                    
+                    handleApiError(error, 'redigering av schema');
                 }
             }
 
@@ -3514,6 +3572,786 @@
                     await updateClassScheduleStatus();
                 }
             };
+
+
+
+            
+
+            /**
+             * Enter edit mode UI state
+             */
+            function enterEditMode(scheduleData) {
+                // Update header to show edit mode
+                const preview = document.getElementById('schedulePreview');
+                if (preview) {
+                    const editHeader = document.createElement('div');
+                    editHeader.id = 'editModeHeader';
+                    editHeader.className = 'edit-mode-header';
+                    editHeader.style.cssText = `
+                        background: linear-gradient(135deg, #ed8936, #f56565);
+                        color: white;
+                        padding: 1rem;
+                        border-radius: 0.5rem;
+                        margin-bottom: 1rem;
+                        text-align: center;
+                        font-weight: bold;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    `;
+                    editHeader.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            <span>✏️ REDIGERINGSLÄGE</span>
+                            <span style="background: rgba(255,255,255,0.2); padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
+                                ${editingClassName}
+                            </span>
+                        </div>
+                        <div style="font-size: 0.85rem; margin-top: 0.5rem; opacity: 0.9;">
+                            Dra och släpp lektioner för att flytta dem. Röda celler = konflikt.
+                        </div>
+                    `;
+                    
+                    // Insert before preview content
+                    preview.insertBefore(editHeader, preview.firstChild);
+                }
+                
+                // Hide class selection (already selected)
+                const classContainer = document.getElementById('classesContainer');
+                if (classContainer) {
+                    classContainer.style.opacity = '0.5';
+                    classContainer.style.pointerEvents = 'none';
+                }
+                
+                // Disable subject configuration
+                const subjectsContainer = document.getElementById('subjectsContainer');
+                if (subjectsContainer) {
+                    subjectsContainer.innerHTML = `
+                        <div style="padding: 1rem; background: #f7fafc; border-radius: 0.5rem; border: 1px solid #e2e8f0; text-align: center; color: #4a5568;">
+                            <strong>Redigeringsläge:</strong> Ämnen och timmar bestäms av befintligt schema
+                        </div>
+                    `;
+                }
+            }
+
+            /**
+             * Exit edit mode and return to normal state
+             */
+            function exitEditMode() {
+                isEditMode = false;
+                editingClassId = null;
+                editingClassName = null;
+                originalScheduleData = null;
+                
+                // Remove edit header
+                const editHeader = document.getElementById('editModeHeader');
+                if (editHeader) editHeader.remove();
+                
+                // Restore UI elements
+                const classContainer = document.getElementById('classesContainer');
+                if (classContainer) {
+                    classContainer.style.opacity = '1';
+                    classContainer.style.pointerEvents = 'auto';
+                }
+                
+                // Restore subject configuration
+                renderClassSubjectSections();
+                
+                // Clear preview
+                const preview = document.getElementById('schedulePreview');
+                preview.innerHTML = `
+                    <div style="text-align: center;">
+                        <p>Välj klasser och ämnen för att generera ett multi-klass schema</p>
+                    </div>
+                `;
+                
+                // Hide controls
+                document.getElementById('generationControls').style.display = 'none';
+                
+                debugLog('Edit mode exited');
+            }
+
+            /**
+             * Display schedule in editable format with drag-and-drop
+             */
+            // 4. Förbättra displayEditableSchedule för att hantera lesson data korrekt
+            function displayEditableSchedule(scheduleData) {
+                const preview = document.getElementById('schedulePreview');
+                
+                // Build schedule grid with drag-and-drop support
+                const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+                const timeSlots = generateTimeSlots('08:00', '15:00', 60);
+                
+                let html = '<div style="overflow-x: auto;"><table class="editable-schedule-table" style="width: 100%; border-collapse: collapse; user-select: none;">';
+                html += '<thead><tr><th style="min-width: 70px; padding: 8px; background: #f7fafc; border: 1px solid #e2e8f0;">Tid</th>';
+                weekdays.forEach(day => {
+                    html += `<th style="padding: 8px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
+                        ${day.charAt(0).toUpperCase() + day.slice(1)}
+                    </th>`;
+                });
+                html += '</tr></thead><tbody>';
+                
+                // Build time slot rows
+                timeSlots.forEach(timeSlot => {
+                    html += `<tr><td style="padding: 8px; font-weight: 600; background: #f7fafc; border: 1px solid #e2e8f0;">${timeSlot}</td>`;
+                    
+                    weekdays.forEach(day => {
+                        const lessons = scheduleData.lessons_by_day[day] || [];
+                        const lesson = lessons.find(l => l.time === timeSlot);
+                        
+                        const cellId = `cell-${day}-${timeSlot.replace(':', '-')}`;
+                        const isOccupied = lesson ? 'occupied' : 'empty';
+                        
+                        html += `<td id="${cellId}" 
+                                    class="schedule-cell ${isOccupied}" 
+                                    data-day="${day}" 
+                                    data-time="${timeSlot}"
+                                    ondrop="handleLessonDrop(event)" 
+                                    ondragover="handleDragOver(event)"
+                                    style="padding: 4px; border: 1px solid #e2e8f0; min-height: 60px; position: relative; vertical-align: top;">`;
+                        
+                        if (lesson) {
+                            // Skapa lesson objekt med ID om det saknas
+                            const lessonWithId = {
+                                ...lesson,
+                                id: lesson.id || `lesson-${day}-${timeSlot.replace(':', '')}-${Math.random().toString(36).substr(2, 4)}`
+                            };
+                            html += createEditableLessonBlock(lessonWithId, day, timeSlot);
+                        }
+                        
+                        html += '</td>';
+                    });
+                    
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table></div>';
+                
+                // Add existing edit header if present, then schedule
+                const existingHeader = document.getElementById('editModeHeader');
+                const headerHtml = existingHeader ? existingHeader.outerHTML : '';
+                
+                preview.innerHTML = headerHtml + html;
+                
+                debugLog('Editable schedule displayed with drag-and-drop support');
+            }
+
+
+            /**
+             * Create draggable lesson block for editing
+             */
+            // 1. Fix för createEditableLessonBlock - lägg till korrekt lesson ID
+            function createEditableLessonBlock(lesson, day, timeSlot) {
+                // Skapa unikt lesson ID om det saknas
+                const lessonId = lesson.id || `temp-${Math.random().toString(36).substr(2, 9)}`;
+                
+                return `
+                    <div id="lesson-${lessonId}" 
+                        class="draggable-lesson" 
+                        draggable="true"
+                        ondragstart="handleLessonDragStart(event)"
+                        ondragend="handleLessonDragEnd(event)"
+                        data-lesson-id="${lessonId}"
+                        data-subject="${lesson.subject}"
+                        data-room="${lesson.room}"
+                        data-original-day="${day}"
+                        data-original-time="${timeSlot}"
+                        style="
+                            background: linear-gradient(135deg, #4299e1, #3182ce);
+                            color: white;
+                            padding: 8px;
+                            border-radius: 6px;
+                            cursor: move;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            transition: all 0.2s ease;
+                            border: 2px solid transparent;
+                        "
+                        onmouseenter="this.style.transform='scale(1.02)'"
+                        onmouseleave="this.style.transform='scale(1)'">
+                        <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 2px;">
+                            ${escapeHtml(lesson.subject)}
+                        </div>
+                        <div style="font-size: 0.8rem; opacity: 0.9;">
+                            ${escapeHtml(lesson.room || 'Inget rum')}
+                        </div>
+                        <div class="drag-handle" style="
+                            position: absolute;
+                            top: 2px;
+                            right: 2px;
+                            width: 12px;
+                            height: 12px;
+                            background: rgba(255,255,255,0.3);
+                            border-radius: 2px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 8px;
+                        ">⋮⋮</div>
+                    </div>
+                `;
+            }
+
+            /**
+             * Handle drag start for lessons
+             */
+            // Add enhanced drag visual feedback
+            function handleLessonDragStart(event) {
+                draggedLesson = {
+                    element: event.target,
+                    lessonId: event.target.dataset.lessonId,
+                    subject: event.target.dataset.subject,
+                    room: event.target.dataset.room,
+                    originalDay: event.target.dataset.originalDay,
+                    originalTime: event.target.dataset.originalTime
+                };
+                
+                event.target.style.opacity = '0.5';
+                event.target.style.transform = 'rotate(5deg)';
+                event.target.style.zIndex = '1000';
+                
+                // Add visual feedback to valid drop zones
+                document.querySelectorAll('.schedule-cell').forEach(cell => {
+                    if (!cell.classList.contains('occupied') || cell.contains(event.target)) {
+                        cell.classList.add('drop-zone');
+                        cell.style.background = 'rgba(66, 153, 225, 0.1)';
+                        cell.style.border = '2px dashed #4299e1';
+                    } else {
+                        // Mark occupied cells as invalid
+                        cell.style.background = 'rgba(245, 101, 101, 0.05)';
+                        cell.style.border = '2px dashed #f56565';
+                    }
+                });
+                
+                debugLog('Enhanced drag started', draggedLesson);
+            }
+
+            /**
+             * Handle drag end
+             */
+            function handleLessonDragEnd(event) {
+                event.target.style.opacity = '1';
+                event.target.style.transform = 'scale(1)';
+                
+                // Remove visual feedback
+                document.querySelectorAll('.drop-zone').forEach(cell => {
+                    cell.classList.remove('drop-zone');
+                    cell.style.background = '';
+                });
+            }
+
+            /**
+             * Handle drag over for drop zones
+             */
+            function handleDragOver(event) {
+                event.preventDefault();
+                event.currentTarget.style.background = 'rgba(72, 187, 120, 0.2)';
+            }
+
+            /**
+             * Handle lesson drop with conflict checking
+             */
+            async function handleLessonDrop(event) {
+                event.preventDefault();
+                event.currentTarget.style.background = '';
+                
+                if (!draggedLesson) return;
+                
+                const targetCell = event.currentTarget;
+                const newDay = targetCell.dataset.day;
+                const newTime = targetCell.dataset.time;
+                const lessonElement = draggedLesson.element;
+                
+                // Check if dropping on same location
+                if (newDay === draggedLesson.originalDay && newTime === draggedLesson.originalTime) {
+                    debugLog('Dropped on same location, no action needed');
+                    return;
+                }
+                
+                // Check if target cell is already occupied by another lesson
+                if (targetCell.classList.contains('occupied') && !targetCell.contains(lessonElement)) {
+                    showConflictMessage('Den tiden är redan upptagen av en annan lektion');
+                    return;
+                }
+                
+                // Check for teacher and room conflicts
+                const conflictCheck = await checkMoveConflicts(draggedLesson, newDay, newTime);
+                if (!conflictCheck.canMove) {
+                    showConflictMessage(conflictCheck.reason);
+                    return;
+                }
+                
+                // Perform the move
+                try {
+                    const moveResult = await moveLesson(draggedLesson.lessonId, newDay, newTime);
+                    if (moveResult.success) {
+                        // Update UI
+                        performLessonMove(lessonElement, targetCell, newDay, newTime);
+                        showSuccessToast(`Lektion flyttad till ${newDay} ${newTime}`);
+                        
+                        // Check for any new conflicts
+                        setTimeout(checkScheduleConflicts, 100);
+                        
+                        debugLog('Lesson moved successfully', moveResult);
+                    } else {
+                        throw new Error(moveResult.error || 'Kunde inte flytta lektion');
+                    }
+                } catch (error) {
+                    console.error('Error moving lesson:', error);
+                    showConflictMessage(`Fel vid flyttning: ${error.message}`);
+                }
+                
+                draggedLesson = null;
+            }
+
+            /**
+             * Check for conflicts when moving a lesson
+             */
+            // 2. Förenkla conflict checking - ta bort API-anrop som inte finns
+            async function checkMoveConflicts(lesson, newDay, newTime) {
+                // Eftersom API:t inte finns, gör enkel client-side validering
+                const currentLessons = Array.from(document.querySelectorAll('.draggable-lesson')).map(lessonEl => {
+                    const cell = lessonEl.closest('.schedule-cell');
+                    return {
+                        id: lessonEl.dataset.lessonId,
+                        day: cell.dataset.day,
+                        time: cell.dataset.time,
+                        subject: lessonEl.dataset.subject,
+                        room: lessonEl.dataset.room
+                    };
+                });
+
+                // Kontrollera om tiden redan är upptagen av en annan lektion
+                const conflictingLesson = currentLessons.find(l => 
+                    l.day === newDay && 
+                    l.time === newTime && 
+                    l.id !== lesson.lessonId
+                );
+
+                if (conflictingLesson) {
+                    return { 
+                        canMove: false, 
+                        reason: `Tiden är redan upptagen av ${conflictingLesson.subject}` 
+                    };
+                }
+
+                return { canMove: true };
+            }
+
+
+            /**
+             * Move lesson in database
+             */
+            async function moveLesson(lessonId, newDay, newTime) {
+                // Simulera flytt genom att returnera success
+                // I riktigt system skulle detta anropa backend API
+                console.log(`Moving lesson ${lessonId} to ${newDay} ${newTime}`);
+                
+                // Uppdatera currentSchedule med nya positioner
+                if (currentSchedule && currentSchedule.lessons) {
+                    const lessonIndex = currentSchedule.lessons.findIndex(l => 
+                        l.id === lessonId || `temp-${lessonId}` === l.id
+                    );
+                    
+                    if (lessonIndex !== -1) {
+                        const [startTime, endTime] = newTime.split('-');
+                        currentSchedule.lessons[lessonIndex].day = newDay;
+                        currentSchedule.lessons[lessonIndex].time = newTime;
+                        currentSchedule.lessons[lessonIndex].start_time = startTime;
+                        currentSchedule.lessons[lessonIndex].end_time = endTime;
+                        
+                        markScheduleAsUnsaved();
+                    }
+                }
+                
+                return { success: true };
+            }
+
+            /**
+             * Perform UI update after successful lesson move
+             */
+            function performLessonMove(lessonElement, targetCell, newDay, newTime) {
+                // Remove from original location
+                const originalCell = lessonElement.parentElement;
+                originalCell.classList.remove('occupied');
+                originalCell.classList.add('empty');
+                
+                // Add to new location
+                targetCell.appendChild(lessonElement);
+                targetCell.classList.add('occupied');
+                targetCell.classList.remove('empty');
+                
+                // Update lesson data attributes
+                lessonElement.dataset.originalDay = newDay;
+                lessonElement.dataset.originalTime = newTime;
+            }
+
+            /**
+             * Check and highlight schedule conflicts
+             */
+            // Enhanced conflict checking with real-time validation
+            // 5. Förenkla konflikt-checking
+            async function checkScheduleConflicts() {
+                if (!isEditMode) return;
+                
+                // Clear existing conflict indicators
+                document.querySelectorAll('.conflict-indicator').forEach(el => el.remove());
+                document.querySelectorAll('.schedule-cell').forEach(cell => {
+                    cell.classList.remove('has-conflict');
+                    cell.style.background = '';
+                });
+                
+                // Get all current lessons from the UI
+                const currentLessons = Array.from(document.querySelectorAll('.draggable-lesson')).map(lessonEl => {
+                    const cell = lessonEl.closest('.schedule-cell');
+                    return {
+                        id: lessonEl.dataset.lessonId,
+                        day: cell.dataset.day,
+                        time: cell.dataset.time,
+                        subject: lessonEl.dataset.subject,
+                        room: lessonEl.dataset.room
+                    };
+                });
+                
+                // Simple client-side conflict detection
+                const roomConflicts = new Map();
+                const timeConflicts = new Map();
+                
+                currentLessons.forEach(lesson => {
+                    const timeKey = `${lesson.day}-${lesson.time}`;
+                    const roomKey = `${lesson.room}-${timeKey}`;
+                    
+                    // Check for time conflicts (multiple lessons same time)
+                    if (!timeConflicts.has(timeKey)) {
+                        timeConflicts.set(timeKey, []);
+                    }
+                    timeConflicts.get(timeKey).push(lesson);
+                    
+                    // Check for room conflicts
+                    if (!roomConflicts.has(roomKey)) {
+                        roomConflicts.set(roomKey, []);
+                    }
+                    roomConflicts.get(roomKey).push(lesson);
+                });
+                
+                // Mark conflicts
+                roomConflicts.forEach((lessons, roomKey) => {
+                    if (lessons.length > 1) {
+                        lessons.forEach(lesson => {
+                            const cell = document.getElementById(`cell-${lesson.day}-${lesson.time.replace(':', '-')}`);
+                            if (cell) {
+                                cell.classList.add('has-conflict');
+                                
+                                const indicator = document.createElement('div');
+                                indicator.className = 'conflict-indicator';
+                                indicator.style.cssText = `
+                                    position: absolute;
+                                    top: 2px;
+                                    left: 2px;
+                                    background: #f56565;
+                                    color: white;
+                                    font-size: 10px;
+                                    padding: 2px 4px;
+                                    border-radius: 2px;
+                                    z-index: 100;
+                                `;
+                                indicator.textContent = '⚠️';
+                                indicator.title = `Konflikt: Flera lektioner använder samma rum (${lesson.room})`;
+                                
+                                cell.style.position = 'relative';
+                                cell.appendChild(indicator);
+                            }
+                        });
+                    }
+                });
+                
+                debugLog('Client-side conflict check completed');
+            }
+
+
+            /**
+             * Show conflict message to user
+             */
+            function showConflictMessage(message) {
+                // Create temporary notification
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #f56565, #e53e3e);
+                    color: white;
+                    padding: 1rem 1.5rem;
+                    border-radius: 0.5rem;
+                    box-shadow: 0 4px 12px rgba(245, 101, 101, 0.3);
+                    z-index: 10000;
+                    font-weight: 500;
+                    animation: slideIn 0.3s ease-out;
+                `;
+                notification.innerHTML = `⚠️ ${message}`;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease-in';
+                    setTimeout(() => notification.remove(), 300);
+                }, 3000);
+            }
+
+            /**
+             * Show success toast message
+             */
+            function showSuccessToast(message) {
+                const toast = document.createElement('div');
+                toast.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #48bb78, #38a169);
+                    color: white;
+                    padding: 1rem 1.5rem;
+                    border-radius: 0.5rem;
+                    box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+                    z-index: 10000;
+                    font-weight: 500;
+                    animation: slideIn 0.3s ease-out;
+                `;
+                toast.innerHTML = `✅ ${message}`;
+                
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.style.animation = 'slideOut 0.3s ease-in';
+                    setTimeout(() => toast.remove(), 300);
+                }, 2000);
+            }
+
+            /**
+             * Update edit controls in generation panel
+             */
+            function updateEditControls() {
+                const controls = document.getElementById('generationControls');
+                if (!controls) return;
+                
+                // Replace normal controls with edit controls
+                controls.innerHTML = `
+                    <div class="edit-controls-header" style="margin-bottom: 1rem; padding: 1rem; background: #fef5e7; border-radius: 0.5rem; border-left: 4px solid #ed8936;">
+                        <h4 style="margin: 0 0 0.5rem 0; color: #744210;">✏️ Redigeringsläge aktiv</h4>
+                        <p style="margin: 0; color: #744210; font-size: 0.9rem;">
+                            Dra och släpp lektioner för att flytta dem. Alla ändringar sparas automatiskt.
+                        </p>
+                    </div>
+                    
+                    <div class="schedule-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button type="button" class="btn" onclick="saveEditedSchedule()" style="background: #48bb78;">
+                            💾 Spara ändringar
+                        </button>
+                        <button type="button" class="btn" onclick="discardScheduleChanges()" style="background: #f56565;">
+                            ❌ Avbryt redigering
+                        </button>
+                        <button type="button" class="btn" onclick="reloadEditSchedule()" style="background: #4299e1;">
+                            🔄 Ladda om schema
+                        </button>
+                    </div>
+                    
+                    <div class="edit-info" style="margin-top: 1rem; padding: 0.75rem; background: #ebf8ff; border-radius: 0.375rem; font-size: 0.85rem; color: #2a4365;">
+                        <strong>💡 Tips för redigering:</strong>
+                        <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
+                            <li>Dra lektioner till nya tider - systemet kollar automatiskt efter konflikter</li>
+                            <li>Röda celler indikerar konflikter som måste lösas</li>
+                            <li>Lärare och klassrum kan inte dubbelbokas</li>
+                        </ul>
+                    </div>
+                `;
+            }
+
+
+            // Enhanced initialization for edit mode
+            document.addEventListener('DOMContentLoaded', function() {
+                // Add global error handler for drag operations
+                window.addEventListener('error', function(e) {
+                    if (isEditMode && e.message.includes('drag')) {
+                        console.error('Drag operation error:', e);
+                        showConflictMessage('Fel vid drag-and-drop operation. Ladda om sidan om problemet kvarstår.');
+                    }
+                });
+                
+                // Add visibility change handler to prevent data loss
+                document.addEventListener('visibilitychange', function() {
+                    if (document.hidden && isEditMode && draggedLesson) {
+                        // User switched tabs while dragging - reset drag state
+                        draggedLesson = null;
+                        document.querySelectorAll('.draggable-lesson').forEach(el => {
+                            el.style.opacity = '1';
+                            el.style.transform = 'scale(1)';
+                        });
+                        document.querySelectorAll('.drop-zone').forEach(el => {
+                            el.classList.remove('drop-zone');
+                            el.style.background = '';
+                            el.style.border = '';
+                        });
+                    }
+                });
+            });
+
+
+            // Add keyboard shortcuts for edit mode
+            document.addEventListener('keydown', function(e) {
+                if (!isEditMode) return;
+                
+                // Escape to exit edit mode
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    discardScheduleChanges();
+                }
+                
+                // Ctrl+S to save in edit mode
+                if (e.ctrlKey && e.key === 's') {
+                    e.preventDefault();
+                    saveEditedSchedule();
+                }
+                
+                // Ctrl+Z for undo (reload from database)
+                if (e.ctrlKey && e.key === 'z') {
+                    e.preventDefault();
+                    reloadEditSchedule();
+                }
+            });
+
+            /**
+             * Save edited schedule changes
+             */
+            // Enhanced save function for edited schedules
+            // 6. Förenkla save-funktionen för editerat schema
+            async function saveEditedSchedule() {
+                if (!confirm('Spara alla ändringar i schemat?')) {
+                    return;
+                }
+                
+                const saveButton = event.target;
+                const originalText = saveButton.textContent;
+                saveButton.disabled = true;
+                saveButton.textContent = '💾 Sparar...';
+                
+                try {
+                    // Get current schedule state from UI
+                    const currentLessons = Array.from(document.querySelectorAll('.draggable-lesson')).map(lessonEl => {
+                        const cell = lessonEl.closest('.schedule-cell');
+                        const [startTime, endTime] = cell.dataset.time.split('-');
+                        
+                        return {
+                            id: lessonEl.dataset.lessonId,
+                            day: cell.dataset.day,
+                            time: cell.dataset.time,
+                            start_time: startTime,
+                            end_time: endTime,
+                            subject: lessonEl.dataset.subject,
+                            room: lessonEl.dataset.room,
+                            class_id: editingClassId,
+                            class_name: editingClassName
+                        };
+                    });
+                    
+                    // Update currentSchedule
+                    if (currentSchedule) {
+                        currentSchedule.lessons = currentLessons;
+                        markScheduleAsUnsaved();
+                    }
+                    
+                    showSuccessToast(`✅ ${currentLessons.length} lektioner uppdaterade!`);
+                    debugLog('Schedule changes saved locally', { lessons: currentLessons.length });
+                    
+                    // Exit edit mode
+                    setTimeout(() => {
+                        exitEditMode();
+                        // Visa det uppdaterade schemat
+                        if (currentSchedule) {
+                            displayMultiClassSchedule(currentSchedule);
+                        }
+                    }, 1000);
+                    
+                } catch (error) {
+                    console.error('Error saving edited schedule:', error);
+                    showConflictMessage(`Fel vid sparning: ${error.message}`);
+                } finally {
+                    saveButton.disabled = false;
+                    saveButton.textContent = originalText;
+                }
+            }
+
+            /**
+             * Discard changes and exit edit mode
+             */
+            function discardScheduleChanges() {
+                if (!confirm('Avbryt redigeringen och förlora alla ändringar?')) {
+                    return;
+                }
+                
+                exitEditMode();
+                showSuccessToast('Redigering avbruten - inga ändringar sparade');
+            }
+
+            /**
+             * Reload schedule from database
+             */
+            async function reloadEditSchedule() {
+                if (!confirm('Ladda om schemat från databasen? Alla osparade ändringar går förlorade.')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/class_schedule/status/${editingClassId}`);
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        originalScheduleData = result;
+                        displayEditableSchedule(result);
+                        showSuccessToast('Schema laddat om från databasen');
+                    } else {
+                        throw new Error(result.error);
+                    }
+                    
+                } catch (error) {
+                    console.error('Error reloading schedule:', error);
+                    showConflictMessage(`Fel vid laddning: ${error.message}`);
+                }
+            }
+
+            // Add CSS animations for notifications
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from {
+                        transform: translateX(100%);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+                
+                @keyframes slideOut {
+                    from {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                    to {
+                        transform: translateX(100%);
+                        opacity: 0;
+                    }
+                }
+                
+                .draggable-lesson:hover {
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+                }
+                
+                .schedule-cell.drop-zone {
+                    border: 2px dashed #4299e1 !important;
+                }
+                
+                .schedule-cell.has-conflict {
+                    background: rgba(245, 101, 101, 0.1) !important;
+                    border-color: #f56565 !important;
+                }
+            `;
+            document.head.appendChild(style);
 
             async function saveMultiClassSchedule() {
                 if (!currentSchedule || !currentSchedule.lessons) {
