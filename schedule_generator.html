@@ -3586,36 +3586,7 @@
              */
             function enterEditMode(scheduleData) {
                 // Update header to show edit mode
-                const preview = document.getElementById('schedulePreview');
-                if (preview) {
-                    const editHeader = document.createElement('div');
-                    editHeader.id = 'editModeHeader';
-                    editHeader.className = 'edit-mode-header';
-                    editHeader.style.cssText = `
-                        background: linear-gradient(135deg, #ed8936, #f56565);
-                        color: white;
-                        padding: 1rem;
-                        border-radius: 0.5rem;
-                        margin-bottom: 1rem;
-                        text-align: center;
-                        font-weight: bold;
-                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                    `;
-                    editHeader.innerHTML = `
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                            <span>✏️ REDIGERINGSLÄGE</span>
-                            <span style="background: rgba(255,255,255,0.2); padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
-                                ${editingClassName}
-                            </span>
-                        </div>
-                        <div style="font-size: 0.85rem; margin-top: 0.5rem; opacity: 0.9;">
-                            Dra och släpp lektioner för att flytta dem. Röda celler = konflikt.
-                        </div>
-                    `;
-                    
-                    // Insert before preview content
-                    preview.insertBefore(editHeader, preview.firstChild);
-                }
+                
                 
                 // Hide class selection (already selected)
                 const classContainer = document.getElementById('classesContainer');
