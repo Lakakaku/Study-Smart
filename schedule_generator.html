@@ -3795,7 +3795,10 @@
                 }
                 
                 .lesson-middle {
-                    border-top: 1px dashed rgba(66, 153, 225, 0.3) !important;
+                    background: linear-gradient(135deg, #4299e1, #3182ce) !important; /* SAMMA FÄRG som lektionsblocket */
+                    border-top: 1px solid rgba(255,255,255,0.3) !important;
+                    border-left: 1px solid rgba(255,255,255,0.3) !important;
+                    border-right: 1px solid rgba(255,255,255,0.3) !important;
                 }
                 
                 .editable-schedule-table td {
@@ -3808,12 +3811,13 @@
                 }
                 
                 .editable-schedule-table .schedule-cell.lesson-start {
-                    background: rgba(66, 153, 225, 0.05);
+                    background: transparent; /* Låt lektionsblocket hantera färgen */
                 }
                 
                 .editable-schedule-table .schedule-cell.lesson-middle {
-                    background: rgba(66, 153, 225, 0.02);
-                    border-left: 2px solid rgba(66, 153, 225, 0.2);
+                    background: linear-gradient(135deg, #4299e1, #3182ce); /* SAMMA FÄRG */
+                    border-left: 1px solid rgba(255,255,255,0.3);
+                    border-right: 1px solid rgba(255,255,255,0.3);
                 }
             `;
 
@@ -3903,9 +3907,10 @@
                                         position: relative; 
                                         vertical-align: top;
                                         transition: all 0.2s ease;
-                                        ${cellData.type === 'lesson-start' ? 'background: rgba(66, 153, 225, 0.1);' : ''}
-                                        ${cellData.type === 'lesson-middle' ? 'background: rgba(66, 153, 225, 0.05);' : ''}
+                                        ${cellData.type === 'lesson-start' ? 'background: transparent;' : ''}
+                                        ${cellData.type === 'lesson-middle' ? 'background: linear-gradient(135deg, #4299e1, #3182ce); border-left: 1px solid rgba(255,255,255,0.3); border-right: 1px solid rgba(255,255,255,0.3);' : ''}
                                     ">`;
+            
                         
                         // Rendera lektion bara på start-raden
                         if (cellData.type === 'lesson-start' && cellData.lesson) {
@@ -3998,9 +4003,10 @@
                 const pixelsPerMinute = cellHeight / 5; // 5 min per cell
                 const offsetPixels = Math.max(0, offsetMinutes * pixelsPerMinute);
                 
-                // Beräkna faktisk höjd baserat på lektionens verkliga längd
+                // FIX: Beräkna faktisk höjd baserat på lektionens verkliga längd och ta bort offset från total höjd
                 const durationMinutes = timeToMinutes(lessonEndTime) - lessonStartMinutes;
-                const blockHeight = Math.max(cellHeight - 2, (durationMinutes / 5) * cellHeight - 2);
+                const totalAvailableHeight = spanRows * cellHeight;
+                const blockHeight = Math.min(durationMinutes * pixelsPerMinute, totalAvailableHeight - offsetPixels - 2); // -2 för borders
                 
                 return `
                     <div id="lesson-${lessonId}" 
@@ -4016,7 +4022,7 @@
                         data-span-rows="${spanRows}"
                         style="
                             position: absolute;
-                            top: ${1 + offsetPixels}px;
+                            top: ${offsetPixels}px;
                             left: 1px;
                             right: 1px;
                             height: ${blockHeight}px;
@@ -4032,6 +4038,7 @@
                             overflow: hidden;
                             font-size: 11px;
                             line-height: 1.2;
+                            box-sizing: border-box;
                         "
                         onmouseenter="this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.25)'; this.style.zIndex='20';"
                         onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.15)'; this.style.zIndex='10';">
@@ -4069,6 +4076,7 @@
                     </div>
                 `;
             }
+    
 
 
 
