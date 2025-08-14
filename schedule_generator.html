@@ -3806,6 +3806,8 @@
              */
             // Förbättrad displayEditableSchedule med scroll-container
             // Uppdaterad displayEditableScheduleWithAutoScroll funktion
+            // Ersätt displayEditableScheduleWithAutoScroll funktionen med denna:
+            // Ersätt displayEditableScheduleWithAutoScroll funktionen med denna:
             function displayEditableScheduleWithAutoScroll(scheduleData) {
                 const preview = document.getElementById('schedulePreview');
                 
@@ -3889,12 +3891,27 @@
                                         ${cellData.type === 'lesson-start' ? 'background: transparent;' : ''}
                                         ${cellData.type === 'lesson-middle' ? 'background: linear-gradient(135deg, #4299e1, #3182ce); border-left: 1px solid rgba(255,255,255,0.3); border-right: 1px solid rgba(255,255,255,0.3);' : ''}
                                     ">`;
-            
+
                         
-                        // Rendera lektion bara på start-raden
+                        // Rendera lektion bara på start-raden (utan höjdberäkning här)
                         if (cellData.type === 'lesson-start' && cellData.lesson) {
                             window.editModeLessons[cellData.lesson.id] = cellData.lesson;
-                            html += createEditableLessonBlockSpanning(cellData.lesson, day, timeSlot, cellData.spanRows);
+                            html += `<div id="lesson-${cellData.lesson.id}" 
+                                class="draggable-lesson spanning-lesson" 
+                                draggable="true"
+                                data-lesson-id="${cellData.lesson.id}"
+                                data-subject="${escapeHtml(cellData.lesson.subject || cellData.lesson.school_subject || 'Okänt ämne')}"
+                                data-room="${escapeHtml(cellData.lesson.room || 'Inget rum')}"
+                                data-original-day="${day}"
+                                data-original-time="${cellData.lesson.time}"
+                                data-span-rows="${cellData.spanRows}"
+                                style="position: absolute; left: 1px; right: 1px; background: linear-gradient(135deg, #4299e1, #3182ce); color: white; padding: 4px 8px; border-radius: 6px; cursor: move; box-shadow: 0 2px 4px rgba(0,0,0,0.15); transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.3); z-index: 10; overflow: hidden; font-size: 11px; line-height: 1.2; box-sizing: border-box;"
+                                ondragstart="handleLessonDragStartEnhanced(event)"
+                                ondragend="handleLessonDragEndEnhanced(event)">
+                                <div style="font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    ${escapeHtml(cellData.lesson.subject || cellData.lesson.school_subject || 'Okänt ämne')}
+                                </div>
+                            </div>`;
                         }
                         
                         html += '</td>';
@@ -3908,35 +3925,6 @@
                 // Set content
                 scrollContainer.innerHTML = html;
 
-                // Lägg till scroll-indikatorer
-                const scrollIndicators = document.createElement('div');
-                scrollIndicators.innerHTML = `
-                    <div style="position: absolute; top: 0; left: 0; right: 0; height: 40px; 
-                                background: linear-gradient(to bottom, rgba(66,153,225,0.1), transparent);
-                                pointer-events: none; z-index: 100; border-radius: 0.5rem 0.5rem 0 0;">
-                        <div style="text-align: center; padding: 10px; font-size: 12px; color: #4299e1;">▲ Dra hit för att scrolla upp</div>
-                    </div>
-                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 40px; 
-                                background: linear-gradient(to top, rgba(66,153,225,0.1), transparent);
-                                pointer-events: none; z-index: 100; border-radius: 0 0 0.5rem 0.5rem;">
-                        <div style="text-align: center; padding: 10px; font-size: 12px; color: #4299e1;">▼ Dra hit för att scrolla ner</div>
-                    </div>
-                    <div style="position: absolute; left: 0; top: 40px; bottom: 40px; width: 40px; 
-                                background: linear-gradient(to right, rgba(66,153,225,0.1), transparent);
-                                pointer-events: none; z-index: 100;">
-                        <div style="writing-mode: vertical-lr; text-align: center; padding: 10px; font-size: 12px; color: #4299e1; transform: rotate(180deg);">◄ Scrolla vänster</div>
-                    </div>
-                    <div style="position: absolute; right: 0; top: 40px; bottom: 40px; width: 40px; 
-                                background: linear-gradient(to left, rgba(66,153,225,0.1), transparent);
-                                pointer-events: none; z-index: 100;">
-                        <div style="writing-mode: vertical-lr; text-align: center; padding: 10px; font-size: 12px; color: #4299e1;">► Scrolla höger</div>
-                    </div>
-                `;
-                scrollIndicators.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s;';
-                scrollIndicators.id = 'scroll-indicators';
-
-                scrollContainer.appendChild(scrollIndicators);
-                
                 // Preserve existing edit header
                 const existingHeader = document.getElementById('editModeHeader');
                 const headerHtml = existingHeader ? existingHeader.outerHTML : '';
@@ -3947,11 +3935,96 @@
                 // Store reference för auto-scroll
                 scheduleScrollContainer = scrollContainer;
                 
-                // Setup scroll bounds för auto-scroll
-                setupAutoScrollBounds();
-                attachScrollListeners();
+                // VIKTIGT: Beräkna korrekta höjder EFTER DOM är renderad
+                setTimeout(() => {
+                    adjustLessonHeights();
+                    setupAutoScrollBounds();
+                    attachScrollListeners();
+                }, 50);
                 
                 debugLog('Enhanced editable schedule displayed with discrete time slots');
+            }
+
+            // Ny funktion för att justera lesson-höjder efter DOM är renderad
+            function adjustLessonHeights() {
+                document.querySelectorAll('.spanning-lesson').forEach(lessonElement => {
+                    const lessonId = lessonElement.dataset.lessonId;
+                    const lesson = window.editModeLessons[lessonId];
+                    const day = lessonElement.dataset.originalDay;
+                    const originalTime = lessonElement.dataset.originalTime;
+                    const spanRows = parseInt(lessonElement.dataset.spanRows);
+                    
+                    if (!lesson || !originalTime) return;
+                    
+                    const [lessonStartTime, lessonEndTime] = originalTime.split('-');
+                    const lessonStartMinutes = timeToMinutes(lessonStartTime);
+                    const lessonEndMinutes = timeToMinutes(lessonEndTime);
+                    const durationMinutes = lessonEndMinutes - lessonStartMinutes;
+                    
+                    // Hitta första cellen
+                    const discreteTimeSlots = generateDiscreteTimeSlots('08:00', '18:00', 5);
+                    let startTimeSlot = null;
+                    let bestMatch = -1;
+                    
+                    discreteTimeSlots.forEach(timeSlot => {
+                        const slotMinutes = timeToMinutes(timeSlot);
+                        if (slotMinutes <= lessonStartMinutes && slotMinutes > bestMatch) {
+                            bestMatch = slotMinutes;
+                            startTimeSlot = timeSlot;
+                        }
+                    });
+                    
+                    if (!startTimeSlot) return;
+                    
+                    const firstCell = document.querySelector(`.schedule-cell[data-day="${day}"][data-time="${startTimeSlot}"]`);
+                    if (!firstCell) return;
+                    
+                    const actualCellHeight = firstCell.getBoundingClientRect().height;
+                    const pixelsPerMinute = actualCellHeight / 5; // 5 minuter per cell
+                    
+                    // Beräkna offset och höjd
+                    const slotStartMinutes = timeToMinutes(startTimeSlot);
+                    const offsetMinutes = Math.max(0, lessonStartMinutes - slotStartMinutes);
+                    const offsetPixels = Math.round(offsetMinutes * pixelsPerMinute);
+                    
+                    // Beräkna total tillgänglig höjd
+                    const lastCellStartMinutes = slotStartMinutes + (spanRows - 1) * 5;
+                    const lastCellTime = minutesToTime(lastCellStartMinutes);
+                    const lastCell = document.querySelector(`.schedule-cell[data-day="${day}"][data-time="${lastCellTime}"]`);
+                    
+                    let totalAvailableHeight = spanRows * actualCellHeight;
+                    if (firstCell && lastCell) {
+                        const firstRect = firstCell.getBoundingClientRect();
+                        const lastRect = lastCell.getBoundingClientRect();
+                        totalAvailableHeight = Math.max(0, lastRect.bottom - firstRect.top);
+                    }
+                    
+                    const durationPixels = Math.round(durationMinutes * pixelsPerMinute);
+                    const maxPossibleHeight = Math.max(0, totalAvailableHeight - offsetPixels - 2);
+                    const blockHeight = Math.max(20, Math.min(durationPixels, maxPossibleHeight));
+                    
+                    // Uppdatera element
+                    lessonElement.style.top = `${offsetPixels}px`;
+                    lessonElement.style.height = `${blockHeight}px`;
+                    
+                    // Lägg till mer innehåll om det finns plats
+                    const contentDiv = lessonElement.querySelector('div');
+                    if (spanRows >= 3 && !lessonElement.querySelector('.room-info')) {
+                        const roomDiv = document.createElement('div');
+                        roomDiv.className = 'room-info';
+                        roomDiv.style.cssText = 'font-size: 10px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+                        roomDiv.textContent = `📍 ${lesson.room || 'Inget rum'}`;
+                        contentDiv.after(roomDiv);
+                    }
+                    
+                    if (spanRows >= 5 && !lessonElement.querySelector('.time-info')) {
+                        const timeDiv = document.createElement('div');
+                        timeDiv.className = 'time-info';
+                        timeDiv.style.cssText = 'font-size: 10px; opacity: 0.8; margin-top: 2px;';
+                        timeDiv.textContent = `🕒 ${originalTime}`;
+                        lessonElement.appendChild(timeDiv);
+                    }
+                });
             }
 
             function displayEditableSchedule(scheduleData) {
