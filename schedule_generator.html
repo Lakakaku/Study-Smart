@@ -408,6 +408,14 @@
             font-size: 0.75rem;
             font-weight: 500;
         }
+
+        .schedule-cell {
+            overflow: visible !important; /* tillåt att .draggable-lesson sticker ut */
+        }
+        .spanning-lesson {
+            box-sizing: border-box; /* säkerställ att padding inkluderas i höjden */
+        }
+
         .lesson-room {
             color: #718096;
             font-size: 0.7rem;
@@ -3960,25 +3968,73 @@
 
             // Uppdaterad funktion för att skapa spanning lesson blocks
             // 5. Uppdatera createEditableLessonBlockSpanning med korrekt lesson data
+            // Ersätt denna funktion (createEditableLessonBlockSpanning) med denna version.
+            // Förklaring: vi hämtar verkliga DOM-höjder för start- och slutcell istället för
+            // att använda hårdkodade 20px/5min. Vi beräknar blockets top (offset) och höjd
+            // från cellernas bounding rects vilket gör att blocket alltid fyller korrekt tid.
+            // --- Ersätt hela createEditableLessonBlockSpanning med denna ---
             function createEditableLessonBlockSpanning(lesson, day, timeSlot, spanRows) {
                 const lessonId = lesson.id;
-                const cellHeight = 20; // px per cell
-                
-                // Beräkna exakt position baserat på lektionens verkliga starttid
+
+                // Försök hitta referenscellen för slotStart (för den dag/tid som skickas in).
+                const firstCell = document.querySelector(`.schedule-cell[data-day="${day}"][data-time="${timeSlot}"]`);
+
+                // Minutes per cell — läs från data-minutes-per-slot om det finns, annars default 5.
+                const minutesPerCell = firstCell && firstCell.dataset && firstCell.dataset.minutesPerSlot
+                    ? parseInt(firstCell.dataset.minutesPerSlot, 10)
+                    : 5;
+
+                // Fallback cellheight om DOM ej renderad
+                const fallbackCellHeight = 20;
+                const actualCellHeight = firstCell ? firstCell.getBoundingClientRect().height : fallbackCellHeight;
+
+                // pixels per minute baserat på verklig cellhöjd
+                const pixelsPerMinute = actualCellHeight / minutesPerCell;
+
+                // Lektionens start/slut i minuter
                 const [lessonStartTime, lessonEndTime] = lesson.time.split('-');
                 const lessonStartMinutes = timeToMinutes(lessonStartTime);
+                const lessonEndMinutes = timeToMinutes(lessonEndTime);
+                const durationMinutes = Math.max(0, lessonEndMinutes - lessonStartMinutes);
+
+                // Offset i minuter (om lektionen börjar mitt i en cell)
                 const slotStartMinutes = timeToMinutes(timeSlot);
-                
-                // Beräkna offset inom cellen (om lektionen inte startar exakt på slot-tiden)
-                const offsetMinutes = lessonStartMinutes - slotStartMinutes;
-                const pixelsPerMinute = cellHeight / 5; // 5 min per cell
-                const offsetPixels = Math.max(0, offsetMinutes * pixelsPerMinute);
-                
-                // FIX: Beräkna faktisk höjd baserat på lektionens verkliga längd och ta bort offset från total höjd
-                const durationMinutes = timeToMinutes(lessonEndTime) - lessonStartMinutes;
-                const totalAvailableHeight = spanRows * cellHeight;
-                const blockHeight = Math.min(durationMinutes * pixelsPerMinute, totalAvailableHeight - offsetPixels - 2); // -2 för borders
-                
+                const offsetMinutes = Math.max(0, lessonStartMinutes - slotStartMinutes);
+                const offsetPixels = Math.max(0, Math.round(offsetMinutes * pixelsPerMinute));
+
+                // Försök hitta sista cellen som lektionen spänner över
+                const lastCellStartMinutes = slotStartMinutes + (spanRows - 1) * minutesPerCell;
+                const lastCellTime = minutesToTime(lastCellStartMinutes);
+                const lastCell = document.querySelector(`.schedule-cell[data-day="${day}"][data-time="${lastCellTime}"]`);
+
+                // totalAvailableHeight: från toppen av första cell till botten av sista cell (inkl. gap)
+                let totalAvailableHeight;
+                if (firstCell && lastCell) {
+                    const firstRect = firstCell.getBoundingClientRect();
+                    const lastRect  = lastCell.getBoundingClientRect();
+                    totalAvailableHeight = Math.max(0, lastRect.bottom - firstRect.top);
+                } else {
+                    totalAvailableHeight = Math.max(0, spanRows * actualCellHeight);
+                }
+
+                // Beräkna gap-justering (radgaps, borders, mm): skillnad mellan faktiska rect-höjden och sum av cell heights
+                const estimatedCellsHeight = spanRows * actualCellHeight;
+                const gapAdjustment = Math.max(0, totalAvailableHeight - estimatedCellsHeight);
+
+                // Beräkna lektionens pixelhöjd + kompensera för gaps
+                const durationPixels = Math.round(durationMinutes * pixelsPerMinute);
+                const desiredHeight = durationPixels + gapAdjustment;
+
+                // Max som får användas (ej rinna utanför tillgänglig area efter offset)
+                const maxPossibleHeight = Math.max(0, totalAvailableHeight - offsetPixels - 2); // -2 för borders
+
+                // Minimal synlig höjd
+                const MIN_LESSON_HEIGHT = 20;
+
+                // Slutlig höjd: clamp till maxPossibleHeight och säkerställ MIN_LESSON_HEIGHT
+                const computed = Math.min(desiredHeight, maxPossibleHeight);
+                const blockHeight = Math.max(MIN_LESSON_HEIGHT, Math.ceil(computed + 1)); // +1 fudge för pixelavrundning
+
                 return `
                     <div id="lesson-${lessonId}" 
                         class="draggable-lesson spanning-lesson" 
@@ -4047,6 +4103,8 @@
                     </div>
                 `;
             }
+
+
     
 
 
