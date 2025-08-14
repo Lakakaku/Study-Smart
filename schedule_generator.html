@@ -3672,10 +3672,157 @@
                 debugLog('Edit mode exited');
             }
 
+
+            // Ny funktion för att generera diskreta tidsintervall
+            function generateDiscreteTimeSlots(startTime, endTime, intervalMinutes) {
+                const slots = [];
+                const startMinutes = timeToMinutes(startTime);
+                const endMinutes = timeToMinutes(endTime);
+                
+                let currentTime = startMinutes;
+                
+                while (currentTime <= endMinutes) {
+                    slots.push(minutesToTime(currentTime));
+                    currentTime += intervalMinutes;
+                }
+                
+                return slots;
+            }
+
+            // Ny funktion för att skapa lesson grid med spanning
+            // 4. Förbättra createLessonGrid för korrekt lesson ID hantering
+            function createLessonGrid(scheduleData, weekdays, discreteTimeSlots) {
+                const grid = {};
+                
+                // Initiera grid
+                weekdays.forEach(day => {
+                    grid[day] = {};
+                    discreteTimeSlots.forEach(timeSlot => {
+                        grid[day][timeSlot] = { type: 'empty', lesson: null, spanRows: 0 };
+                    });
+                });
+                
+                // Placera lektioner i grid
+                if (scheduleData.lessons_by_day) {
+                    Object.entries(scheduleData.lessons_by_day).forEach(([day, lessons]) => {
+                        lessons.forEach((lesson, lessonIndex) => {
+                            // Skapa unikt lesson ID om det inte finns
+                            if (!lesson.id) {
+                                lesson.id = `${day}-${lessonIndex}-${lesson.subject?.replace(/\s+/g, '')}-${lesson.time?.replace(/[:-]/g, '')}`;
+                            }
+                            
+                            const [lessonStartTime, lessonEndTime] = lesson.time.split('-');
+                            const lessonStartMinutes = timeToMinutes(lessonStartTime);
+                            const lessonEndMinutes = timeToMinutes(lessonEndTime);
+                            
+                            // RÄTT metod: Hitta närmaste tidslot som är <= lektionens starttid
+                            let startIndex = -1;
+                            let bestMatch = -1;
+                            
+                            discreteTimeSlots.forEach((timeSlot, index) => {
+                                const slotMinutes = timeToMinutes(timeSlot);
+                                
+                                // Hitta den senaste tidslot som är <= lektionens starttid
+                                if (slotMinutes <= lessonStartMinutes) {
+                                    if (slotMinutes > bestMatch) {
+                                        bestMatch = slotMinutes;
+                                        startIndex = index;
+                                    }
+                                }
+                            });
+
+                            // Sätt start cell med korrekt spanRows
+                            if (startIndex >= 0 && startIndex < discreteTimeSlots.length) {
+                                const startTimeSlot = discreteTimeSlots[startIndex];
+                                
+                                // Beräkna spanRows baserat på faktisk lektionstid
+                                const intervalMinutes = 5;
+                                const actualDurationMinutes = lessonEndMinutes - lessonStartMinutes;
+                                const spanRows = Math.ceil(actualDurationMinutes / intervalMinutes);
+                                
+                                grid[day][startTimeSlot] = {
+                                    type: 'lesson-start',
+                                    lesson: lesson,
+                                    spanRows: spanRows
+                                };
+                                
+                                // Markera mellanliggande celler
+                                const endIndex = Math.min(startIndex + spanRows - 1, discreteTimeSlots.length - 1);
+                                for (let i = startIndex + 1; i <= endIndex; i++) {
+                                    const middleTimeSlot = discreteTimeSlots[i];
+                                    grid[day][middleTimeSlot] = {
+                                        type: 'lesson-middle',
+                                        lesson: lesson,
+                                        spanRows: 0
+                                    };
+                                }
+                            }
+                        });
+                    });
+                }
+                
+                return grid;
+            }
+
+
+            // Lägg till styles om de inte redan finns
+            if (!document.getElementById('spanning-lesson-styles')) {
+                const styleElement = document.createElement('style');
+                styleElement.id = 'spanning-lesson-styles';
+                styleElement.textContent = spanningLessonStyles;
+                document.head.appendChild(styleElement);
+            }
+
+
+
+            // Lägg till CSS för spanning lessons
+            const spanningLessonStyles = `
+                .schedule-cell {
+                    position: relative;
+                }
+                
+                .spanning-lesson {
+                    box-sizing: border-box;
+                }
+                
+                .spanning-lesson:hover {
+                    z-index: 30 !important;
+                    transform: scale(1.02) !important;
+                }
+                
+                .spanning-lesson:active {
+                    cursor: grabbing !important;
+                }
+                
+                .lesson-middle {
+                    border-top: 1px dashed rgba(66, 153, 225, 0.3) !important;
+                }
+                
+                .editable-schedule-table td {
+                    padding: 0;
+                    vertical-align: top;
+                }
+                
+                .editable-schedule-table .schedule-cell.empty {
+                    background: transparent;
+                }
+                
+                .editable-schedule-table .schedule-cell.lesson-start {
+                    background: rgba(66, 153, 225, 0.05);
+                }
+                
+                .editable-schedule-table .schedule-cell.lesson-middle {
+                    background: rgba(66, 153, 225, 0.02);
+                    border-left: 2px solid rgba(66, 153, 225, 0.2);
+                }
+            `;
+
+
             /**
              * Display schedule in editable format with drag-and-drop
              */
             // Förbättrad displayEditableSchedule med scroll-container
+            // Uppdaterad displayEditableScheduleWithAutoScroll funktion
             function displayEditableScheduleWithAutoScroll(scheduleData) {
                 const preview = document.getElementById('schedulePreview');
                 
@@ -3692,9 +3839,11 @@
                     box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
                 `;
 
+                // Generera diskreta tidsintervall (5-minuters intervall)
+                const discreteTimeSlots = generateDiscreteTimeSlots('08:00', '18:00', 5);
+                
                 // Build schedule grid med förbättrad layout
                 const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
-                const timeSlots = generateTimeSlots('08:00', '15:00', 60);
                 
                 // Store lesson data för lookup
                 window.editModeLessons = {};
@@ -3716,10 +3865,13 @@
                 });
                 html += '</tr></thead><tbody>';
                 
-                // Build time slot rows
-                timeSlots.forEach(timeSlot => {
+                // Skapa en grid för lektioner per dag och tid
+                const lessonGrid = createLessonGrid(scheduleData, weekdays, discreteTimeSlots);
+                
+                // Rendera rader för varje diskret tidsslot
+                discreteTimeSlots.forEach(timeSlot => {
                     html += `<tr><td style="
-                        padding: 8px 12px; 
+                        padding: 4px 12px; 
                         font-weight: 600; 
                         background: #f9fafb; 
                         border: 1px solid #e2e8f0;
@@ -3727,17 +3879,17 @@
                         position: sticky;
                         left: 0;
                         z-index: 10;
+                        height: 20px;
+                        font-size: 12px;
+                        line-height: 1;
                     ">${timeSlot}</td>`;
                     
                     weekdays.forEach(day => {
-                        const lessons = scheduleData.lessons_by_day[day] || [];
-                        const lesson = lessons.find(l => l.time === timeSlot);
-                        
                         const cellId = `cell-${day}-${timeSlot.replace(':', '-')}`;
-                        const isOccupied = lesson ? 'occupied' : 'empty';
+                        const cellData = lessonGrid[day][timeSlot];
                         
                         html += `<td id="${cellId}" 
-                                    class="schedule-cell ${isOccupied}" 
+                                    class="schedule-cell ${cellData.type}" 
                                     data-day="${day}" 
                                     data-time="${timeSlot}"
                                     ondrop="handleLessonDrop(event)" 
@@ -3745,18 +3897,20 @@
                                     ondragenter="handleDragEnter(event)"
                                     ondragleave="handleDragLeave(event)"
                                     style="
-                                        padding: 6px; 
+                                        padding: 0; 
                                         border: 1px solid #e2e8f0; 
-                                        min-height: 70px; 
+                                        height: 20px;
                                         position: relative; 
                                         vertical-align: top;
                                         transition: all 0.2s ease;
+                                        ${cellData.type === 'lesson-start' ? 'background: rgba(66, 153, 225, 0.1);' : ''}
+                                        ${cellData.type === 'lesson-middle' ? 'background: rgba(66, 153, 225, 0.05);' : ''}
                                     ">`;
                         
-                        if (lesson) {
-                            // Store lesson data
-                            window.editModeLessons[lesson.id] = lesson;
-                            html += createEditableLessonBlock(lesson, day, timeSlot);
+                        // Rendera lektion bara på start-raden
+                        if (cellData.type === 'lesson-start' && cellData.lesson) {
+                            window.editModeLessons[cellData.lesson.id] = cellData.lesson;
+                            html += createEditableLessonBlockSpanning(cellData.lesson, day, timeSlot, cellData.spanRows);
                         }
                         
                         html += '</td>';
@@ -3769,11 +3923,6 @@
                 
                 // Set content
                 scrollContainer.innerHTML = html;
-
-
-
-                // Lägg till scroll-indikatorer
-                // Lägg till detta efter scrollContainer.innerHTML = html; i displayEditableScheduleWithAutoScroll
 
                 // Lägg till scroll-indikatorer
                 const scrollIndicators = document.createElement('div');
@@ -3816,10 +3965,9 @@
                 
                 // Setup scroll bounds för auto-scroll
                 setupAutoScrollBounds();
-
                 attachScrollListeners();
                 
-                debugLog('Enhanced editable schedule displayed with auto-scroll');
+                debugLog('Enhanced editable schedule displayed with discrete time slots');
             }
 
             function displayEditableSchedule(scheduleData) {
@@ -3832,6 +3980,96 @@
             function createEditableLessonBlock(lesson, day, timeSlot) {
                 return createEditableLessonBlockEnhanced(lesson, day, timeSlot);
             }
+
+
+            // Uppdaterad funktion för att skapa spanning lesson blocks
+            // 5. Uppdatera createEditableLessonBlockSpanning med korrekt lesson data
+            function createEditableLessonBlockSpanning(lesson, day, timeSlot, spanRows) {
+                const lessonId = lesson.id;
+                const cellHeight = 20; // px per cell
+                
+                // Beräkna exakt position baserat på lektionens verkliga starttid
+                const [lessonStartTime, lessonEndTime] = lesson.time.split('-');
+                const lessonStartMinutes = timeToMinutes(lessonStartTime);
+                const slotStartMinutes = timeToMinutes(timeSlot);
+                
+                // Beräkna offset inom cellen (om lektionen inte startar exakt på slot-tiden)
+                const offsetMinutes = lessonStartMinutes - slotStartMinutes;
+                const pixelsPerMinute = cellHeight / 5; // 5 min per cell
+                const offsetPixels = Math.max(0, offsetMinutes * pixelsPerMinute);
+                
+                // Beräkna faktisk höjd baserat på lektionens verkliga längd
+                const durationMinutes = timeToMinutes(lessonEndTime) - lessonStartMinutes;
+                const blockHeight = Math.max(cellHeight - 2, (durationMinutes / 5) * cellHeight - 2);
+                
+                return `
+                    <div id="lesson-${lessonId}" 
+                        class="draggable-lesson spanning-lesson" 
+                        draggable="true"
+                        ondragstart="handleLessonDragStartEnhanced(event)"
+                        ondragend="handleLessonDragEndEnhanced(event)"
+                        data-lesson-id="${lessonId}"
+                        data-subject="${escapeHtml(lesson.subject || lesson.school_subject || 'Okänt ämne')}"
+                        data-room="${escapeHtml(lesson.room || 'Inget rum')}"
+                        data-original-day="${day}"
+                        data-original-time="${lesson.time}"
+                        data-span-rows="${spanRows}"
+                        style="
+                            position: absolute;
+                            top: ${1 + offsetPixels}px;
+                            left: 1px;
+                            right: 1px;
+                            height: ${blockHeight}px;
+                            background: linear-gradient(135deg, #4299e1, #3182ce);
+                            color: white;
+                            padding: 4px 8px;
+                            border-radius: 6px;
+                            cursor: move;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+                            transition: all 0.2s ease;
+                            border: 1px solid rgba(255,255,255,0.3);
+                            z-index: 10;
+                            overflow: hidden;
+                            font-size: 11px;
+                            line-height: 1.2;
+                        "
+                        onmouseenter="this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.25)'; this.style.zIndex='20';"
+                        onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.15)'; this.style.zIndex='10';">
+                        
+                        <div style="font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${escapeHtml(lesson.subject || lesson.school_subject || 'Okänt ämne')}
+                        </div>
+                        
+                        ${spanRows >= 3 ? `
+                            <div style="font-size: 10px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                📍 ${escapeHtml(lesson.room || 'Inget rum')}
+                            </div>
+                        ` : ''}
+                        
+                        ${spanRows >= 5 ? `
+                            <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;">
+                                🕒 ${lesson.time}
+                            </div>
+                        ` : ''}
+                        
+                        <div class="drag-handle" style="
+                            position: absolute;
+                            top: 2px;
+                            right: 2px;
+                            width: 12px;
+                            height: 12px;
+                            background: rgba(255,255,255,0.3);
+                            border-radius: 2px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 8px;
+                            cursor: grab;
+                        ">⋮⋮</div>
+                    </div>
+                `;
+            }
+
 
 
             /**
@@ -3902,37 +4140,36 @@
              */
             // Add enhanced drag visual feedback
             // Förbättrad drag start med auto-scroll setup
+            // 3. Fix dragstart för spanning lessons
             function handleLessonDragStartEnhanced(event) {
+                const lessonElement = event.target;
+                
                 draggedLesson = {
-                    element: event.target,
-                    lessonId: event.target.dataset.lessonId,
-                    subject: event.target.dataset.subject,
-                    room: event.target.dataset.room,
-                    originalDay: event.target.dataset.originalDay,
-                    originalTime: event.target.dataset.originalTime
+                    element: lessonElement,
+                    lessonId: lessonElement.dataset.lessonId,
+                    subject: lessonElement.dataset.subject,
+                    room: lessonElement.dataset.room,
+                    originalDay: lessonElement.dataset.originalDay,
+                    originalTime: lessonElement.dataset.originalTime
                 };
                 
+                debugLog('Drag start enhanced', draggedLesson);
+                
                 event.target.style.opacity = '0.5';
-                event.target.style.transform = 'rotate(5deg)';
+                event.target.style.transform = 'rotate(2deg)';
                 event.target.style.zIndex = '1000';
                 
                 // Enhanced visual feedback
                 document.querySelectorAll('.schedule-cell').forEach(cell => {
-                    if (!cell.classList.contains('occupied') || cell.contains(event.target)) {
-                        cell.classList.add('drop-zone');
-                        cell.style.background = 'rgba(66, 153, 225, 0.1)';
-                        cell.style.border = '2px dashed #4299e1';
-                    } else {
-                        cell.style.background = 'rgba(245, 101, 101, 0.05)';
-                        cell.style.border = '2px dashed #f56565';
-                    }
+                    cell.classList.add('drop-zone');
+                    cell.style.border = '2px dashed #4299e1';
+                    cell.style.background = 'rgba(66, 153, 225, 0.1)';
                 });
                 
                 // Start auto-scroll monitoring
                 startAutoScroll();
                 
-                debugLog('Enhanced drag started with auto-scroll', draggedLesson);
-
+                // Show scroll indicators
                 const scrollIndicators = document.getElementById('scroll-indicators');
                 if (scrollIndicators) {
                     scrollIndicators.style.opacity = '1';
@@ -3961,10 +4198,9 @@
                 event.currentTarget.style.background = 'rgba(72, 187, 120, 0.2)';
             }
 
-            /**
-             * Handle lesson drop with conflict checking
-             */
-            async function handleLessonDrop(event) {
+
+            // Uppdaterad drop handler för diskreta tidsintervall
+            async function handleLessonDropDiscrete(event) {
                 event.preventDefault();
                 event.currentTarget.style.background = '';
                 
@@ -3972,40 +4208,42 @@
                 
                 const targetCell = event.currentTarget;
                 const newDay = targetCell.dataset.day;
-                const newTime = targetCell.dataset.time;
+                const newTimeSlot = targetCell.dataset.time;
                 const lessonElement = draggedLesson.element;
                 
-                // Check if dropping on same location
-                if (newDay === draggedLesson.originalDay && newTime === draggedLesson.originalTime) {
+                // Räkna ut ny tid baserat på lektionens ursprungliga längd
+                const originalTime = draggedLesson.element.dataset.originalTime;
+                const [originalStart, originalEnd] = originalTime.split('-');
+                const lessonDurationMinutes = timeToMinutes(originalEnd) - timeToMinutes(originalStart);
+                
+                const newStartMinutes = timeToMinutes(newTimeSlot);
+                const newEndMinutes = newStartMinutes + lessonDurationMinutes;
+                const newEndTime = minutesToTime(newEndMinutes);
+                const newTimeRange = `${newTimeSlot}-${newEndTime}`;
+                
+                // Kontrollera om det är samma position
+                if (newDay === draggedLesson.originalDay && newTimeSlot === timeToMinutes(draggedLesson.originalTime.split('-')[0])) {
                     debugLog('Dropped on same location, no action needed');
                     return;
                 }
                 
-                // Check if target cell is already occupied by another lesson
-                if (targetCell.classList.contains('occupied') && !targetCell.contains(lessonElement)) {
-                    showConflictMessage('Den tiden är redan upptagen av en annan lektion');
-                    return;
-                }
-                
-                // Check for teacher and room conflicts
-                const conflictCheck = await checkMoveConflicts(draggedLesson, newDay, newTime);
+                // Kontrollera konflikter med ny tidsberäkning
+                const conflictCheck = await checkMoveConflictsDiscrete(draggedLesson, newDay, newTimeRange);
                 if (!conflictCheck.canMove) {
                     showConflictMessage(conflictCheck.reason);
                     return;
                 }
                 
-                // Perform the move
                 try {
-                    const moveResult = await moveLesson(draggedLesson.lessonId, newDay, newTime);
+                    // Flytta lektionen med ny start- och sluttid
+                    const moveResult = await moveLesson(draggedLesson.lessonId, newDay, newTimeSlot, newEndTime);
                     if (moveResult.success) {
-                        // Update UI
-                        performLessonMove(lessonElement, targetCell, newDay, newTime);
-                        showSuccessToast(`Lektion flyttad till ${newDay} ${newTime}`);
+                        showSuccessToast(`Lektion flyttad till ${newDay} ${newTimeRange}`);
                         
-                        // Check for any new conflicts
-                        setTimeout(checkScheduleConflicts, 100);
+                        // Ladda om schemat för att visa uppdateringen
+                        reloadEditSchedule();
                         
-                        debugLog('Lesson moved successfully', moveResult);
+                        debugLog('Lesson moved successfully with discrete time slots', moveResult);
                     } else {
                         throw new Error(moveResult.error || 'Kunde inte flytta lektion');
                     }
@@ -4015,6 +4253,151 @@
                 }
                 
                 draggedLesson = null;
+            }
+
+            // Uppdaterad konflikt-kontroll för diskreta tidsintervall
+            function checkMoveConflictsDiscrete(lesson, newDay, newTimeRange) {
+                const [newStartTime, newEndTime] = newTimeRange.split('-');
+                const newStartMinutes = timeToMinutes(newStartTime);
+                const newEndMinutes = timeToMinutes(newEndTime);
+                
+                const ROOM_BUFFER_MINUTES = 5;
+                
+                // Hämta alla nuvarande lektioner från schemat
+                const currentLessons = Array.from(document.querySelectorAll('.spanning-lesson')).map(lessonEl => {
+                    const originalTime = lessonEl.dataset.originalTime;
+                    if (!originalTime || !originalTime.includes('-')) return null;
+                    
+                    const [startTime, endTime] = originalTime.split('-');
+                    const lessonDay = lessonEl.dataset.originalDay;
+                    
+                    return {
+                        id: lessonEl.dataset.lessonId,
+                        day: lessonDay,
+                        time: originalTime,
+                        startMinutes: timeToMinutes(startTime),
+                        endMinutes: timeToMinutes(endTime),
+                        subject: lessonEl.dataset.subject,
+                        room: lessonEl.dataset.room
+                    };
+                }).filter(Boolean);
+
+                // Kontrollera klassrums-konflikter med 5-minuters buffer
+                const roomConflicts = currentLessons.filter(l => 
+                    l.day === newDay && 
+                    l.id !== lesson.lessonId &&
+                    l.room === lesson.room &&
+                    (newStartMinutes < l.endMinutes + ROOM_BUFFER_MINUTES && 
+                    newEndMinutes + ROOM_BUFFER_MINUTES > l.startMinutes)
+                );
+
+                if (roomConflicts.length > 0) {
+                    const conflictDetails = roomConflicts.map(l => 
+                        `${l.subject} (${l.time})`
+                    ).join(', ');
+                    
+                    return { 
+                        canMove: false, 
+                        reason: `Klassrumskonflikt med ${ROOM_BUFFER_MINUTES}-min buffer: ${conflictDetails}` 
+                    };
+                }
+
+                // Kontrollera vanliga tidskonflikter
+                const timeConflicts = currentLessons.filter(l => 
+                    l.day === newDay && 
+                    l.id !== lesson.lessonId &&
+                    l.room !== lesson.room &&
+                    newStartMinutes < l.endMinutes && newEndMinutes > l.startMinutes
+                );
+
+                if (timeConflicts.length > 0) {
+                    const conflictDetails = timeConflicts.map(l => 
+                        `${l.subject} (${l.time})`
+                    ).join(', ');
+                    
+                    return { 
+                        canMove: false, 
+                        reason: `Tidskonflikt: ${conflictDetails}` 
+                    };
+                }
+
+                return { canMove: true };
+            }
+
+            /**
+             * Handle lesson drop with conflict checking
+             */
+            // 1. Ersätt handleLessonDrop funktionen med korrekt implementation
+            async function handleLessonDrop(event) {
+                event.preventDefault();
+                event.currentTarget.style.background = '';
+                event.currentTarget.classList.remove('drop-zone', 'invalid-drop-zone');
+                
+                if (!draggedLesson) {
+                    debugLog('No dragged lesson found');
+                    return;
+                }
+                
+                const targetCell = event.currentTarget;
+                const newDay = targetCell.dataset.day;
+                const newTimeSlot = targetCell.dataset.time;
+                
+                debugLog('Attempting to drop lesson', {
+                    lessonId: draggedLesson.lessonId,
+                    originalDay: draggedLesson.originalDay,
+                    originalTime: draggedLesson.originalTime,
+                    newDay: newDay,
+                    newTimeSlot: newTimeSlot
+                });
+                
+                // Kontrollera om det är samma position
+                const originalTimeSlot = draggedLesson.originalTime.split('-')[0];
+                if (newDay === draggedLesson.originalDay && newTimeSlot === originalTimeSlot) {
+                    debugLog('Dropped on same location, no action needed');
+                    return;
+                }
+                
+                // Räkna ut ny sluttid baserat på lektionens ursprungliga längd
+                const [originalStart, originalEnd] = draggedLesson.originalTime.split('-');
+                const lessonDurationMinutes = timeToMinutes(originalEnd) - timeToMinutes(originalStart);
+                const newStartMinutes = timeToMinutes(newTimeSlot);
+                const newEndMinutes = newStartMinutes + lessonDurationMinutes;
+                const newEndTime = minutesToTime(newEndMinutes);
+                
+                try {
+                    // Flytta lektionen via API
+                    const moveResult = await moveLesson(draggedLesson.lessonId, newDay, newTimeSlot, newEndTime);
+                    if (moveResult.success) {
+                        showSuccessToast(`Lektion flyttad till ${newDay} ${newTimeSlot}-${newEndTime}`);
+                        
+                        // Ladda om schemat för att visa uppdateringen
+                        setTimeout(() => {
+                            reloadEditSchedule();
+                        }, 500);
+                        
+                        debugLog('Lesson moved successfully', moveResult);
+                    } else {
+                        throw new Error(moveResult.error || 'Kunde inte flytta lektion');
+                    }
+                } catch (error) {
+                    console.error('Error moving lesson:', error);
+                    showConflictMessage(`Fel vid flyttning: ${error.message}`);
+                    
+                    // Reset dragged lesson position
+                    if (draggedLesson.element) {
+                        draggedLesson.element.style.opacity = '1';
+                        draggedLesson.element.style.transform = 'scale(1)';
+                    }
+                }
+                
+                draggedLesson = null;
+                stopAutoScroll();
+                
+                // Hide scroll indicators
+                const scrollIndicators = document.getElementById('scroll-indicators');
+                if (scrollIndicators) {
+                    scrollIndicators.style.opacity = '0';
+                }
             }
 
             /**
@@ -4102,14 +4485,9 @@
             }
 
 
-            /**
-             * Move lesson in database
-             */
-            // Uppdatera moveLesson funktionen för att använda riktig API
-            async function moveLesson(lessonId, newDay, newTime) {
+            // Uppdatera moveLesson för att hantera både start och end tid
+            async function moveLessonWithEndTime(lessonId, newDay, newStartTime, newEndTime) {
                 try {
-                    const [startTime, endTime] = newTime.split('-');
-                    
                     const response = await fetch(`/api/schedule/move_lesson/${lessonId}`, {
                         method: 'PUT',
                         headers: {
@@ -4117,8 +4495,8 @@
                         },
                         body: JSON.stringify({
                             weekday: newDay,
-                            start_time: startTime,
-                            end_time: endTime
+                            start_time: newStartTime,
+                            end_time: newEndTime
                         })
                     });
 
@@ -4132,6 +4510,55 @@
 
                 } catch (error) {
                     console.error('Error moving lesson:', error);
+                    throw error;
+                }
+            }
+
+
+
+            /**
+             * Move lesson in database
+             */
+            // Uppdatera moveLesson funktionen för att använda riktig API
+            // 2. Uppdatera moveLesson för att acceptera både start och end tid
+            async function moveLesson(lessonId, newDay, newStartTime, newEndTime = null) {
+                try {
+                    // Om ingen sluttid angiven, räkna ut från starttid (60 min default)
+                    if (!newEndTime) {
+                        const startMinutes = timeToMinutes(newStartTime);
+                        const endMinutes = startMinutes + 60; // Default 60 minuter
+                        newEndTime = minutesToTime(endMinutes);
+                    }
+                    
+                    debugLog('Moving lesson via API', {
+                        lessonId,
+                        newDay,
+                        newStartTime,
+                        newEndTime
+                    });
+                    
+                    const response = await fetch(`/api/schedule/move_lesson/${lessonId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            weekday: newDay,
+                            start_time: newStartTime,
+                            end_time: newEndTime
+                        })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || 'Kunde inte flytta lektion');
+                    }
+
+                    return result;
+
+                } catch (error) {
+                    console.error('Error in moveLesson:', error);
                     throw error;
                 }
             }
@@ -4831,7 +5258,8 @@
             window.handleLessonDragEnd = handleLessonDragEndEnhanced;
 
             debugLog('Enhanced drag-and-drop schedule editor loaded with 5-minute room buffer and auto-scroll');
-
+            window.handleLessonDrop = handleLessonDropDiscrete;
+            window.createEditableLessonBlockSpanning = createEditableLessonBlockSpanning;
 
             function setupAutoScrollBounds() {
                 if (!scheduleScrollContainer) return;
