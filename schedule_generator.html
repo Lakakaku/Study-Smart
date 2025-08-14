@@ -1666,12 +1666,26 @@
             }
 
             function getAvailableRooms() {
-                const roomCheckboxes = document.querySelectorAll('input[name="rooms[]"]:checked');
-                const rooms = [];
-                roomCheckboxes.forEach(checkbox => {
-                    rooms.push(checkbox.value);
+                // Fallback om availableRooms inte är definierad
+                if (typeof availableRooms !== 'undefined' && Array.isArray(availableRooms)) {
+                    return availableRooms;
+                }
+                
+                // Extrahera rum från DOM om de inte finns globalt
+                const roomsFromDOM = new Set();
+                document.querySelectorAll('.spanning-lesson').forEach(lessonEl => {
+                    const room = lessonEl.dataset.room;
+                    if (room && room !== 'Inget rum') {
+                        roomsFromDOM.add(room);
+                    }
                 });
-                return rooms;
+                
+                // Lägg till några standard rum om inga hittades
+                if (roomsFromDOM.size === 0) {
+                    return ['Sal A', 'Sal B', 'Sal C', 'Sal D', 'Sal E'];
+                }
+                
+                return Array.from(roomsFromDOM);
             }
 
 
@@ -2511,10 +2525,7 @@
 
 
 
-            function timeToMinutes(timeStr) {
-                const [hours, minutes] = timeStr.split(':').map(Number);
-                return hours * 60 + minutes;
-            }
+            
 
             function minutesToTime(minutes) {
                 const hours = Math.floor(minutes / 60);
@@ -4260,21 +4271,19 @@
                     subject: lessonElement.dataset.subject,
                     room: lessonElement.dataset.room,
                     originalDay: lessonElement.dataset.originalDay,
-                    originalTime: lessonElement.dataset.originalTime
+                    originalTime: lessonElement.dataset.originalTime,
+                    teacherId: lessonElement.dataset.teacherId || null,
+                    teacherName: lessonElement.dataset.teacherName || null
                 };
                 
-                debugLog('Drag start enhanced', draggedLesson);
+                debugLog('Drag start enhanced with teacher conflict checking', draggedLesson);
                 
                 event.target.style.opacity = '0.5';
                 event.target.style.transform = 'rotate(2deg)';
                 event.target.style.zIndex = '1000';
                 
-                // Enhanced visual feedback
-                document.querySelectorAll('.schedule-cell').forEach(cell => {
-                    cell.classList.add('drop-zone');
-                    cell.style.border = '2px dashed #4299e1';
-                    cell.style.background = 'rgba(66, 153, 225, 0.1)';
-                });
+                // Markera alla celler med visuell feedback baserat på lärarkonflikter
+                markTeacherConflictCells();
                 
                 // Start auto-scroll monitoring
                 startAutoScroll();
@@ -4285,6 +4294,7 @@
                     scrollIndicators.style.opacity = '1';
                 }
             }
+
 
             /**
              * Handle drag end
@@ -4300,12 +4310,190 @@
                 });
             }
 
+
+
+            function markTeacherConflictCells() {
+                if (!draggedLesson || !draggedLesson.teacherId && !draggedLesson.teacherName) {
+                    // Fallback till vanlig markering om ingen lärarinfo finns
+                    document.querySelectorAll('.schedule-cell').forEach(cell => {
+                        cell.classList.add('drop-zone');
+                        cell.style.border = '2px dashed #4299e1';
+                        cell.style.background = 'rgba(66, 153, 225, 0.1)';
+                    });
+                    return;
+                }
+                
+                // Hämta alla lektioner från DOM
+                const allCurrentLessons = Array.from(document.querySelectorAll('.spanning-lesson')).map(lessonEl => {
+                    return {
+                        id: lessonEl.dataset.lessonId,
+                        day: lessonEl.dataset.originalDay,
+                        time: lessonEl.dataset.originalTime,
+                        teacherId: lessonEl.dataset.teacherId,
+                        teacherName: lessonEl.dataset.teacherName,
+                        room: lessonEl.dataset.room,
+                        subject: lessonEl.dataset.subject
+                    };
+                }).filter(lesson => lesson.id !== draggedLesson.lessonId); // Exkludera den som dras
+                
+                // Markera alla celler
+                document.querySelectorAll('.schedule-cell').forEach(cell => {
+                    const cellDay = cell.dataset.day;
+                    const cellTime = cell.dataset.time;
+                    
+                    if (!cellDay || !cellTime) return;
+                    
+                    // Beräkna tidsintervall för cellen (antag att lektionen behåller sin ursprungliga längd)
+                    const originalDuration = calculateLessonDuration(draggedLesson.originalTime);
+                    const cellStartMinutes = timeToMinutes(cellTime);
+                    const cellEndMinutes = cellStartMinutes + originalDuration;
+                    const newTimeRange = `${cellTime}-${minutesToTime(cellEndMinutes)}`;
+                    
+                    // Kontrollera om läraren har konflikt på denna tid
+                    const hasTeacherConflict = checkTeacherConflictForCell(
+                        allCurrentLessons, cellDay, newTimeRange, draggedLesson.teacherId, draggedLesson.teacherName
+                    );
+                    
+                    // Kontrollera om det finns lediga rum (för automatisk salsbyte)
+                    const availableRooms = getAvailableRoomsForTimeSlot(allCurrentLessons, cellDay, newTimeRange);
+                    const canAutoSwitchRoom = availableRooms.length > 0;
+                    
+                    if (hasTeacherConflict) {
+                        // Röd markering för lärarkonflikter
+                        cell.classList.add('teacher-conflict-zone');
+                        cell.style.border = '2px solid #f56565';
+                        cell.style.background = 'rgba(245, 101, 101, 0.2)';
+                        cell.title = `⚠️ Läraren har en annan lektion denna tid`;
+                        
+                        // Lägg till konfliktindikator
+                        const conflictIcon = document.createElement('div');
+                        conflictIcon.className = 'drag-conflict-indicator';
+                        conflictIcon.innerHTML = '⚠️';
+                        conflictIcon.style.cssText = `
+                            position: absolute;
+                            top: 2px;
+                            right: 2px;
+                            background: #f56565;
+                            color: white;
+                            border-radius: 50%;
+                            width: 20px;
+                            height: 20px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 12px;
+                            z-index: 100;
+                            pointer-events: none;
+                        `;
+                        cell.style.position = 'relative';
+                        cell.appendChild(conflictIcon);
+                        
+                    } else if (!canAutoSwitchRoom && !isRoomAvailableForTimeSlot(draggedLesson.room, allCurrentLessons, cellDay, newTimeRange)) {
+                        // Orange markering för salskonflikter (men kan lösas med automatisk salsbyte)
+                        cell.classList.add('room-conflict-zone');
+                        cell.style.border = '2px dashed #ed8936';
+                        cell.style.background = 'rgba(237, 137, 54, 0.1)';
+                        cell.title = `🏫 Originalsal upptagen, kommer att byta sal automatiskt`;
+                        
+                        const roomIcon = document.createElement('div');
+                        roomIcon.className = 'drag-conflict-indicator';
+                        roomIcon.innerHTML = '🏫';
+                        roomIcon.style.cssText = `
+                            position: absolute;
+                            top: 2px;
+                            left: 2px;
+                            background: #ed8936;
+                            color: white;
+                            border-radius: 3px;
+                            padding: 2px 4px;
+                            font-size: 10px;
+                            z-index: 100;
+                            pointer-events: none;
+                        `;
+                        cell.style.position = 'relative';
+                        cell.appendChild(roomIcon);
+                        
+                    } else {
+                        // Grön/blå markering för tillgängliga platser
+                        cell.classList.add('drop-zone');
+                        cell.style.border = '2px dashed #4299e1';
+                        cell.style.background = 'rgba(66, 153, 225, 0.1)';
+                    }
+                });
+            }
+
             /**
              * Handle drag over for drop zones
              */
             function handleDragOver(event) {
                 event.preventDefault();
                 event.currentTarget.style.background = 'rgba(72, 187, 120, 0.2)';
+            }
+
+            function calculateLessonDuration(timeRange) {
+                if (!timeRange || typeof timeRange !== 'string' || !timeRange.includes('-')) {
+                    console.warn('calculateLessonDuration received invalid timeRange:', timeRange);
+                    return 60; // Default 60 minuter
+                }
+                const [startTime, endTime] = timeRange.split('-');
+                return timeToMinutes(endTime) - timeToMinutes(startTime);
+            }
+
+
+            function getAvailableRoomsForTimeSlot(allLessons, targetDay, targetTimeRange) {
+                const allRooms = getAvailableRooms(); // Hämta alla tillgängliga rum
+                const [targetStart, targetEnd] = targetTimeRange.split('-');
+                const targetStartMinutes = timeToMinutes(targetStart);
+                const targetEndMinutes = timeToMinutes(targetEnd);
+                
+                const occupiedRooms = new Set();
+                
+                allLessons.forEach(lesson => {
+                    if (lesson.day !== targetDay) return;
+                    
+                    const [lessonStart, lessonEnd] = lesson.time.split('-');
+                    const lessonStartMinutes = timeToMinutes(lessonStart);
+                    const lessonEndMinutes = timeToMinutes(lessonEnd);
+                    
+                    // Om lektionen överlappar med måltiden, markera rummet som upptaget
+                    if (!(targetEndMinutes <= lessonStartMinutes || targetStartMinutes >= lessonEndMinutes)) {
+                        occupiedRooms.add(lesson.room);
+                    }
+                });
+                
+                return allRooms.filter(room => !occupiedRooms.has(room));
+            }
+
+            /**
+             * Kontrollera om ett specifikt rum är ledigt vid en viss tid
+             */
+            function isRoomAvailableForTimeSlot(room, allLessons, targetDay, targetTimeRange) {
+                const availableRooms = getAvailableRoomsForTimeSlot(allLessons, targetDay, targetTimeRange);
+                return availableRooms.includes(room);
+}
+
+
+            function checkTeacherConflictForCell(allLessons, targetDay, targetTimeRange, teacherId, teacherName) {
+                const [targetStart, targetEnd] = targetTimeRange.split('-');
+                const targetStartMinutes = timeToMinutes(targetStart);
+                const targetEndMinutes = timeToMinutes(targetEnd);
+                
+                return allLessons.some(lesson => {
+                    if (lesson.day !== targetDay) return false;
+                    
+                    // Matcha lärare (antingen ID eller namn)
+                    const sameTeacher = (teacherId && lesson.teacherId === teacherId) || 
+                                    (teacherName && lesson.teacherName === teacherName);
+                    
+                    if (!sameTeacher) return false;
+                    
+                    // Kontrollera tidsöverlappning
+                    const [lessonStart, lessonEnd] = lesson.time.split('-');
+                    const lessonStartMinutes = timeToMinutes(lessonStart);
+                    const lessonEndMinutes = timeToMinutes(lessonEnd);
+                    
+                    return !(targetEndMinutes <= lessonStartMinutes || targetStartMinutes >= lessonEndMinutes);
+                });
             }
 
 
@@ -4438,77 +4626,114 @@
              * Handle lesson drop with conflict checking
              */
             // 1. Ersätt handleLessonDrop funktionen med korrekt implementation
+            // 5. Fix handleLessonDrop för att kontrollera draggedLesson ordentligt
             async function handleLessonDrop(event) {
                 event.preventDefault();
                 event.currentTarget.style.background = '';
-                event.currentTarget.classList.remove('drop-zone', 'invalid-drop-zone');
+                event.currentTarget.classList.remove('drop-zone', 'teacher-conflict-zone', 'room-conflict-zone');
                 
-                if (!draggedLesson) {
-                    debugLog('No dragged lesson found');
-                    return;
+                // Ta bort alla konfliktindikatorer
+                document.querySelectorAll('.drag-conflict-indicator').forEach(el => el.remove());
+                
+                if (!draggedLesson || !draggedLesson.element) {
+                    console.warn('handleLessonDrop: No valid draggedLesson found');
+                    return; // Ta bort cleanupDragState() här
                 }
                 
                 const targetCell = event.currentTarget;
                 const newDay = targetCell.dataset.day;
                 const newTimeSlot = targetCell.dataset.time;
                 
-                debugLog('Attempting to drop lesson', {
-                    lessonId: draggedLesson.lessonId,
-                    originalDay: draggedLesson.originalDay,
-                    originalTime: draggedLesson.originalTime,
-                    newDay: newDay,
-                    newTimeSlot: newTimeSlot
-                });
-                
-                // Kontrollera om det är samma position
-                const originalTimeSlot = draggedLesson.originalTime.split('-')[0];
-                if (newDay === draggedLesson.originalDay && newTimeSlot === originalTimeSlot) {
-                    debugLog('Dropped on same location, no action needed');
+                if (!newDay || !newTimeSlot) {
+                    console.warn('handleLessonDrop: Target cell missing day or time data');
+                    draggedLesson = null; // Reset här istället
                     return;
                 }
                 
-                // Räkna ut ny sluttid baserat på lektionens ursprungliga längd
-                const [originalStart, originalEnd] = draggedLesson.originalTime.split('-');
-                const lessonDurationMinutes = timeToMinutes(originalEnd) - timeToMinutes(originalStart);
+                // Spara draggedLesson i lokal variabel INNAN den kan bli null
+                const currentDraggedLesson = { ...draggedLesson };
+                
+                // Kontrollera om det är samma position
+                const originalTimeSlot = currentDraggedLesson.originalTime ? currentDraggedLesson.originalTime.split('-')[0] : '';
+                if (newDay === currentDraggedLesson.originalDay && newTimeSlot === originalTimeSlot) {
+                    debugLog('Dropped on same location, no action needed');
+                    draggedLesson = null;
+                    return;
+                }
+                
+                // Förhindra drop på lärarkonfliktzoner
+                if (targetCell.classList.contains('teacher-conflict-zone')) {
+                    showConflictMessage('⚠️ Läraren har redan en lektion vid denna tid. Välj en annan tid.');
+                    draggedLesson = null;
+                    return;
+                }
+                
+                // Beräkna ny tid och kontrollera rumstillgänglighet
+                const originalDuration = calculateLessonDuration(currentDraggedLesson.originalTime);
                 const newStartMinutes = timeToMinutes(newTimeSlot);
-                const newEndMinutes = newStartMinutes + lessonDurationMinutes;
+                const newEndMinutes = newStartMinutes + originalDuration;
                 const newEndTime = minutesToTime(newEndMinutes);
+                const newTimeRange = `${newTimeSlot}-${newEndTime}`;
+                
+                // Hämta alla andra lektioner för rumskontroll
+                const allCurrentLessons = Array.from(document.querySelectorAll('.spanning-lesson'))
+                    .filter(el => el.dataset.lessonId !== currentDraggedLesson.lessonId)
+                    .map(el => ({
+                        day: el.dataset.originalDay,
+                        time: el.dataset.originalTime,
+                        room: el.dataset.room
+                    }))
+                    .filter(lesson => lesson.time && lesson.day);
+                
+                // Bestäm vilket rum som ska användas
+                let finalRoom = currentDraggedLesson.room || 'Inget rum';
+                
+                if (!isRoomAvailableForTimeSlot(currentDraggedLesson.room, allCurrentLessons, newDay, newTimeRange)) {
+                    const availableRooms = getAvailableRoomsForTimeSlot(allCurrentLessons, newDay, newTimeRange);
+                    
+                    if (availableRooms.length === 0) {
+                        showConflictMessage('🏫 Inga lediga rum tillgängliga för denna tid. Välj en annan tid.');
+                        draggedLesson = null;
+                        return;
+                    }
+                    
+                    finalRoom = availableRooms[0];
+                    debugLog(`Room switched from ${currentDraggedLesson.room} to ${finalRoom} due to conflict`);
+                }
                 
                 try {
-                    // Flytta lektionen via API
-                    const moveResult = await moveLesson(draggedLesson.lessonId, newDay, newTimeSlot, newEndTime);
+                    // Flytta lektionen med eventuell salsbyte
+                    const moveResult = await moveLessonWithRoomChange(
+                        currentDraggedLesson.lessonId, 
+                        newDay, 
+                        newTimeSlot, 
+                        newEndTime, 
+                        finalRoom
+                    );
+                    
                     if (moveResult.success) {
-                        showSuccessToast(`Lektion flyttad till ${newDay} ${newTimeSlot}-${newEndTime}`);
+                        if (finalRoom !== currentDraggedLesson.room) {
+                            showSuccessToast(`✅ Lektion flyttad till ${newDay} ${newTimeRange} (sal ändrad till ${finalRoom})`);
+                        } else {
+                            showSuccessToast(`✅ Lektion flyttad till ${newDay} ${newTimeRange}`);
+                        }
                         
-                        // Ladda om schemat för att visa uppdateringen
                         setTimeout(() => {
                             reloadEditSchedule();
                         }, 500);
                         
-                        debugLog('Lesson moved successfully', moveResult);
+                        debugLog('Lesson moved successfully with potential room change', moveResult);
                     } else {
                         throw new Error(moveResult.error || 'Kunde inte flytta lektion');
                     }
                 } catch (error) {
                     console.error('Error moving lesson:', error);
-                    showConflictMessage(`Fel vid flyttning: ${error.message}`);
-                    
-                    // Reset dragged lesson position
-                    if (draggedLesson.element) {
-                        draggedLesson.element.style.opacity = '1';
-                        draggedLesson.element.style.transform = 'scale(1)';
-                    }
+                    showConflictMessage(`❌ Fel vid flyttning: ${error.message}`);
                 }
                 
-                draggedLesson = null;
-                stopAutoScroll();
-                
-                // Hide scroll indicators
-                const scrollIndicators = document.getElementById('scroll-indicators');
-                if (scrollIndicators) {
-                    scrollIndicators.style.opacity = '0';
-                }
+                draggedLesson = null; // Reset efter allt är klart
             }
+
 
             /**
              * Check for conflicts when moving a lesson
@@ -4517,53 +4742,64 @@
             // Uppdatera checkMoveConflicts funktionen
 
             function timeToMinutes(timeStr) {
-                const [hours, minutes] = timeStr.split(':').map(Number);
-                return hours * 60 + (minutes || 0);
+                if (!timeStr || typeof timeStr !== 'string') {
+                    console.warn('timeToMinutes received invalid input:', timeStr);
+                    return 0;
+                }
+                const parts = timeStr.split(':');
+                if (parts.length < 2) {
+                    console.warn('timeToMinutes received invalid time format:', timeStr);
+                    return 0;
+                }
+                const [hours, minutes] = parts.map(Number);
+                return (hours || 0) * 60 + (minutes || 0);
             }
 
             // Förbättrad checkMoveConflicts med 5-minuters buffer för klassrum
+            // 2. Fix checkMoveConflicts för att hantera saknade tidsdata
             function checkMoveConflicts(lesson, newDay, newTime) {
+                if (!newTime || typeof newTime !== 'string' || !newTime.includes('-')) {
+                    console.warn('checkMoveConflicts received invalid newTime:', newTime);
+                    return { canMove: false, reason: 'Ogiltig tid angiven' };
+                }
+                
                 const [newStartTime, newEndTime] = newTime.split('-');
                 const newStartMinutes = timeToMinutes(newStartTime);
                 const newEndMinutes = timeToMinutes(newEndTime);
                 
-                const ROOM_BUFFER_MINUTES = 5; // 5 minuter mellan lektioner i samma klassrum
+                const ROOM_BUFFER_MINUTES = 5;
                 
-                const currentLessons = Array.from(document.querySelectorAll('.draggable-lesson')).map(lessonEl => {
-                    const cell = lessonEl.closest('.schedule-cell');
-                    const lessonTime = cell.dataset.time;
-                    const [startTime, endTime] = lessonTime.split('-');
+                const currentLessons = Array.from(document.querySelectorAll('.spanning-lesson')).map(lessonEl => {
+                    const originalTime = lessonEl.dataset.originalTime;
+                    if (!originalTime || !originalTime.includes('-')) return null;
+                    
+                    const [startTime, endTime] = originalTime.split('-');
+                    const lessonDay = lessonEl.dataset.originalDay;
                     
                     return {
                         id: lessonEl.dataset.lessonId,
-                        day: cell.dataset.day,
-                        time: lessonTime,
+                        day: lessonDay,
+                        time: originalTime,
                         startMinutes: timeToMinutes(startTime),
                         endMinutes: timeToMinutes(endTime),
                         subject: lessonEl.dataset.subject,
                         room: lessonEl.dataset.room
                     };
-                });
+                }).filter(Boolean);
 
-                // Kontrollera klassrums-konflikter MED 5-minuters buffer
+                // Kontrollera klassrums-konflikter med buffer
                 const roomConflicts = currentLessons.filter(l => 
                     l.day === newDay && 
                     l.id !== lesson.lessonId &&
-                    l.room === lesson.room && // Samma klassrum
-                    // Kontrollera överlappning MED buffer - lektioner måste ha minst 5 min mellanrum
+                    l.room === lesson.room &&
                     (newStartMinutes < l.endMinutes + ROOM_BUFFER_MINUTES && 
                     newEndMinutes + ROOM_BUFFER_MINUTES > l.startMinutes)
                 );
 
                 if (roomConflicts.length > 0) {
-                    const conflictDetails = roomConflicts.map(l => {
-                        let bufferInfo = "";
-                        if (Math.abs(newEndMinutes - l.startMinutes) < ROOM_BUFFER_MINUTES || 
-                            Math.abs(newStartMinutes - l.endMinutes) < ROOM_BUFFER_MINUTES) {
-                            bufferInfo = " (behöver 5 min mellanrum)";
-                        }
-                        return `${l.subject} (${l.time})${bufferInfo}`;
-                    }).join(', ');
+                    const conflictDetails = roomConflicts.map(l => 
+                        `${l.subject} (${l.time})`
+                    ).join(', ');
                     
                     return { 
                         canMove: false, 
@@ -4571,27 +4807,41 @@
                     };
                 }
 
-                // Kontrollera övriga tidskonflikter (utan buffer för lärare och klass)
-                const timeConflicts = currentLessons.filter(l => 
-                    l.day === newDay && 
-                    l.id !== lesson.lessonId &&
-                    (l.room !== lesson.room) && // Inte samma klassrum (det har vi redan kollat)
-                    // Vanlig tidsöverlappning utan buffer
-                    newStartMinutes < l.endMinutes && newEndMinutes > l.startMinutes
-                );
-
-                if (timeConflicts.length > 0) {
-                    const conflictDetails = timeConflicts.map(l => 
-                        `${l.subject} (${l.time})`
-                    ).join(', ');
-                    
-                    return { 
-                        canMove: false, 
-                        reason: `Tidskonflikt: ${conflictDetails}` 
-                    };
-                }
-
                 return { canMove: true };
+            }
+
+
+            async function moveLessonWithRoomChange(lessonId, newDay, newStartTime, newEndTime, newRoom) {
+                try {
+                    debugLog('Moving lesson with room change', {
+                        lessonId, newDay, newStartTime, newEndTime, newRoom
+                    });
+                    
+                    const response = await fetch(`/api/schedule/move_lesson/${lessonId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            weekday: newDay,
+                            start_time: newStartTime,
+                            end_time: newEndTime,
+                            room: newRoom // Inkludera rum i API-anropet
+                        })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || 'Kunde inte flytta lektion');
+                    }
+
+                    return result;
+
+                } catch (error) {
+                    console.error('Error in moveLessonWithRoomChange:', error);
+                    throw error;
+                }
             }
 
 
@@ -4881,20 +5131,36 @@
             }
 
             // Förbättrade drag handlers
+            // 3. Fix handleDragEnter för att hantera null draggedLesson
             function handleDragEnter(event) {
                 event.preventDefault();
-                if (!draggedLesson) return;
+                if (!draggedLesson) {
+                    console.warn('handleDragEnter called without draggedLesson');
+                    return;
+                }
                 
                 const cell = event.currentTarget;
                 const day = cell.dataset.day;
                 const time = cell.dataset.time;
                 
+                if (!day || !time) {
+                    console.warn('handleDragEnter: cell missing day or time data');
+                    return;
+                }
+                
+                // Beräkna ny tidsintervall baserat på lektionens längd
+                const originalDuration = calculateLessonDuration(draggedLesson.originalTime);
+                const newStartMinutes = timeToMinutes(time);
+                const newEndMinutes = newStartMinutes + originalDuration;
+                const newTimeRange = `${time}-${minutesToTime(newEndMinutes)}`;
+                
                 // Quick conflict check för visuell feedback
-                const conflictCheck = checkMoveConflicts(draggedLesson, day, time);
+                const conflictCheck = checkMoveConflicts(draggedLesson, day, newTimeRange);
                 
                 if (conflictCheck.canMove) {
                     cell.style.background = 'rgba(72, 187, 120, 0.2)';
                     cell.style.borderColor = '#48bb78';
+                    cell.title = 'Drop här för att flytta lektionen';
                 } else {
                     cell.style.background = 'rgba(245, 101, 101, 0.2)';
                     cell.style.borderColor = '#f56565';
@@ -5264,6 +5530,37 @@
                 }, 16); // ~60 FPS
             }
 
+            // Lägg till CSS för nya klasser
+            const enhancedConflictStyles = `
+            .teacher-conflict-zone {
+                border: 2px solid #f56565 !important;
+                background: rgba(245, 101, 101, 0.2) !important;
+            }
+
+            .room-conflict-zone {
+                border: 2px dashed #ed8936 !important;
+                background: rgba(237, 137, 54, 0.1) !important;
+            }
+
+            .drag-conflict-indicator {
+                pointer-events: none;
+                user-select: none;
+                font-weight: bold;
+            }
+
+            .schedule-cell {
+                transition: all 0.2s ease;
+            }
+            `;
+
+            // Lägg till styles om de inte redan finns
+            if (!document.getElementById('enhanced-conflict-styles')) {
+                const styleElement = document.createElement('style');
+                styleElement.id = 'enhanced-conflict-styles';
+                styleElement.textContent = enhancedConflictStyles;
+                document.head.appendChild(styleElement);
+            }
+
             // Förbättrat visuell feedback system
             const enhancedStyles = `
                 .schedule-cell.drop-zone {
@@ -5328,28 +5625,43 @@
                 stopAutoScroll();
             });
 
+
+            function cleanupDragState() {
+                stopAutoScroll();
+                
+                // Ta bort alla visuella feedback-klasser
+                document.querySelectorAll('.drop-zone, .teacher-conflict-zone, .room-conflict-zone').forEach(cell => {
+                    cell.classList.remove('drop-zone', 'teacher-conflict-zone', 'room-conflict-zone');
+                    cell.style.background = '';
+                    cell.style.border = '';
+                    cell.title = '';
+                });
+                
+                // Ta bort konfliktindikatorer
+                document.querySelectorAll('.drag-conflict-indicator').forEach(el => el.remove());
+                
+                // Hide scroll indicators
+                const scrollIndicators = document.getElementById('scroll-indicators');
+                if (scrollIndicators) {
+                    scrollIndicators.style.opacity = '0';
+                }
+                
+                // Reset draggedLesson sist
+                draggedLesson = null;
+            }
+
             // Förbättrad drag end
             function handleLessonDragEndEnhanced(event) {
                 event.target.style.opacity = '1';
                 event.target.style.transform = 'scale(1)';
                 event.target.style.zIndex = '';
                 
-                // Stop auto-scroll
-                stopAutoScroll();
+                // Vänta lite innan cleanup för att låta drop-event köras först
+                setTimeout(() => {
+                    cleanupDragState();
+                }, 10);
                 
-                // Remove visual feedback
-                document.querySelectorAll('.drop-zone, .invalid-drop-zone').forEach(cell => {
-                    cell.classList.remove('drop-zone', 'invalid-drop-zone');
-                    cell.style.background = '';
-                    cell.style.border = '';
-                });
-                
-                debugLog('Enhanced drag ended');
-
-                const scrollIndicators = document.getElementById('scroll-indicators');
-                if (scrollIndicators) {
-                    scrollIndicators.style.opacity = '0';
-                }
+                debugLog('Enhanced drag ended with delayed cleanup');
             }
 
             // Lägg till styles
