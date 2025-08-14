@@ -826,6 +826,25 @@
             let originalScheduleData = null;
             let draggedLesson = null;
 
+
+            let isDragging = false;
+
+            document.addEventListener('dragstart', function(e) {
+                if (e.target.classList.contains('draggable-lesson')) {
+                    isDragging = true;
+                    document.body.classList.add('dragging');
+                    e.target.classList.add('dragging');
+                }
+            });
+
+            document.addEventListener('dragend', function(e) {
+                if (e.target.classList.contains('draggable-lesson')) {
+                    isDragging = false;
+                    document.body.classList.remove('dragging');
+                    e.target.classList.remove('dragging');
+                }
+            });
+
             // Lägg högst upp (efter att serverdata injicerats)
             let schoolSubjects = (typeof availableSubjects !== 'undefined' && Array.isArray(availableSubjects))
                 ? availableSubjects.slice()   // kopiera så vi inte muterar originalet oväntat
@@ -4271,9 +4290,18 @@
             // Add enhanced drag visual feedback
             // Förbättrad drag start med auto-scroll setup
             // 3. Fix dragstart för spanning lessons
+            // 1. HUVUDPROBLEMET: Förbättra handleLessonDragStartEnhanced
             function handleLessonDragStartEnhanced(event) {
-                const lessonElement = event.target;
+                // Förhindra event bubbling
+                event.stopPropagation();
                 
+                const lessonElement = event.target.closest('.draggable-lesson');
+                if (!lessonElement) {
+                    console.warn('Drag started on non-lesson element');
+                    return;
+                }
+                
+                // Säkerställ att draggedLesson sätts FÖRST
                 draggedLesson = {
                     element: lessonElement,
                     lessonId: lessonElement.dataset.lessonId,
@@ -4286,21 +4314,34 @@
                     spanRows: parseInt(lessonElement.dataset.spanRows) || 1
                 };
                 
-                debugLog('Drag start enhanced with teacher data', draggedLesson);
+                debugLog('Drag start enhanced - draggedLesson set:', draggedLesson);
                 
-                // Store original cells for later restoration - but DON'T modify them during drag start
+                // Sätt drag data för native drag-and-drop
+                try {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', draggedLesson.lessonId);
+                    event.dataTransfer.setData('application/json', JSON.stringify(draggedLesson));
+                } catch (e) {
+                    debugLog('DataTransfer error (IE compatibility):', e);
+                }
+                
+                // Visuell feedback för dragged element
+                lessonElement.style.opacity = '0.7';
+                lessonElement.style.transform = 'rotate(2deg) scale(1.05)';
+                lessonElement.style.zIndex = '1000';
+                lessonElement.style.boxShadow = '0 8px 16px rgba(0,0,0,0.3)';
+                
+                // Hitta ursprungscellerna MEN rensa dem INTE än
                 const originalDay = draggedLesson.originalDay;
                 const [originalStart, originalEnd] = draggedLesson.originalTime.split('-');
                 const originalStartMinutes = timeToMinutes(originalStart);
                 const originalEndMinutes = timeToMinutes(originalEnd);
                 
-                // Find all cells this lesson was occupying - but don't modify them yet
                 const discreteTimeSlots = generateDiscreteTimeSlots('08:00', '18:00', 5);
                 const occupiedCells = [];
                 
                 discreteTimeSlots.forEach(timeSlot => {
                     const slotMinutes = timeToMinutes(timeSlot);
-                    // If this time slot overlaps with the original lesson time
                     if (slotMinutes >= originalStartMinutes && slotMinutes < originalEndMinutes) {
                         const cellId = `cell-${originalDay}-${timeSlot.replace(':', '-')}`;
                         const cell = document.getElementById(cellId);
@@ -4310,24 +4351,17 @@
                     }
                 });
                 
-                // Store reference to occupied cells for cleanup - DON'T clear them during drag start
                 draggedLesson.originalCells = occupiedCells;
                 
-                event.target.style.opacity = '0.5';
-                event.target.style.transform = 'rotate(2deg)';
-                event.target.style.zIndex = '1000';
+                // Starta auto-scroll och markera celler EFTER en liten delay
+                setTimeout(() => {
+                    if (draggedLesson) {
+                        markTeacherConflictCells();
+                        startAutoScroll();
+                    }
+                }, 50);
                 
-                // Markera alla celler med visuell feedback baserat på lärarkonflikter
-                markTeacherConflictCells();
-                
-                // Start auto-scroll monitoring
-                startAutoScroll();
-                
-                // Show scroll indicators
-                const scrollIndicators = document.getElementById('scroll-indicators');
-                if (scrollIndicators) {
-                    scrollIndicators.style.opacity = '1';
-                }
+                debugLog('Enhanced drag started successfully');
             }
 
 
@@ -4350,6 +4384,8 @@
             // Update markTeacherConflictCells to handle original cell clearing properly
             // Update markTeacherConflictCells to handle original cell clearing properly
             // Update markTeacherConflictCells to handle original cell clearing properly
+            // Ersätt markTeacherConflictCells funktionen med denna version
+            // 6. FÖRBÄTTRA markTeacherConflictCells - anropa clearOriginalLessonCells BARA en gång
             function markTeacherConflictCells() {
                 // Clear all previous markings first
                 document.querySelectorAll('.schedule-cell').forEach(cell => {
@@ -4361,37 +4397,8 @@
                     cell.querySelectorAll('.drag-conflict-indicator, .teacher-buffer-indicator').forEach(el => el.remove());
                 });
                 
-                // NOW clear the original cells and make them available for dropping
-                if (draggedLesson && draggedLesson.originalCells) {
-                    draggedLesson.originalCells.forEach(cell => {
-                        // Only clear if this cell contains the lesson being dragged
-                        const lessonInCell = cell.querySelector(`#lesson-${draggedLesson.lessonId}`);
-                        if (lessonInCell && lessonInCell === draggedLesson.element) {
-                            // Don't remove the lesson element itself, just clear the cell classes and restore grid appearance
-                            cell.classList.remove('lesson-start', 'lesson-middle');
-                            cell.classList.add('empty');
-                            
-                            // Restore the cell's original grid styling to match other empty cells
-                            cell.style.cssText = `
-                                padding: 0; 
-                                border: 1px solid #e2e8f0; 
-                                height: 20px;
-                                position: relative; 
-                                vertical-align: top;
-                                transition: all 0.2s ease;
-                                background: transparent;
-                            `;
-                            
-                            // Ensure it has proper drop handlers
-                            if (!cell.hasAttribute('ondrop')) {
-                                cell.setAttribute('ondrop', 'handleLessonDrop(event)');
-                                cell.setAttribute('ondragover', 'handleDragOver(event)');
-                                cell.setAttribute('ondragenter', 'handleDragEnter(event)');
-                                cell.setAttribute('ondragleave', 'handleDragLeave(event)');
-                            }
-                        }
-                    });
-                }
+                // Rensa ursprungscellerna BARA FÖRSTA GÅNGEN
+                clearOriginalLessonCells();
                 
                 if (!draggedLesson || (!draggedLesson.teacherId && !draggedLesson.teacherName)) {
                     // Fallback - mark all empty cells as available
@@ -4405,7 +4412,7 @@
                 
                 // Get all lessons from DOM (excluding the one being dragged)
                 const allCurrentLessons = Array.from(document.querySelectorAll('.spanning-lesson'))
-                    .filter(lessonEl => lessonEl.dataset.lessonId !== draggedLesson.lessonId)
+                    .filter(lessonEl => lessonEl.dataset.lessonId !== draggedLesson.lessonId && lessonEl.style.display !== 'none')
                     .map(lessonEl => {
                         const originalTime = lessonEl.dataset.originalTime;
                         if (!originalTime || !originalTime.includes('-')) return null;
@@ -4746,44 +4753,65 @@
              */
             // 1. Ersätt handleLessonDrop funktionen med korrekt implementation
             // 5. Fix handleLessonDrop för att kontrollera draggedLesson ordentligt
+            // Uppdatera handleLessonDrop för att hantera den dolda lektionen
+            // Uppdatera handleLessonDrop för att vara enklare
+            // 7. FÖRBÄTTRA handleLessonDrop för att hantera dataTransfer korrekt
             async function handleLessonDrop(event) {
                 event.preventDefault();
-                event.currentTarget.style.background = '';
-                event.currentTarget.classList.remove('drop-zone', 'teacher-conflict-zone', 'room-conflict-zone');
+                event.stopPropagation();
+                
+                const targetCell = event.currentTarget;
+                targetCell.style.background = '';
+                targetCell.classList.remove('drop-zone', 'teacher-conflict-zone', 'room-conflict-zone');
                 
                 // Ta bort alla konfliktindikatorer
                 document.querySelectorAll('.drag-conflict-indicator').forEach(el => el.remove());
                 
-                if (!draggedLesson || !draggedLesson.element) {
-                    console.warn('handleLessonDrop: No valid draggedLesson found');
-                    return; // Ta bort cleanupDragState() här
+                // Hämta draggedLesson från dataTransfer om det inte finns
+                if (!draggedLesson) {
+                    try {
+                        const lessonData = event.dataTransfer.getData('application/json');
+                        if (lessonData) {
+                            draggedLesson = JSON.parse(lessonData);
+                            debugLog('Restored draggedLesson from dataTransfer:', draggedLesson);
+                        }
+                    } catch (e) {
+                        debugLog('Could not restore draggedLesson from dataTransfer:', e);
+                    }
                 }
                 
-                const targetCell = event.currentTarget;
+                if (!draggedLesson) {
+                    debugLog('handleLessonDrop: No valid draggedLesson found');
+                    return;
+                }
+                
                 const newDay = targetCell.dataset.day;
                 const newTimeSlot = targetCell.dataset.time;
                 
                 if (!newDay || !newTimeSlot) {
-                    console.warn('handleLessonDrop: Target cell missing day or time data');
-                    draggedLesson = null; // Reset här istället
+                    debugLog('handleLessonDrop: Target cell missing day or time data');
+                    restoreLessonToOriginalPosition();
+                    cleanupDragState();
                     return;
                 }
                 
-                // Spara draggedLesson i lokal variabel INNAN den kan bli null
+                // Spara draggedLesson i lokal variabel
                 const currentDraggedLesson = { ...draggedLesson };
                 
                 // Kontrollera om det är samma position
                 const originalStartTime = currentDraggedLesson.originalTime ? currentDraggedLesson.originalTime.split('-')[0] : '';
                 if (newDay === currentDraggedLesson.originalDay && newTimeSlot === originalStartTime) {
-                    debugLog('Dropped on exact same location, no action needed');
-                    draggedLesson = null;
+                    debugLog('Dropped on exact same location, restoring');
+                    restoreLessonToOriginalPosition();
+                    cleanupDragState();
                     return;
                 }
                 
                 // Förhindra drop på lärarkonfliktzoner
                 if (targetCell.classList.contains('teacher-conflict-zone')) {
                     showConflictMessage('⚠️ Läraren har redan en lektion vid denna tid. Välj en annan tid.');
-                    draggedLesson = null;
+                    restoreLessonToOriginalPosition();
+                    cleanupDragState();
                     return;
                 }
                 
@@ -4796,7 +4824,7 @@
                 
                 // Hämta alla andra lektioner för rumskontroll
                 const allCurrentLessons = Array.from(document.querySelectorAll('.spanning-lesson'))
-                    .filter(el => el.dataset.lessonId !== currentDraggedLesson.lessonId)
+                    .filter(el => el.dataset.lessonId !== currentDraggedLesson.lessonId && el.style.display !== 'none')
                     .map(el => ({
                         day: el.dataset.originalDay,
                         time: el.dataset.originalTime,
@@ -4812,7 +4840,8 @@
                     
                     if (availableRooms.length === 0) {
                         showConflictMessage('🏫 Inga lediga rum tillgängliga för denna tid. Välj en annan tid.');
-                        draggedLesson = null;
+                        restoreLessonToOriginalPosition();
+                        cleanupDragState();
                         return;
                     }
                     
@@ -4837,6 +4866,10 @@
                             showSuccessToast(`✅ Lektion flyttad till ${newDay} ${newTimeRange}`);
                         }
                         
+                        // Cleanup omedelbart efter framgångsrik flytt
+                        cleanupDragState();
+                        
+                        // Ladda om schemat efter kort delay
                         setTimeout(() => {
                             reloadEditSchedule();
                         }, 500);
@@ -4848,10 +4881,11 @@
                 } catch (error) {
                     console.error('Error moving lesson:', error);
                     showConflictMessage(`❌ Fel vid flyttning: ${error.message}`);
+                    restoreLessonToOriginalPosition();
+                    cleanupDragState();
                 }
-                
-                draggedLesson = null; // Reset efter allt är klart
             }
+
 
 
             /**
@@ -5276,6 +5310,55 @@
                     cell.style.borderColor = '#4299e1';
                 }
                 cell.title = '';
+            }
+
+
+            // 8. LÄGG TILL CSS-FIX för att förhindra text-selection under drag
+            const dragFixStyles = `
+            .editable-schedule-table {
+                user-select: none;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+            }
+
+            .draggable-lesson {
+                user-select: none;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                cursor: grab;
+            }
+
+            .draggable-lesson:active {
+                cursor: grabbing !important;
+            }
+
+            .draggable-lesson.dragging {
+                opacity: 0.7 !important;
+                transform: rotate(2deg) scale(1.05) !important;
+                z-index: 1000 !important;
+                box-shadow: 0 8px 16px rgba(0,0,0,0.3) !important;
+                pointer-events: none;
+            }
+
+            .schedule-cell {
+                position: relative;
+            }
+
+            /* Förhindra hover-effekter under drag */
+            body.dragging .draggable-lesson:not(.dragging):hover {
+                transform: none !important;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+            }
+            `;
+
+            // Lägg till styles om de inte redan finns
+            if (!document.getElementById('drag-fix-styles')) {
+                const styleElement = document.createElement('style');
+                styleElement.id = 'drag-fix-styles';
+                styleElement.textContent = dragFixStyles;
+                document.head.appendChild(styleElement);
             }
 
             // Förbättrade drag handlers
@@ -5832,98 +5915,177 @@
             });
 
 
+            function restoreHiddenLesson() {
+                if (draggedLesson && draggedLesson.originalCells) {
+                    draggedLesson.originalCells.forEach(cell => {
+                        const hiddenLesson = cell.querySelector(`#lesson-${draggedLesson.lessonId}`);
+                        if (hiddenLesson && hiddenLesson.style.display === 'none') {
+                            hiddenLesson.style.display = 'block';
+                            // Återställ cellens läge
+                            cell.classList.remove('empty');
+                            if (cell === draggedLesson.originalCells[0]) {
+                                cell.classList.add('lesson-start');
+                            } else {
+                                cell.classList.add('lesson-middle');
+                            }
+                        }
+                    });
+                }
+            }
+
+
             // New function to restore lesson to original position if drop failed
             // New function to restore lesson to original position if drop failed
             function restoreLessonToOriginalPosition() {
-                if (!draggedLesson || !draggedLesson.element || !draggedLesson.originalCells) return;
-                
-                const lessonElement = draggedLesson.element;
-                const originalCells = draggedLesson.originalCells;
-                
-                if (originalCells.length > 0) {
-                    const firstCell = originalCells[0];
-                    const spanRows = draggedLesson.spanRows || 1;
-                    
-                    // Restore the lesson grid structure
-                    firstCell.classList.remove('empty');
-                    firstCell.classList.add('lesson-start');
-                    firstCell.innerHTML = lessonElement.outerHTML;
-                    
-                    // Restore middle cells
-                    for (let i = 1; i < originalCells.length; i++) {
-                        const middleCell = originalCells[i];
-                        middleCell.classList.remove('empty');
-                        middleCell.classList.add('lesson-middle');
-                        middleCell.innerHTML = '';
-                    }
-                    
-                    // Remove the floating lesson element
-                    if (lessonElement.parentElement) {
-                        lessonElement.remove();
-                    }
-                    
-                    debugLog('Lesson restored to original position');
+                if (!draggedLesson || !draggedLesson.originalCells) {
+                    debugLog('Cannot restore lesson - missing data');
+                    return;
                 }
+                
+                debugLog('Restoring lesson to original position');
+                
+                draggedLesson.originalCells.forEach((cell, index) => {
+                    const hiddenLesson = cell.querySelector(`#lesson-${draggedLesson.lessonId}`);
+                    
+                    if (index === 0) {
+                        // Första cellen - återställ lesson-start
+                        cell.classList.remove('empty');
+                        cell.classList.add('lesson-start');
+                        
+                        if (hiddenLesson) {
+                            hiddenLesson.style.display = 'block';
+                        }
+                    } else {
+                        // Mellan-celler - återställ lesson-middle
+                        cell.classList.remove('empty');
+                        cell.classList.add('lesson-middle');
+                        cell.innerHTML = ''; // Mellan-celler ska vara tomma
+                    }
+                });
+            }
+
+            // 3. FÖRBÄTTRA clearOriginalLessonCells - anropa ENDAST från markTeacherConflictCells
+            function clearOriginalLessonCells() {
+                if (!draggedLesson || !draggedLesson.originalCells || clearOriginalLessonCells.hasRun) {
+                    return;
+                }
+                
+                // Förhindra dubbelanrop
+                clearOriginalLessonCells.hasRun = true;
+                
+                debugLog('Clearing original lesson cells', draggedLesson.originalCells.length);
+                
+                draggedLesson.originalCells.forEach((cell, index) => {
+                    // Ta bort lesson content men behåll cell structure
+                    const lessonInCell = cell.querySelector(`#lesson-${draggedLesson.lessonId}`);
+                    if (lessonInCell) {
+                        // Gör lektionen osynlig istället för att ta bort den helt
+                        lessonInCell.style.display = 'none';
+                    }
+                    
+                    // Uppdatera cell classes
+                    cell.classList.remove('lesson-start', 'lesson-middle');
+                    cell.classList.add('empty');
+                    
+                    // Behåll cell styling och drop handlers
+                    if (!cell.hasAttribute('ondrop')) {
+                        cell.setAttribute('ondrop', 'handleLessonDrop(event)');
+                        cell.setAttribute('ondragover', 'handleDragOver(event)');
+                        cell.setAttribute('ondragenter', 'handleDragEnter(event)');
+                        cell.setAttribute('ondragleave', 'handleDragLeave(event)');
+                    }
+                });
             }
 
 
 
             // Also update the cleanupDragState function to better handle cell restoration:
+            // 5. FÖRBÄTTRA cleanupDragState
             function cleanupDragState() {
+                debugLog('Starting drag state cleanup');
+                
                 stopAutoScroll();
                 
-                // Ta bort alla visuella feedback-klasser och styles
+                // Reset clearOriginalLessonCells flag
+                clearOriginalLessonCells.hasRun = false;
+                
+                // Ta bort alla visuella feedback-klasser
                 document.querySelectorAll('.schedule-cell').forEach(cell => {
                     cell.classList.remove('drop-zone', 'teacher-conflict-zone', 'room-conflict-zone');
-                    cell.style.border = '';
-                    cell.style.background = '';
-                    cell.style.borderColor = '';
-                    cell.style.borderStyle = '';
-                    cell.style.borderWidth = '';
+                    
+                    // Återställ cell styling till default
+                    if (cell.classList.contains('empty')) {
+                        cell.style.cssText = `
+                            padding: 0; 
+                            border: 1px solid #e2e8f0; 
+                            height: 20px;
+                            position: relative; 
+                            vertical-align: top;
+                            transition: all 0.2s ease;
+                            background: transparent;
+                        `;
+                    } else if (cell.classList.contains('lesson-middle')) {
+                        cell.style.cssText = `
+                            padding: 0; 
+                            border: 1px solid #e2e8f0; 
+                            height: 20px;
+                            position: relative; 
+                            vertical-align: top;
+                            background: linear-gradient(135deg, #4299e1, #3182ce);
+                            border-left: 1px solid rgba(255,255,255,0.3);
+                            border-right: 1px solid rgba(255,255,255,0.3);
+                        `;
+                    }
+                    
                     cell.title = '';
                 });
                 
                 // Ta bort konfliktindikatorer
                 document.querySelectorAll('.drag-conflict-indicator, .teacher-buffer-indicator').forEach(el => el.remove());
                 
-                // If drag was cancelled (not dropped), restore the original lesson position
-                if (draggedLesson && draggedLesson.element && draggedLesson.originalCells) {
-                    const lessonStillFloating = !draggedLesson.element.closest('.schedule-cell');
-                    if (lessonStillFloating) {
-                        // Restore lesson to original position
-                        restoreLessonToOriginalPosition();
-                    }
-                }
-                
-                // Reset draggedLesson sist
+                // Reset draggedLesson
                 draggedLesson = null;
                 
-                debugLog('Drag state cleaned up completely');
+                debugLog('Drag state cleanup completed');
             }
 
 
             // Update handleLessonDragEndEnhanced to handle restoration better:
             // Update handleLessonDragEndEnhanced to handle restoration better:
+            // 2. FÖRBÄTTRA handleLessonDragEndEnhanced
             function handleLessonDragEndEnhanced(event) {
-                event.target.style.opacity = '1';
-                event.target.style.transform = 'scale(1)';
-                event.target.style.zIndex = '';
+                event.stopPropagation();
                 
-                // Check if the lesson was successfully dropped
-                const wasDropped = event.target.closest('.schedule-cell') && 
-                                !draggedLesson.originalCells.includes(event.target.closest('.schedule-cell'));
-                
-                // If not successfully dropped, delay cleanup to allow restoration
-                if (!wasDropped) {
-                    setTimeout(() => {
-                        cleanupDragState();
-                    }, 10);
-                } else {
-                    // Immediate cleanup for successful drops
-                    cleanupDragState();
+                if (!draggedLesson) {
+                    debugLog('Drag end called but no draggedLesson found');
+                    return;
                 }
                 
-                debugLog('Enhanced drag ended with conditional cleanup');
+                const lessonElement = event.target.closest('.draggable-lesson');
+                if (lessonElement) {
+                    // Återställ visuell feedback
+                    lessonElement.style.opacity = '1';
+                    lessonElement.style.transform = 'scale(1)';
+                    lessonElement.style.zIndex = '';
+                    lessonElement.style.boxShadow = '';
+                }
+                
+                // Kontrollera om lektionen droppades framgångsrikt
+                const wasSuccessfullyMoved = !draggedLesson.originalCells.some(cell => 
+                    cell.contains(lessonElement)
+                );
+                
+                if (!wasSuccessfullyMoved) {
+                    debugLog('Drag ended without successful drop - restoring lesson');
+                    restoreLessonToOriginalPosition();
+                }
+                
+                // Cleanup efter en kort delay för att låta drop-handler köra först
+                setTimeout(() => {
+                    cleanupDragState();
+                }, 100);
+                
+                debugLog('Enhanced drag ended');
             }
 
             // Lägg till styles
@@ -5941,8 +6103,15 @@
             window.handleLessonDragStart = handleLessonDragStartEnhanced;
             window.handleLessonDragEnd = handleLessonDragEndEnhanced;
 
+
+            window.markTeacherConflictCells = markTeacherConflictCells;
+            window.clearOriginalLessonCells = clearOriginalLessonCells;
+            window.restoreLessonToOriginalPosition = restoreLessonToOriginalPosition;
+            window.cleanupDragState = cleanupDragState;
+
+
             debugLog('Enhanced drag-and-drop schedule editor loaded with 5-minute room buffer and auto-scroll');
-            window.handleLessonDrop = handleLessonDropDiscrete;
+            window.handleLessonDrop = handleLessonDrop;
             window.createEditableLessonBlockSpanning = createEditableLessonBlockSpanning;
 
             function setupAutoScrollBounds() {
