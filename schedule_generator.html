@@ -4291,8 +4291,11 @@
                 event.target.style.transform = 'rotate(2deg)';
                 event.target.style.zIndex = '1000';
                 
-                // Markera alla celler med visuell feedback baserat på lärarkonflikter
-                markTeacherConflictCells();
+                // Markera alla celler med visuell feedback baserat på konflikter
+                // Vänta lite för att säkerställa att DOM är redo
+                setTimeout(() => {
+                    markTeacherConflictCells();
+                }, 50);
                 
                 // Start auto-scroll monitoring
                 startAutoScroll();
@@ -4321,23 +4324,21 @@
 
 
 
+            // Uppdatera markTeacherConflictCells funktionen för bättre CSS-specificity
             function markTeacherConflictCells() {
                 // Rensa alla tidigare markeringar först
                 document.querySelectorAll('.schedule-cell').forEach(cell => {
                     cell.classList.remove('drop-zone', 'teacher-conflict-zone', 'room-conflict-zone');
-                    cell.style.border = '';
-                    cell.style.background = '';
+                    cell.removeAttribute('style'); // Ta bort alla inline styles
                     cell.title = '';
-                    // Ta bort gamla indikatorer
+                    // Ta bort alla indikatorer
                     cell.querySelectorAll('.drag-conflict-indicator, .teacher-buffer-indicator').forEach(el => el.remove());
                 });
                 
                 if (!draggedLesson || (!draggedLesson.teacherId && !draggedLesson.teacherName)) {
-                    // Fallback - markera alla celler som tillgängliga
+                    // Fallback - markera alla tomma celler som tillgängliga
                     document.querySelectorAll('.schedule-cell.empty').forEach(cell => {
                         cell.classList.add('drop-zone');
-                        cell.style.border = '2px dashed #4299e1';
-                        cell.style.background = 'rgba(66, 153, 225, 0.1)';
                     });
                     return;
                 }
@@ -4382,14 +4383,9 @@
                     const hasRoomConflict = !isRoomAvailableForTimeSlot(draggedLesson.room, allCurrentLessons, cellDay, newTimeRange);
                     const availableRooms = getAvailableRoomsForTimeSlot(allCurrentLessons, cellDay, newTimeRange);
                     
-                    // Sätt position relative för indikatorer
-                    cell.style.position = 'relative';
-                    
                     if (hasTeacherConflict) {
                         // RÖD markering för lärarkonflikter
                         cell.classList.add('teacher-conflict-zone');
-                        cell.style.border = '2px solid #f56565 !important';
-                        cell.style.background = 'rgba(245, 101, 101, 0.3) !important';
                         cell.title = `⚠️ Läraren ${draggedLesson.teacherName || 'okänd'} har redan lektion här (10 min buffert krävs)`;
                         
                         // Lägg till konfliktikon
@@ -4418,8 +4414,6 @@
                     } else if (hasRoomConflict && availableRooms.length === 0) {
                         // RÖD markering för rumskonflikt utan alternativ
                         cell.classList.add('room-conflict-zone');
-                        cell.style.border = '2px solid #f56565 !important';
-                        cell.style.background = 'rgba(245, 101, 101, 0.2) !important';
                         cell.title = `🏫 Inga lediga rum tillgängliga för denna tid`;
                         
                         const roomIcon = document.createElement('div');
@@ -4441,9 +4435,7 @@
                         
                     } else if (hasRoomConflict && availableRooms.length > 0) {
                         // ORANGE markering för rumskonflikt med alternativ
-                        cell.classList.add('room-conflict-zone');
-                        cell.style.border = '2px dashed #ed8936 !important';
-                        cell.style.background = 'rgba(237, 137, 54, 0.15) !important';
+                        cell.classList.add('room-conflict-zone', 'has-alternative');
                         cell.title = `🏫 Originalsal upptagen, kommer att byta till: ${availableRooms[0]}`;
                         
                         const roomIcon = document.createElement('div');
@@ -4466,12 +4458,17 @@
                     } else {
                         // GRÖN/BLÅ markering för tillgängliga platser
                         cell.classList.add('drop-zone');
-                        cell.style.border = '2px dashed #4299e1 !important';
-                        cell.style.background = 'rgba(66, 153, 225, 0.1) !important';
                         cell.title = 'Tillgänglig - klicka för att flytta hit';
                     }
                 });
+                
+                console.log('Conflict cells marked. Teacher conflicts:', 
+                    document.querySelectorAll('.teacher-conflict-zone').length,
+                    'Room conflicts:', 
+                    document.querySelectorAll('.room-conflict-zone').length
+                );
             }
+
 
             /**
              * Handle drag over for drop zones
@@ -5651,50 +5648,56 @@
             }
 
             // Lägg till CSS för nya klasser
+            // Uppdatera CSS för att säkerställa att röd markering visas
             const enhancedConflictStyles = `
-                .teacher-conflict-zone {
-                    border: 2px solid #f56565 !important;
-                    background: rgba(245, 101, 101, 0.3) !important;
+                /* Högsta prioritet för konfliktzoner */
+                .editable-schedule-table .schedule-cell.teacher-conflict-zone {
+                    background: rgba(245, 101, 101, 0.6) !important;
+                    border: 3px solid #f56565 !important;
+                    border-style: solid !important;
+                    border-width: 3px !important;
+                    box-shadow: inset 0 0 0 2px rgba(245, 101, 101, 0.3) !important;
                 }
 
-                .room-conflict-zone {
-                    border: 2px dashed #ed8936 !important;
-                    background: rgba(237, 137, 54, 0.15) !important;
+                .editable-schedule-table .schedule-cell.room-conflict-zone:not(.has-alternative) {
+                    background: rgba(245, 101, 101, 0.4) !important;
+                    border: 3px solid #f56565 !important;
+                    border-style: solid !important;
+                    border-width: 3px !important;
+                    box-shadow: inset 0 0 0 2px rgba(245, 101, 101, 0.3) !important;
                 }
 
-                .drop-zone {
+                .editable-schedule-table .schedule-cell.room-conflict-zone.has-alternative {
+                    background: rgba(237, 137, 54, 0.4) !important;
+                    border: 3px dashed #ed8936 !important;
+                    border-style: dashed !important;
+                    border-width: 3px !important;
+                }
+
+                .editable-schedule-table .schedule-cell.drop-zone {
+                    background: rgba(66, 153, 225, 0.2) !important;
                     border: 2px dashed #4299e1 !important;
-                    background: rgba(66, 153, 225, 0.1) !important;
+                    border-style: dashed !important;
+                    border-width: 2px !important;
                 }
 
+                /* Säkerställ att celler har position relative för indikatorer */
+                .schedule-cell {
+                    position: relative !important;
+                    transition: all 0.2s ease;
+                }
+                
                 .drag-conflict-indicator {
                     pointer-events: none !important;
                     user-select: none;
                     font-weight: bold;
-                }
-
-                .schedule-cell {
-                    transition: all 0.2s ease;
-                    position: relative;
+                    z-index: 1000 !important;
                 }
                 
-                /* Förstärk markeringen */
-                .schedule-cell.teacher-conflict-zone {
-                    border-color: #f56565 !important;
-                    border-style: solid !important;
-                    border-width: 2px !important;
-                }
-                
-                .schedule-cell.room-conflict-zone {
-                    border-color: #ed8936 !important;
-                    border-style: dashed !important;  
-                    border-width: 2px !important;
-                }
-                
-                .schedule-cell.drop-zone {
-                    border-color: #4299e1 !important;
-                    border-style: dashed !important;
-                    border-width: 2px !important;
+                /* Override för lesson-middle cells när de markeras */
+                .editable-schedule-table .schedule-cell.lesson-middle.teacher-conflict-zone,
+                .editable-schedule-table .schedule-cell.lesson-middle.room-conflict-zone {
+                    background: rgba(245, 101, 101, 0.8) !important;
                 }
             `;
 
@@ -5755,6 +5758,18 @@
                     opacity: 0.8;
                 }
             `;
+
+
+            // Ta bort gamla styles och lägg till nya
+            const oldStyles = document.getElementById('enhanced-conflict-styles');
+            if (oldStyles) oldStyles.remove();
+
+            const styleElement = document.createElement('style');
+            styleElement.id = 'enhanced-conflict-styles';
+            styleElement.textContent = enhancedConflictStyles;
+            document.head.appendChild(styleElement);
+
+
 
 
             window.addEventListener('resize', setupAutoScrollBounds);
