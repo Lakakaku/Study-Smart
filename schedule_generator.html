@@ -717,17 +717,7 @@
                             </div>
 
                             <!-- Lektionslängd sektion -->
-                            <div class="lesson-duration-section">
-                                <label for="lesson_duration">Lektionslängd (minuter):</label>
-                                <select name="lesson_duration" id="lesson_duration">
-                                    <option value="45">45 minuter</option>
-                                    <option value="60" selected>60 minuter</option>
-                                    <option value="90">90 minuter</option>
-                                </select>
-                                <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #666;">
-                                    💡 Multi-klass schema med automatisk klassrumshantering.
-                                </p>
-                            </div>
+                            
                         </div>
                     </div>
 
@@ -2758,10 +2748,9 @@
                 try {
                     const form = document.getElementById('scheduleForm');
                     const formData = new FormData(form);
-                    const lessonDuration = parseInt(formData.get('lesson_duration') || '60');
-                    const multiClassSchedule = generateMultiClassScheduleWithConstraints(
+                    const multiClassSchedule = generateSmartCompactSchedule(
                         selectedClasses, classSubjectMap, rooms, 
-                        formData.get('start_time'), formData.get('end_time'), lessonDuration
+                        formData.get('start_time'), formData.get('end_time')
                     );
 
                     setTimeout(() => {
