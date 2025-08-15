@@ -1684,6 +1684,473 @@
                 }
             }
 
+
+            // Optimize daily schedule with flexible lesson durations and mandatory lunch
+            function optimizeDailySchedule(daySubjects, startMinutes, endMinutes, classInfo, day, rooms, teacherAvailability) {
+                const dayLessons = [];
+                if (daySubjects.length === 0) return dayLessons;
+                
+                // Define lunch break constraints (45-60 minutes between 10:30-13:00)
+                const lunchStartEarliest = timeToMinutes('10:30');
+                const lunchStartLatest = timeToMinutes('12:15'); // Allow lunch to end by 13:00
+                const lunchDuration = Math.random() > 0.5 ? 45 : 60; // 45 or 60 minutes lunch
+                
+                // Calculate available time excluding lunch
+                const totalAvailableTime = (endMinutes - startMinutes) - lunchDuration;
+                
+                // Calculate optimal lesson duration (50-100 minutes)
+                const baseTimePerLesson = Math.floor(totalAvailableTime / daySubjects.length);
+                let lessonDuration = Math.max(50, Math.min(100, baseTimePerLesson));
+                
+                // Adjust if needed to fit all lessons
+                const totalNeededTime = daySubjects.length * lessonDuration + lunchDuration;
+                if (totalNeededTime > (endMinutes - startMinutes)) {
+                    lessonDuration = Math.floor((endMinutes - startMinutes - lunchDuration) / daySubjects.length);
+                    lessonDuration = Math.max(50, Math.min(100, lessonDuration));
+                }
+                
+                // Create compact schedule
+                let currentTime = startMinutes;
+                let lunchPlaced = false;
+                
+                for (let i = 0; i < daySubjects.length; i++) {
+                    const subject = daySubjects[i];
+                    
+                    // Check if we should place lunch break
+                    if (!lunchPlaced && shouldPlaceLunchNow(currentTime, lunchStartEarliest, lunchStartLatest, daySubjects.length - i, lessonDuration)) {
+                        currentTime += lunchDuration;
+                        lunchPlaced = true;
+                    }
+                    
+                    // Ensure we don't exceed end time
+                    if (currentTime + lessonDuration > endMinutes) {
+                        // Try to compress remaining lessons
+                        const remainingSubjects = daySubjects.length - i;
+                        const remainingTime = endMinutes - currentTime;
+                        lessonDuration = Math.max(50, Math.floor(remainingTime / remainingSubjects));
+                    }
+                    
+                    const lessonStart = minutesToTime(currentTime);
+                    const lessonEnd = minutesToTime(currentTime + lessonDuration);
+                    const timeSlot = `${lessonStart}-${lessonEnd}`;
+                    
+                    // Find available room
+                    const availableRoom = findAvailableRoom(rooms, day, timeSlot, teacherAvailability);
+                    
+                    // Assign teacher
+                    const teacherAssignment = assignOptimalTeacher(subject, day, timeSlot, teacherAvailability);
+                    
+                    const lessonData = {
+                        day: day,
+                        time: timeSlot,
+                        class_id: subject.class_id,
+                        class_name: subject.class_name,
+                        subject_id: subject.subject_id,
+                        school_subject_id: subject.school_subject_id || subject.subject_id,
+                        subject_name: subject.subject_name,
+                        room: availableRoom || rooms[Math.floor(Math.random() * rooms.length)],
+                        teacher_id: teacherAssignment?.teacher_id || 'fallback',
+                        teacher_name: teacherAssignment?.teacher_name || 'Lärare',
+                        color: subject.color,
+                        duration: lessonDuration,
+                        optimized: true
+                    };
+                    
+                    dayLessons.push(lessonData);
+                    
+                    // Reserve teacher time
+                    if (teacherAssignment && teacherAvailability[teacherAssignment.teacher_id]) {
+                        teacherAvailability[teacherAssignment.teacher_id][day].push({
+                            start: currentTime,
+                            end: currentTime + lessonDuration,
+                            lessonId: `${subject.class_name}-${subject.subject_name}-${timeSlot}`
+                        });
+                    }
+                    
+                    // Move to next lesson (with minimal 5-minute break)
+                    currentTime += lessonDuration + 5;
+                }
+                
+                // Ensure lunch is placed if not already
+                if (!lunchPlaced && daySubjects.length > 0) {
+                    debugLog(`Warning: Could not optimally place lunch for ${classInfo.name} on ${day}`);
+                }
+                
+                return dayLessons;
+            }
+
+
+            // Determine if lunch should be placed at current time
+            function shouldPlaceLunchNow(currentTime, lunchEarliest, lunchLatest, remainingLessons, lessonDuration) {
+                // Must be within lunch time window
+                if (currentTime < lunchEarliest) return false;
+                
+                // If we're past the latest start time, must place now
+                if (currentTime >= lunchLatest) return true;
+                
+                // Smart placement: try to place lunch in the middle of the day
+                const estimatedEndTime = currentTime + (remainingLessons * (lessonDuration + 5));
+                const middleTime = currentTime + ((estimatedEndTime - currentTime) / 2);
+                
+                // Place lunch if we're near the middle and within acceptable window
+                return (currentTime >= lunchEarliest && currentTime <= middleTime);
+            }
+
+
+            // Calculate compactness score for the schedule
+            function calculateCompactScore(allLessons, classes) {
+                let totalScore = 0;
+                
+                classes.forEach(classInfo => {
+                    const classLessons = allLessons.filter(l => l.class_id === classInfo.id);
+                    let classScore = 0;
+                    
+                    // Group by day
+                    const dayGroups = {};
+                    classLessons.forEach(lesson => {
+                        if (!dayGroups[lesson.day]) dayGroups[lesson.day] = [];
+                        dayGroups[lesson.day].push(lesson);
+                    });
+                    
+                    // Calculate compactness for each day
+                    Object.values(dayGroups).forEach(dayLessons => {
+                        if (dayLessons.length <= 1) {
+                            classScore += 100; // Perfect score for single lesson days
+                            return;
+                        }
+                        
+                        // Sort by start time
+                        const sortedLessons = dayLessons.sort((a, b) => {
+                            const aStart = timeToMinutes(a.time.split('-')[0]);
+                            const bStart = timeToMinutes(b.time.split('-')[0]);
+                            return aStart - bStart;
+                        });
+                        
+                        // Calculate time span and gaps
+                        const firstStart = timeToMinutes(sortedLessons[0].time.split('-')[0]);
+                        const lastEnd = timeToMinutes(sortedLessons[sortedLessons.length - 1].time.split('-')[1]);
+                        const totalSpan = lastEnd - firstStart;
+                        
+                        // Calculate actual lesson time
+                        const totalLessonTime = sortedLessons.reduce((sum, lesson) => {
+                            const [start, end] = lesson.time.split('-');
+                            return sum + (timeToMinutes(end) - timeToMinutes(start));
+                        }, 0);
+                        
+                        // Compactness score: higher is better (more lessons packed into shorter time span)
+                        const compactness = totalLessonTime > 0 ? (totalLessonTime / totalSpan) * 100 : 0;
+                        classScore += Math.max(0, Math.min(100, compactness));
+                    });
+                    
+                    totalScore += classScore / Object.keys(dayGroups).length;
+                });
+                
+                return Math.round(totalScore / classes.length);
+            }
+
+            // Count successfully placed lunch breaks
+            function countLunchBreaks(allLessons, classes) {
+                let lunchBreaksFound = 0;
+                
+                classes.forEach(classInfo => {
+                    const classLessons = allLessons.filter(l => l.class_id === classInfo.id);
+                    
+                    // Group by day and check for lunch break gaps
+                    const dayGroups = {};
+                    classLessons.forEach(lesson => {
+                        if (!dayGroups[lesson.day]) dayGroups[lesson.day] = [];
+                        dayGroups[lesson.day].push(lesson);
+                    });
+                    
+                    Object.values(dayGroups).forEach(dayLessons => {
+                        if (dayLessons.length <= 1) return;
+                        
+                        const sortedLessons = dayLessons.sort((a, b) => {
+                            const aStart = timeToMinutes(a.time.split('-')[0]);
+                            const bStart = timeToMinutes(b.time.split('-')[0]);
+                            return aStart - bStart;
+                        });
+                        
+                        // Look for lunch-sized gaps between 10:30-13:00
+                        for (let i = 0; i < sortedLessons.length - 1; i++) {
+                            const currentEnd = timeToMinutes(sortedLessons[i].time.split('-')[1]);
+                            const nextStart = timeToMinutes(sortedLessons[i + 1].time.split('-')[0]);
+                            const gap = nextStart - currentEnd;
+                            
+                            if (gap >= 45 && currentEnd >= timeToMinutes('10:30') && nextStart <= timeToMinutes('13:00')) {
+                                lunchBreaksFound++;
+                                break; // Only count one lunch per day per class
+                            }
+                        }
+                    });
+                });
+                
+                return lunchBreaksFound;
+            }
+
+            function findAvailableRoom(rooms, day, timeSlot, teacherAvailability) {
+                // This is a simplified version - in a full implementation, you'd track room occupancy
+                return rooms[Math.floor(Math.random() * rooms.length)];
+            }
+
+            // Check if teacher is available for a specific time slot
+            function isTeacherAvailableForTimeSlot(teacherId, day, startMinutes, endMinutes, teacherAvailability) {
+                if (!teacherAvailability[teacherId] || !teacherAvailability[teacherId][day]) {
+                    return true;
+                }
+
+                const teacherLessons = teacherAvailability[teacherId][day];
+                const minBreak = 5;
+
+                for (const lesson of teacherLessons) {
+                    if (!(endMinutes + minBreak <= lesson.start || startMinutes >= lesson.end + minBreak)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+
+            // Lägg till denna funktion i ditt JavaScript (runt rad 2400, före assignTeacherToLesson)
+
+            // Lägg till denna variabel högst upp i script-sektionen, efter andra globala variabler
+            let teacherAvailability = {};
+
+            // Uppdatera isTeacherAvailable funktionen
+            function isTeacherAvailable(teacherId, day, timeSlot, lessonDurationMinutes) {
+                // Säkerställ att teacherAvailability är initialiserat
+                if (!teacherAvailability || typeof teacherAvailability !== 'object') {
+                    teacherAvailability = {};
+                }
+                
+                if (!teacherAvailability[teacherId] || !teacherAvailability[teacherId][day]) {
+                    return true; // Om ingen data finns, anta att läraren är tillgänglig
+                }
+                
+                const [startTime, endTime] = timeSlot.split('-');
+                const startMinutes = timeToMinutes(startTime);
+                const endMinutes = timeToMinutes(endTime);
+                const minBreak = 5; // 5 minuters paus mellan lektioner
+                
+                const teacherLessons = teacherAvailability[teacherId][day];
+                
+                for (const lesson of teacherLessons) {
+                    // Kontrollera om det finns överlappning eller otillräcklig paus
+                    if (!(endMinutes + minBreak <= lesson.start || startMinutes >= lesson.end + minBreak)) {
+                        return false; // Läraren är inte tillgänglig
+                    }
+                }
+                
+                return true; // Läraren är tillgänglig
+            }
+
+
+            // Assign optimal teacher considering qualifications and availability
+            function assignOptimalTeacher(subject, day, timeSlot, teacherAvailability) {
+                const [startTime, endTime] = timeSlot.split('-');
+                const startMinutes = timeToMinutes(startTime);
+                const endMinutes = timeToMinutes(endTime);
+
+                if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
+                    const qualifiedAndAvailableTeachers = availableTeachers.filter(teacher => {
+                        // Check availability
+                        const isTimeAvailable = isTeacherAvailableForTimeSlot(teacher.id, day, startMinutes, endMinutes, teacherAvailability);
+                        
+                        // Check qualifications
+                        let isQualified = true;
+                        if (teacher.qualified_subjects && Array.isArray(teacher.qualified_subjects)) {
+                            isQualified = teacher.qualified_subjects.includes(parseInt(subject.subject_id));
+                        }
+                        
+                        return isTimeAvailable && isQualified;
+                    });
+
+                    if (qualifiedAndAvailableTeachers.length > 0) {
+                        const selectedTeacher = qualifiedAndAvailableTeachers[Math.floor(Math.random() * qualifiedAndAvailableTeachers.length)];
+                        return {
+                            teacher_id: selectedTeacher.id,
+                            teacher_name: selectedTeacher.name || selectedTeacher.username || 'Lärare'
+                        };
+                    }
+                }
+
+                // Fallback
+                const fallbackTeachers = ['Lärare A', 'Lärare B', 'Lärare C', 'Lärare D', 'Lärare E'];
+                return {
+                    teacher_id: 'fallback',
+                    teacher_name: fallbackTeachers[Math.floor(Math.random() * fallbackTeachers.length)]
+                };
+            }
+
+
+
+            // Distribute subjects across weekdays (max 1 lesson per subject per day)
+            function distributeSubjectsAcrossDays(subjectPlans, weekdays) {
+                const dailyPlans = {};
+                weekdays.forEach(day => dailyPlans[day] = []);
+                
+                // Group by subject
+                const subjectGroups = {};
+                subjectPlans.forEach(plan => {
+                    if (!subjectGroups[plan.subject_name]) {
+                        subjectGroups[plan.subject_name] = [];
+                    }
+                    subjectGroups[plan.subject_name].push(plan);
+                });
+                
+                // Distribute each subject across days
+                Object.values(subjectGroups).forEach(group => {
+                    group.forEach((lesson, index) => {
+                        const dayIndex = index % weekdays.length;
+                        dailyPlans[weekdays[dayIndex]].push(lesson);
+                    });
+                });
+                
+                return dailyPlans;
+            }
+
+            // Smart Schedule Generator - Kompakt schema med flexibel lektionslängd
+            function generateSmartCompactSchedule(classes, classSubjectMap, rooms, startTime = '08:00', endTime = '15:00') {
+                debugLog('Generating smart compact schedule with flexible lesson duration:', {
+                    classes: classes.length, 
+                    classSubjectMap, 
+                    rooms: rooms.length, 
+                    startTime, 
+                    endTime
+                });
+
+                const actualRooms = (rooms && rooms.length) ? rooms : getAvailableRooms();
+                if (!actualRooms || actualRooms.length === 0) {
+                    throw new Error('Inga klassrum valda. Välj minst ett klassrum.');
+                }
+
+                const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+                const allLessons = [];
+                
+                // Teacher availability tracker
+                const teacherAvailability = {};
+                const teacherMinBreak = 5;
+                
+                if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
+                    availableTeachers.forEach(teacher => {
+                        teacherAvailability[teacher.id] = {};
+                        weekdays.forEach(day => {
+                            teacherAvailability[teacher.id][day] = [];
+                        });
+                    });
+                }
+
+                // Create subject plans for each class
+                const classSubjectPlans = {};
+                
+                classes.forEach(classInfo => {
+                    const cid = classInfo.id;
+                    classSubjectPlans[cid] = [];
+
+                    const items = classSubjectMap[cid] || [];
+                    items.forEach(item => {
+                        const subjectId = item.subject_id;
+                        const subjectName = getSubjectNameById(subjectId) || (availableSubjects.find(s => String(s.id) === String(subjectId))?.name) || `Ämne ${subjectId}`;
+                        const hoursPerWeek = parseInt(item.hours);
+
+                        if (hoursPerWeek > 5) {
+                            throw new Error(`Ämnet "${subjectName}" för klass ${classInfo.name} har ${hoursPerWeek} lektioner, men max 5 är tillåtet`);
+                        }
+
+                        for (let h = 0; h < hoursPerWeek; h++) {
+                            classSubjectPlans[cid].push({
+                                class_id: classInfo.id,
+                                class_name: classInfo.name,
+                                subject_id: subjectId,
+                                subject_name: subjectName,
+                                color: classInfo.color || classColors[Math.floor(Math.random() * classColors.length)]
+                            });
+                        }
+                    });
+                });
+
+                // Smart optimization for each class
+                for (const classInfo of classes) {
+                    const classId = classInfo.id;
+                    const subjectPlans = classSubjectPlans[classId] || [];
+                    
+                    if (subjectPlans.length === 0) continue;
+
+                    // Generate optimal schedule for this class
+                    const classSchedule = generateOptimalClassSchedule(
+                        classInfo, 
+                        subjectPlans, 
+                        actualRooms, 
+                        teacherAvailability, 
+                        startTime, 
+                        endTime,
+                        weekdays
+                    );
+
+                    allLessons.push(...classSchedule);
+                }
+
+                // Generate time slots based on actual lesson times used
+                const usedTimes = new Set();
+                allLessons.forEach(lesson => {
+                    if (lesson.time) usedTimes.add(lesson.time);
+                });
+                const timeSlots = Array.from(usedTimes).sort((a, b) => {
+                    const aStart = timeToMinutes(a.split('-')[0]);
+                    const bStart = timeToMinutes(b.split('-')[0]);
+                    return aStart - bStart;
+                });
+
+                return {
+                    lessons: allLessons,
+                    time_slots: timeSlots,
+                    classes: classes,
+                    stats: {
+                        total_lessons: allLessons.length,
+                        lessons_per_class: classes.reduce((acc, cls) => {
+                            acc[cls.name] = allLessons.filter(l => l.class_id === cls.id).length;
+                            return acc;
+                        }, {}),
+                        rooms_used: [...new Set(allLessons.map(l => l.room))],
+                        teachers_used: [...new Set(allLessons.map(l => l.teacher_name))],
+                        compact_score: calculateCompactScore(allLessons, classes),
+                        lunch_breaks_placed: countLunchBreaks(allLessons, classes),
+                        optimization_applied: true
+                    }
+                };
+            }
+
+            // Generate optimal schedule for a single class
+            function generateOptimalClassSchedule(classInfo, subjectPlans, rooms, teacherAvailability, startTime, endTime, weekdays) {
+                const classLessons = [];
+                const startMinutes = timeToMinutes(startTime);
+                const endMinutes = timeToMinutes(endTime);
+                const maxDailyTime = endMinutes - startMinutes; // Total minutes available per day
+                
+                // Group subjects by day, ensuring no more than 1 lesson per subject per day
+                const dailyPlans = distributeSubjectsAcrossDays(subjectPlans, weekdays);
+                
+                for (const [day, daySubjects] of Object.entries(dailyPlans)) {
+                    if (daySubjects.length === 0) continue;
+                    
+                    // Calculate optimal lesson durations for this day
+                    const optimalSchedule = optimizeDailySchedule(
+                        daySubjects, 
+                        startMinutes, 
+                        endMinutes,
+                        classInfo,
+                        day,
+                        rooms,
+                        teacherAvailability
+                    );
+                    
+                    classLessons.push(...optimalSchedule);
+                }
+                
+                return classLessons;
+            }
+
             function getAvailableRooms() {
                 // Fallback om availableRooms inte är definierad
                 if (typeof availableRooms !== 'undefined' && Array.isArray(availableRooms)) {
@@ -1757,7 +2224,7 @@
                 const allLessons = [];
 
                 // Create teacher availability tracker
-                const teacherAvailability = {};
+                teacherAvailability = {}; // Återställ global variabel
                 const teacherMinBreak = 5; // 5 minutes minimum break between lessons
                 
                 // Initialize teacher availability structure
@@ -1831,28 +2298,130 @@
                     });
                 });
 
-                // Enhanced function to check teacher availability
-                function isTeacherAvailable(teacherId, day, timeSlot, lessonDuration) {
-                    if (!teacherAvailability[teacherId] || !teacherAvailability[teacherId][day]) {
-                        return true; // If teacher tracking is not available, assume available
-                    }
 
-                    const [startTime, endTime] = timeSlot.split('-');
-                    const startMinutes = timeToMinutes(startTime);
-                    const endMinutes = timeToMinutes(endTime);
 
-                    const teacherLessons = teacherAvailability[teacherId][day];
+                // Smart Schedule Generator - Kompakt schema med flexibel lektionslängd
+            function generateSmartCompactSchedule(classes, classSubjectMap, rooms, startTime = '08:00', endTime = '15:00') {
+                debugLog('Generating smart compact schedule with flexible lesson duration:', {
+                    classes: classes.length, 
+                    classSubjectMap, 
+                    rooms: rooms.length, 
+                    startTime, 
+                    endTime
+                });
 
-                    for (const lesson of teacherLessons) {
-                        // Check for overlap or insufficient break time
-                        if (!(endMinutes + teacherMinBreak <= lesson.start || 
-                            startMinutes >= lesson.end + teacherMinBreak)) {
-                            return false; // Conflict found
-                        }
-                    }
-
-                    return true; // No conflicts
+                const actualRooms = (rooms && rooms.length) ? rooms : getAvailableRooms();
+                if (!actualRooms || actualRooms.length === 0) {
+                    throw new Error('Inga klassrum valda. Välj minst ett klassrum.');
                 }
+
+                const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+                const allLessons = [];
+                
+                // Teacher availability tracker
+                const teacherAvailability = {};
+                const teacherMinBreak = 5;
+                
+                if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
+                    availableTeachers.forEach(teacher => {
+                        teacherAvailability[teacher.id] = {};
+                        weekdays.forEach(day => {
+                            teacherAvailability[teacher.id][day] = [];
+                        });
+                    });
+                }
+
+                // Create subject plans for each class
+                const classSubjectPlans = {};
+                
+                classes.forEach(classInfo => {
+                    const cid = classInfo.id;
+                    classSubjectPlans[cid] = [];
+
+                    const items = classSubjectMap[cid] || [];
+                    items.forEach(item => {
+                        const subjectId = item.subject_id;
+                        const subjectName = getSubjectNameById(subjectId) || (availableSubjects.find(s => String(s.id) === String(subjectId))?.name) || `Ämne ${subjectId}`;
+                        const hoursPerWeek = parseInt(item.hours);
+
+                        if (hoursPerWeek > 5) {
+                            throw new Error(`Ämnet "${subjectName}" för klass ${classInfo.name} har ${hoursPerWeek} lektioner, men max 5 är tillåtet`);
+                        }
+
+                        for (let h = 0; h < hoursPerWeek; h++) {
+                            classSubjectPlans[cid].push({
+                                class_id: classInfo.id,
+                                class_name: classInfo.name,
+                                subject_id: subjectId,
+                                subject_name: subjectName,
+                                color: classInfo.color || classColors[Math.floor(Math.random() * classColors.length)]
+                            });
+                        }
+                    });
+                });
+
+                // Smart optimization for each class
+                for (const classInfo of classes) {
+                    const classId = classInfo.id;
+                    const subjectPlans = classSubjectPlans[classId] || [];
+                    
+                    if (subjectPlans.length === 0) continue;
+
+                    // Generate optimal schedule for this class
+                    const classSchedule = generateOptimalClassSchedule(
+                        classInfo, 
+                        subjectPlans, 
+                        actualRooms, 
+                        teacherAvailability, 
+                        startTime, 
+                        endTime,
+                        weekdays
+                    );
+
+                    allLessons.push(...classSchedule);
+                }
+
+                // Generate time slots based on actual lesson times used
+                const usedTimes = new Set();
+                allLessons.forEach(lesson => {
+                    if (lesson.time) usedTimes.add(lesson.time);
+                });
+                const timeSlots = Array.from(usedTimes).sort((a, b) => {
+                    const aStart = timeToMinutes(a.split('-')[0]);
+                    const bStart = timeToMinutes(b.split('-')[0]);
+                    return aStart - bStart;
+                });
+
+                return {
+                    lessons: allLessons,
+                    time_slots: timeSlots,
+                    classes: classes,
+                    stats: {
+                        total_lessons: allLessons.length,
+                        lessons_per_class: classes.reduce((acc, cls) => {
+                            acc[cls.name] = allLessons.filter(l => l.class_id === cls.id).length;
+                            return acc;
+                        }, {}),
+                        rooms_used: [...new Set(allLessons.map(l => l.room))],
+                        teachers_used: [...new Set(allLessons.map(l => l.teacher_name))],
+                        compact_score: calculateCompactScore(allLessons, classes),
+                        lunch_breaks_placed: countLunchBreaks(allLessons, classes),
+                        optimization_applied: true
+                    }
+                };
+            }
+
+            
+
+
+
+
+
+
+
+
+
+                
 
                 // Enhanced function to assign teacher to lesson
                 // Enhanced function to assign teacher to lesson with subject qualification check
