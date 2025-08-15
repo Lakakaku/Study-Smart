@@ -3924,6 +3924,7 @@
 
                         
                         // Rendera lektion bara på start-raden (utan höjdberäkning här)
+                        // Rendera lektion bara på start-raden (utan höjdberäkning här)
                         if (cellData.type === 'lesson-start' && cellData.lesson) {
                             const lessonWithTeacher = {
                                 ...cellData.lesson,
@@ -3931,7 +3932,9 @@
                                 teacher_name: cellData.lesson.teacher_name || cellData.lesson.teacherName || cellData.lesson.teacher
                             };
                             
-                            window.editModeLessons[cellData.lesson.id] = cellData.lesson;
+                            // Store complete lesson data including teacher info
+                            window.editModeLessons[cellData.lesson.id] = lessonWithTeacher;
+                            
                             html += `<div id="lesson-${cellData.lesson.id}" 
                                 class="draggable-lesson spanning-lesson" 
                                 draggable="true"
@@ -3941,6 +3944,8 @@
                                 data-original-day="${day}"
                                 data-original-time="${cellData.lesson.time}"
                                 data-span-rows="${cellData.spanRows}"
+                                data-teacher-id="${lessonWithTeacher.teacher_id || ''}"
+                                data-teacher-name="${escapeHtml(lessonWithTeacher.teacher_name || '')}"
                                 style="position: absolute; left: 1px; right: 1px; background: linear-gradient(135deg, #4299e1, #3182ce); color: white; padding: 4px 8px; border-radius: 6px; cursor: move; box-shadow: 0 2px 4px rgba(0,0,0,0.15); transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.3); z-index: 10; overflow: hidden; font-size: 11px; line-height: 1.2; box-sizing: border-box;"
                                 ondragstart="handleLessonDragStartEnhanced(event)"
                                 ondragend="handleLessonDragEndEnhanced(event)">
@@ -4301,7 +4306,20 @@
                     return;
                 }
                 
-                // Säkerställ att draggedLesson sätts FÖRST
+                // Hämta lärardata från DOM eller window.editModeLessons
+                let teacherId = lessonElement.dataset.teacherId;
+                let teacherName = lessonElement.dataset.teacherName;
+                
+                // Fallback: hämta från editModeLessons om data saknas i DOM
+                if ((!teacherId || !teacherName) && window.editModeLessons) {
+                    const lesson = window.editModeLessons[lessonElement.dataset.lessonId];
+                    if (lesson) {
+                        teacherId = teacherId || lesson.teacher_id || lesson.teacherId;
+                        teacherName = teacherName || lesson.teacher_name || lesson.teacherName || lesson.teacher;
+                    }
+                }
+                
+                // Säkerställ att draggedLesson sätts FÖRST med korrekt lärardata
                 draggedLesson = {
                     element: lessonElement,
                     lessonId: lessonElement.dataset.lessonId,
@@ -4309,8 +4327,8 @@
                     room: lessonElement.dataset.room,
                     originalDay: lessonElement.dataset.originalDay,
                     originalTime: lessonElement.dataset.originalTime,
-                    teacherId: lessonElement.dataset.teacherId || null,
-                    teacherName: lessonElement.dataset.teacherName || null,
+                    teacherId: teacherId || null,
+                    teacherName: teacherName || null,
                     spanRows: parseInt(lessonElement.dataset.spanRows) || 1
                 };
                 
@@ -4400,7 +4418,19 @@
                 // Rensa ursprungscellerna BARA FÖRSTA GÅNGEN
                 clearOriginalLessonCells();
                 
-                if (!draggedLesson || (!draggedLesson.teacherId && !draggedLesson.teacherName)) {
+                if (!draggedLesson) {
+                    debugLog('No draggedLesson available for conflict marking');
+                    return;
+                }
+                
+                // Debug lärardata
+                debugLog('Teacher data for conflict check:', {
+                    teacherId: draggedLesson.teacherId,
+                    teacherName: draggedLesson.teacherName
+                });
+                
+                if (!draggedLesson.teacherId && !draggedLesson.teacherName) {
+                    debugLog('No teacher data available, marking all empty cells as available');
                     // Fallback - mark all empty cells as available
                     document.querySelectorAll('.schedule-cell.empty').forEach(cell => {
                         cell.classList.add('drop-zone');
@@ -4410,23 +4440,42 @@
                     return;
                 }
                 
-                // Get all lessons from DOM (excluding the one being dragged)
+                // Get all lessons from DOM (excluding the one being dragged) with improved data extraction
                 const allCurrentLessons = Array.from(document.querySelectorAll('.spanning-lesson'))
                     .filter(lessonEl => lessonEl.dataset.lessonId !== draggedLesson.lessonId && lessonEl.style.display !== 'none')
                     .map(lessonEl => {
                         const originalTime = lessonEl.dataset.originalTime;
                         if (!originalTime || !originalTime.includes('-')) return null;
                         
+                        let teacherId = lessonEl.dataset.teacherId;
+                        let teacherName = lessonEl.dataset.teacherName;
+                        
+                        // Fallback: hämta från editModeLessons
+                        if ((!teacherId || !teacherName) && window.editModeLessons) {
+                            const lesson = window.editModeLessons[lessonEl.dataset.lessonId];
+                            if (lesson) {
+                                teacherId = teacherId || lesson.teacher_id || lesson.teacherId;
+                                teacherName = teacherName || lesson.teacher_name || lesson.teacherName || lesson.teacher;
+                            }
+                        }
+                        
                         return {
                             id: lessonEl.dataset.lessonId,
                             day: lessonEl.dataset.originalDay,
                             time: originalTime,
-                            teacherId: lessonEl.dataset.teacherId,
-                            teacherName: lessonEl.dataset.teacherName,
+                            teacherId: teacherId,
+                            teacherName: teacherName,
                             room: lessonEl.dataset.room,
                             subject: lessonEl.dataset.subject
                         };
                     }).filter(Boolean);
+                
+                debugLog('Found lessons for conflict check:', allCurrentLessons.map(l => ({
+                    subject: l.subject,
+                    teacher: l.teacherName || l.teacherId,
+                    time: l.time,
+                    day: l.day
+                })));
                 
                 // Mark all cells with conflict checking
                 document.querySelectorAll('.schedule-cell').forEach(cell => {
@@ -4458,7 +4507,7 @@
                         cell.classList.add('teacher-conflict-zone');
                         cell.style.border = '2px solid #f56565 !important';
                         cell.style.background = 'rgba(245, 101, 101, 0.3) !important';
-                        cell.title = `⚠️ Läraren ${draggedLesson.teacherName || 'okänd'} har redan lektion här (10 min buffert krävs)`;
+                        cell.title = `⚠️ Läraren ${draggedLesson.teacherName || draggedLesson.teacherId || 'okänd'} har redan lektion här (10 min buffert krävs)`;
                         
                         // Add conflict icon
                         const conflictIcon = document.createElement('div');
@@ -4593,6 +4642,11 @@
 
 
             function checkTeacherConflictForCell(allLessons, targetDay, targetTimeRange, teacherId, teacherName) {
+                if (!teacherId && !teacherName) {
+                    debugLog('No teacher data available for conflict check');
+                    return false;
+                }
+                
                 const [targetStart, targetEnd] = targetTimeRange.split('-');
                 const targetStartMinutes = timeToMinutes(targetStart);
                 const targetEndMinutes = timeToMinutes(targetEnd);
@@ -4602,9 +4656,17 @@
                 return allLessons.some(lesson => {
                     if (lesson.day !== targetDay) return false;
                     
-                    // Matcha lärare (antingen ID eller namn)
-                    const sameTeacher = (teacherId && lesson.teacherId === teacherId) || 
-                                    (teacherName && lesson.teacherName === teacherName);
+                    // Förbättrad lärarmatching - kontrollera både ID och namn
+                    let sameTeacher = false;
+                    
+                    if (teacherId && lesson.teacherId) {
+                        sameTeacher = lesson.teacherId === teacherId;
+                    } else if (teacherName && lesson.teacherName) {
+                        // Normalisera namn för jämförelse
+                        const normalizedDraggedName = teacherName.toLowerCase().trim();
+                        const normalizedLessonName = lesson.teacherName.toLowerCase().trim();
+                        sameTeacher = normalizedDraggedName === normalizedLessonName;
+                    }
                     
                     if (!sameTeacher) return false;
                     
@@ -4617,6 +4679,14 @@
                     // och befintlig lektion får inte börja inom 10 min efter ny lektion slutar
                     const bufferConflict = (targetStartMinutes < lessonEndMinutes + TEACHER_BUFFER_MINUTES && 
                                         targetEndMinutes + TEACHER_BUFFER_MINUTES > lessonStartMinutes);
+                    
+                    if (bufferConflict) {
+                        debugLog('Teacher conflict detected:', {
+                            teacher: teacherName || teacherId,
+                            conflictLesson: lesson,
+                            targetTime: targetTimeRange
+                        });
+                    }
                     
                     return bufferConflict;
                 });
