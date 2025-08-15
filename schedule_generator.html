@@ -5856,6 +5856,8 @@
             }
             `;
 
+
+
             // Lägg till styles
             if (!document.getElementById('teacher-buffer-styles')) {
                 const styleElement = document.createElement('style');
@@ -5971,6 +5973,40 @@
             `;
 
 
+
+            const preserveGridStyles = `
+                .schedule-cell.lesson-start,
+                .schedule-cell.lesson-middle,
+                .schedule-cell.empty {
+                    height: 20px !important;
+                    border: 1px solid #e2e8f0 !important;
+                    position: relative !important;
+                    vertical-align: top !important;
+                }
+                
+                /* Bevara rutnätet även när celler är tomma under drag */
+                .schedule-cell {
+                    min-height: 20px !important;
+                    box-sizing: border-box !important;
+                }
+                
+                /* Förhindra att lesson-middle celler kollapsar */
+                .schedule-cell.lesson-middle {
+                    background: linear-gradient(135deg, #4299e1, #3182ce) !important;
+                    border-left: 1px solid rgba(255,255,255,0.3) !important;
+                    border-right: 1px solid rgba(255,255,255,0.3) !important;
+                }
+            `;
+
+            // Lägg till styles om de inte redan finns
+            if (!document.getElementById('preserve-grid-styles')) {
+                const styleElement = document.createElement('style');
+                styleElement.id = 'preserve-grid-styles';
+                styleElement.textContent = preserveGridStyles;
+                document.head.appendChild(styleElement);
+            }
+
+
             window.addEventListener('resize', setupAutoScrollBounds);
 
             window.addEventListener('resize', function() {
@@ -6005,7 +6041,6 @@
 
 
             // New function to restore lesson to original position if drop failed
-            // New function to restore lesson to original position if drop failed
             function restoreLessonToOriginalPosition() {
                 if (!draggedLesson || !draggedLesson.originalCells) {
                     debugLog('Cannot restore lesson - missing data');
@@ -6017,19 +6052,24 @@
                 draggedLesson.originalCells.forEach((cell, index) => {
                     const hiddenLesson = cell.querySelector(`#lesson-${draggedLesson.lessonId}`);
                     
+                    if (hiddenLesson) {
+                        // Återställ synligheten
+                        hiddenLesson.style.display = 'block';
+                    }
+                    
+                    // Återställ ursprungliga cellklasser utan att störa rutnätet
                     if (index === 0) {
-                        // Första cellen - återställ lesson-start
-                        cell.classList.remove('empty');
-                        cell.classList.add('lesson-start');
-                        
-                        if (hiddenLesson) {
-                            hiddenLesson.style.display = 'block';
+                        // Första cellen behåller lesson-start
+                        if (!cell.classList.contains('lesson-start')) {
+                            cell.classList.add('lesson-start');
                         }
-                    } else {
-                        // Mellan-celler - återställ lesson-middle
                         cell.classList.remove('empty');
-                        cell.classList.add('lesson-middle');
-                        cell.innerHTML = ''; // Mellan-celler ska vara tomma
+                    } else {
+                        // Mellan-celler behåller lesson-middle
+                        if (!cell.classList.contains('lesson-middle')) {
+                            cell.classList.add('lesson-middle');
+                        }
+                        cell.classList.remove('empty');
                     }
                 });
             }
@@ -6053,11 +6093,10 @@
                         lessonInCell.style.display = 'none';
                     }
                     
-                    // Uppdatera cell classes
-                    cell.classList.remove('lesson-start', 'lesson-middle');
-                    cell.classList.add('empty');
+                    // VIKTIGT: Behåll cellernas ursprungliga klasser och struktur
+                    // Ta INTE bort lesson-start/lesson-middle klasserna här - det påverkar rutnätet
                     
-                    // Behåll cell styling och drop handlers
+                    // Behåll cell styling och drop handlers utan att ändra grundläggande struktur
                     if (!cell.hasAttribute('ondrop')) {
                         cell.setAttribute('ondrop', 'handleLessonDrop(event)');
                         cell.setAttribute('ondragover', 'handleDragOver(event)');
