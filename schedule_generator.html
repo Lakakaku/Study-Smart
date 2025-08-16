@@ -1689,6 +1689,8 @@
 
             // Optimize daily schedule with flexible lesson durations and mandatory lunch
             // 2. FIX: Uppdatera optimizeDailySchedule för att hantera rumsbrist
+            // 3. FIX: Update optimizeDailySchedule to handle room shortage better
+            // 1. FIX: Ersätt optimizeDailySchedule - förhindra överlappningar
             function optimizeDailySchedule(daySubjects, startMinutes, endMinutes, classInfo, day, rooms, teacherAvailability) {
                 const dayLessons = [];
                 if (daySubjects.length === 0) return dayLessons;
@@ -1712,71 +1714,120 @@
                     lessonDuration = Math.max(50, Math.min(100, lessonDuration));
                 }
                 
-                // Create compact schedule
+                // CRITICAL FIX: Track ALL occupied times for this class to prevent overlaps
+                const occupiedTimes = [];
+                
+                // Create compact schedule with NO OVERLAPS
                 let currentTime = startMinutes;
                 let lunchPlaced = false;
+                let skippedLessons = 0;
                 
                 for (let i = 0; i < daySubjects.length; i++) {
                     const subject = daySubjects[i];
                     
                     // Check if we should place lunch break
                     if (!lunchPlaced && shouldPlaceLunchNow(currentTime, lunchStartEarliest, lunchStartLatest, daySubjects.length - i, lessonDuration)) {
+                        // Add lunch to occupied times to prevent lesson placement
+                        occupiedTimes.push({
+                            start: currentTime,
+                            end: currentTime + lunchDuration,
+                            type: 'lunch'
+                        });
                         currentTime += lunchDuration;
                         lunchPlaced = true;
                     }
                     
-                    // Ensure we don't exceed end time
-                    if (currentTime + lessonDuration > endMinutes) {
-                        const remainingSubjects = daySubjects.length - i;
-                        const remainingTime = endMinutes - currentTime;
-                        lessonDuration = Math.max(50, Math.floor(remainingTime / remainingSubjects));
+                    // CRITICAL: Find next available time slot with NO overlaps
+                    let lessonStart = currentTime;
+                    let attempts = 0;
+                    const maxAttempts = 20;
+                    
+                    while (attempts < maxAttempts) {
+                        const lessonEnd = lessonStart + lessonDuration;
+                        
+                        // Check if this time slot overlaps with ANY existing lesson or lunch
+                        let hasOverlap = false;
+                        for (const occupied of occupiedTimes) {
+                            if (!(lessonEnd <= occupied.start || lessonStart >= occupied.end)) {
+                                hasOverlap = true;
+                                break;
+                            }
+                        }
+                        
+                        // If no overlap and within day bounds, place lesson
+                        if (!hasOverlap && lessonEnd <= endMinutes) {
+                            const timeSlot = `${minutesToTime(lessonStart)}-${minutesToTime(lessonEnd)}`;
+                            
+                            // Check room availability
+                            const availableRoom = findAvailableRoom(rooms, day, timeSlot, teacherAvailability);
+                            
+                            if (availableRoom) {
+                                // Assign teacher
+                                const teacherAssignment = assignOptimalTeacher(subject, day, timeSlot, teacherAvailability);
+                                
+                                const lessonData = {
+                                    day: day,
+                                    time: timeSlot,
+                                    class_id: subject.class_id,
+                                    class_name: subject.class_name,
+                                    subject_id: subject.subject_id,
+                                    school_subject_id: subject.school_subject_id || subject.subject_id,
+                                    subject_name: subject.subject_name,
+                                    room: availableRoom,
+                                    teacher_id: teacherAssignment?.teacher_id || 'fallback',
+                                    teacher_name: teacherAssignment?.teacher_name || 'Lärare',
+                                    color: subject.color,
+                                    duration: lessonDuration,
+                                    optimized: true
+                                };
+                                
+                                dayLessons.push(lessonData);
+                                
+                                // CRITICAL: Add to occupied times to prevent future overlaps
+                                occupiedTimes.push({
+                                    start: lessonStart,
+                                    end: lessonEnd,
+                                    type: 'lesson',
+                                    lesson: lessonData
+                                });
+                                
+                                // Reserve teacher time
+                                if (teacherAssignment && teacherAvailability[teacherAssignment.teacher_id]) {
+                                    teacherAvailability[teacherAssignment.teacher_id][day].push({
+                                        start: lessonStart,
+                                        end: lessonEnd,
+                                        lessonId: `${subject.class_name}-${subject.subject_name}-${timeSlot}`
+                                    });
+                                }
+                                
+                                debugLog(`✓ Lesson placed: ${subject.class_name}-${subject.subject_name} ${timeSlot} in ${availableRoom}`);
+                                break; // Successfully placed
+                                
+                            } else {
+                                debugLog(`✗ No room available for ${subject.class_name}-${subject.subject_name} ${timeSlot}`);
+                                skippedLessons++;
+                                break; // Can't place due to room shortage
+                            }
+                            
+                        } else {
+                            // Try next time slot (5 minutes later)
+                            lessonStart += 5;
+                            attempts++;
+                        }
                     }
                     
-                    const lessonStart = minutesToTime(currentTime);
-                    const lessonEnd = minutesToTime(currentTime + lessonDuration);
-                    const timeSlot = `${lessonStart}-${lessonEnd}`;
-                    
-                    // KRITISK: Kontrollera att rum finns tillgängligt
-                    const availableRoom = findAvailableRoom(rooms, day, timeSlot, teacherAvailability);
-                    
-                    if (!availableRoom) {
-                        // Om inget rum finns, hoppa över denna lektion
-                        debugLog(`⚠️ Skipping lesson ${subject.class_name}-${subject.subject_name} on ${day} ${timeSlot} - no rooms available`);
-                        continue;
+                    if (attempts >= maxAttempts) {
+                        debugLog(`⚠️ Could not place lesson ${subject.class_name}-${subject.subject_name} after ${maxAttempts} attempts`);
+                        skippedLessons++;
                     }
                     
-                    // Assign teacher
-                    const teacherAssignment = assignOptimalTeacher(subject, day, timeSlot, teacherAvailability);
-                    
-                    const lessonData = {
-                        day: day,
-                        time: timeSlot,
-                        class_id: subject.class_id,
-                        class_name: subject.class_name,
-                        subject_id: subject.subject_id,
-                        school_subject_id: subject.school_subject_id || subject.subject_id,
-                        subject_name: subject.subject_name,
-                        room: availableRoom,
-                        teacher_id: teacherAssignment?.teacher_id || 'fallback',
-                        teacher_name: teacherAssignment?.teacher_name || 'Lärare',
-                        color: subject.color,
-                        duration: lessonDuration,
-                        optimized: true
-                    };
-                    
-                    dayLessons.push(lessonData);
-                    
-                    // Reserve teacher time
-                    if (teacherAssignment && teacherAvailability[teacherAssignment.teacher_id]) {
-                        teacherAvailability[teacherAssignment.teacher_id][day].push({
-                            start: currentTime,
-                            end: currentTime + lessonDuration,
-                            lessonId: `${subject.class_name}-${subject.subject_name}-${timeSlot}`
-                        });
-                    }
-                    
-                    // Move to next lesson (with minimal 5-minute break)
-                    currentTime += lessonDuration + 5;
+                    // Move current time forward for next lesson (ensuring gap)
+                    currentTime = Math.max(currentTime, lessonStart + lessonDuration + 5);
+                }
+                
+                // Warn if lessons were skipped
+                if (skippedLessons > 0) {
+                    debugLog(`⚠️ WARNING: ${skippedLessons} lessons skipped for ${classInfo.name} on ${day} due to conflicts or room shortage`);
                 }
                 
                 return dayLessons;
@@ -2004,10 +2055,11 @@
             // 1. Fixad findAvailableRoom funktion - förhindrar dubbelbokningar
             // Replace the existing findAvailableRoom function with this improved version
             // 1. FIX: Ersätt findAvailableRoom funktionen - kritisk fix för dubbelbokningar
+            // 1. FIX: Replace the existing findAvailableRoom function completely
             function findAvailableRoom(rooms, day, timeSlot, teacherAvailability) {
                 const roomList = (rooms && rooms.length) ? rooms : getAvailableRooms();
-
-                // Säkerställ global rumsbokningsstruktur
+                
+                // Ensure global room occupancy structure exists
                 if (!globalRoomOccupancy) {
                     globalRoomOccupancy = {};
                 }
@@ -2017,23 +2069,24 @@
                 if (!globalRoomOccupancy[day][timeSlot]) {
                     globalRoomOccupancy[day][timeSlot] = new Set();
                 }
-
+                
                 const occupiedRooms = globalRoomOccupancy[day][timeSlot];
                 
-                // KRITISK FIX: Hitta första lediga rummet
+                // CRITICAL FIX: Find first available room and reserve it IMMEDIATELY
                 for (const room of roomList) {
                     if (!occupiedRooms.has(room)) {
-                        // Markera rummet som upptaget OMEDELBART
+                        // Mark room as occupied IMMEDIATELY to prevent double-booking
                         globalRoomOccupancy[day][timeSlot].add(room);
                         
-                        debugLog(`✓ Room reserved: ${room} for ${day} ${timeSlot}. Remaining rooms: ${roomList.length - occupiedRooms.size - 1}`);
+                        debugLog(`✓ Room reserved: ${room} for ${day} ${timeSlot}. Occupied rooms: ${occupiedRooms.size}/${roomList.length}`);
                         return room;
                     }
                 }
                 
                 debugLog(`✗ NO ROOMS AVAILABLE for ${day} ${timeSlot}. All ${roomList.length} rooms occupied: ${Array.from(occupiedRooms).join(', ')}`);
-                return null; // Returnera null istället för slumpmässigt rum
+                return null; // Return null instead of random room
             }
+
 
 
 
@@ -2207,6 +2260,7 @@
 
             // Smart Schedule Generator - Kompakt schema med flexibel lektionslängd
             // 3. FIX: Förbättra generateSmartCompactScheduleWithConstraints för att hantera rumkonflikter bättre
+            // 2. FIX: Update generateSmartCompactScheduleWithConstraints to reset room occupancy properly
             function generateSmartCompactScheduleWithConstraints(classes, classSubjectMap, rooms, startTime = '08:00', endTime = '15:00', existingTeacherAvailability = {}) {
                 debugLog('Generating smart compact schedule with STRICT room management:', {
                     classes: classes.length, 
@@ -2219,7 +2273,7 @@
                     throw new Error('Inga klassrum valda. Välj minst ett klassrum.');
                 }
                 
-                // KRITISK: Kontrollera att vi har tillräckligt med rum
+                // CRITICAL: Check if we have enough rooms
                 const maxSimultaneousLessons = classes.length;
                 if (actualRooms.length < maxSimultaneousLessons) {
                     debugLog(`Warning: Only ${actualRooms.length} rooms for ${maxSimultaneousLessons} classes - conflicts likely`);
@@ -2228,16 +2282,32 @@
                 const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
                 const allLessons = [];
                 
-                // NOLLSTÄLL globala rumsbokningar
+                // RESET global room occupancy - CRITICAL FIX
                 globalRoomOccupancy = {};
                 weekdays.forEach(day => {
                     globalRoomOccupancy[day] = {};
+                    // Pre-initialize all possible time slots as empty
+                    for (let hour = 8; hour <= 15; hour++) {
+                        for (let minute = 0; minute < 60; minute += 5) {
+                            const timeKey = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                            // Initialize all possible time ranges
+                            for (let duration = 50; duration <= 120; duration += 10) {
+                                const endHour = Math.floor((hour * 60 + minute + duration) / 60);
+                                const endMinute = (hour * 60 + minute + duration) % 60;
+                                if (endHour <= 15) {
+                                    const endKey = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+                                    const slot = `${timeKey}-${endKey}`;
+                                    globalRoomOccupancy[day][slot] = new Set();
+                                }
+                            }
+                        }
+                    }
                 });
                 
-                // Återställ och initialisera med befintliga scheman
+                // Reset and initialize with existing schedules
                 teacherAvailability = JSON.parse(JSON.stringify(existingTeacherAvailability));
                 
-                // Lägg till tomma strukturer för lärare som inte har befintliga scheman
+                // Add empty structures for teachers without existing schedules
                 if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers)) {
                     availableTeachers.forEach(teacher => {
                         if (!teacherAvailability[teacher.id]) {
@@ -2299,7 +2369,7 @@
                     allLessons.push(...classSchedule);
                 }
 
-                // SLUTGILTIG VALIDERING - kasta fel om det finns rumkonflikter
+                // FINAL VALIDATION - throw error if room conflicts exist
                 const finalRoomConflicts = validateFinalRoomBookings(allLessons);
                 if (finalRoomConflicts.length > 0) {
                     debugLog('CRITICAL ERROR: Room conflicts in generated schedule!', finalRoomConflicts);
@@ -2342,6 +2412,7 @@
                     }
                 };
             }
+
 
 
 
@@ -2942,9 +3013,17 @@
             
 
 
+            // 2. FIX: Förbättra findAvailableTimeSlotsForClass för att undvika överlappningar
             function findAvailableTimeSlotsForClass(daySchedule, classId, allTimeSlots, minBreakMinutes) {
                 const availableSlots = [];
                 const classLessons = daySchedule.filter(lesson => lesson.class_id === classId);
+                
+                // CRITICAL: Sort existing lessons by time for proper overlap checking
+                const sortedClassLessons = classLessons.sort((a, b) => {
+                    const aStart = timeToMinutes(a.time.split('-')[0]);
+                    const bStart = timeToMinutes(b.time.split('-')[0]);
+                    return aStart - bStart;
+                });
                 
                 for (const timeSlot of allTimeSlots) {
                     const [startTime, endTime] = timeSlot.split('-');
@@ -2953,16 +3032,19 @@
                     
                     let canPlace = true;
                     
-                    // Kontrollera mot denna klass befintliga lektioner
-                    for (const existingLesson of classLessons) {
+                    // CRITICAL: Check against ALL existing lessons for this class
+                    for (const existingLesson of sortedClassLessons) {
                         const [existingStart, existingEnd] = existingLesson.time.split('-');
                         const existingStartMinutes = timeToMinutes(existingStart);
                         const existingEndMinutes = timeToMinutes(existingEnd);
                         
-                        // Kontrollera överlappning och paus
-                        if (!(endMinutes + minBreakMinutes <= existingStartMinutes || 
-                            startMinutes >= existingEndMinutes + minBreakMinutes)) {
+                        // Check for ANY overlap (not just insufficient break)
+                        const hasOverlap = !(endMinutes + minBreakMinutes <= existingStartMinutes || 
+                                            startMinutes >= existingEndMinutes + minBreakMinutes);
+                        
+                        if (hasOverlap) {
                             canPlace = false;
+                            debugLog(`Time slot ${timeSlot} conflicts with existing lesson ${existingLesson.time} for class ${classId}`);
                             break;
                         }
                     }
@@ -2972,8 +3054,10 @@
                     }
                 }
                 
+                debugLog(`Found ${availableSlots.length} available slots for class ${classId} out of ${allTimeSlots.length} total slots`);
                 return availableSlots;
             }
+
 
 
             function checkTeacherConflicts(lessons) {
@@ -3060,6 +3144,117 @@
                 });
                 
                 return Math.round(totalBalance / classes.length);
+            }
+
+
+            // 3. FIX: Lägg till strikt validering före sparande
+            function validateScheduleBeforeSave(lessons) {
+                const conflicts = {
+                    timeOverlaps: [],
+                    roomConflicts: [],
+                    teacherConflicts: []
+                };
+                
+                // Group lessons by class for overlap checking
+                const lessonsByClass = {};
+                lessons.forEach(lesson => {
+                    if (!lessonsByClass[lesson.class_id]) {
+                        lessonsByClass[lesson.class_id] = [];
+                    }
+                    lessonsByClass[lesson.class_id].push(lesson);
+                });
+                
+                // Check for time overlaps within each class
+                Object.entries(lessonsByClass).forEach(([classId, classLessons]) => {
+                    const dailyLessons = {};
+                    
+                    // Group by day
+                    classLessons.forEach(lesson => {
+                        if (!dailyLessons[lesson.day]) {
+                            dailyLessons[lesson.day] = [];
+                        }
+                        dailyLessons[lesson.day].push(lesson);
+                    });
+                    
+                    // Check overlaps within each day
+                    Object.entries(dailyLessons).forEach(([day, dayLessons]) => {
+                        for (let i = 0; i < dayLessons.length; i++) {
+                            for (let j = i + 1; j < dayLessons.length; j++) {
+                                const lesson1 = dayLessons[i];
+                                const lesson2 = dayLessons[j];
+                                
+                                const [start1, end1] = lesson1.time.split('-');
+                                const [start2, end2] = lesson2.time.split('-');
+                                
+                                const start1Min = timeToMinutes(start1);
+                                const end1Min = timeToMinutes(end1);
+                                const start2Min = timeToMinutes(start2);
+                                const end2Min = timeToMinutes(end2);
+                                
+                                // Check for overlap
+                                if (!(end1Min <= start2Min || start1Min >= end2Min)) {
+                                    conflicts.timeOverlaps.push({
+                                        class_name: lesson1.class_name,
+                                        day: day,
+                                        lesson1: `${lesson1.subject_name} (${lesson1.time})`,
+                                        lesson2: `${lesson2.subject_name} (${lesson2.time})`,
+                                        conflict: `Overlapping lessons in ${lesson1.class_name} on ${day}: ${lesson1.time} vs ${lesson2.time}`
+                                    });
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                // Check room conflicts
+                const roomBookings = {};
+                lessons.forEach(lesson => {
+                    const key = `${lesson.day}-${lesson.time}`;
+                    if (!roomBookings[key]) {
+                        roomBookings[key] = [];
+                    }
+                    roomBookings[key].push(lesson);
+                });
+                
+                Object.entries(roomBookings).forEach(([timeKey, lessonsAtTime]) => {
+                    const roomsUsed = {};
+                    lessonsAtTime.forEach(lesson => {
+                        if (roomsUsed[lesson.room]) {
+                            conflicts.roomConflicts.push({
+                                room: lesson.room,
+                                time: timeKey,
+                                classes: [roomsUsed[lesson.room].class_name, lesson.class_name],
+                                subjects: [roomsUsed[lesson.room].subject_name, lesson.subject_name]
+                            });
+                        } else {
+                            roomsUsed[lesson.room] = lesson;
+                        }
+                    });
+                });
+                
+                // Check teacher conflicts
+                const teacherBookings = {};
+                lessons.forEach(lesson => {
+                    if (lesson.teacher_id && lesson.teacher_id !== 'fallback') {
+                        const key = `${lesson.day}-${lesson.time}`;
+                        if (!teacherBookings[key]) {
+                            teacherBookings[key] = {};
+                        }
+                        
+                        if (teacherBookings[key][lesson.teacher_id]) {
+                            conflicts.teacherConflicts.push({
+                                teacher: lesson.teacher_name || lesson.teacher_id,
+                                time: key,
+                                classes: [teacherBookings[key][lesson.teacher_id].class_name, lesson.class_name],
+                                subjects: [teacherBookings[key][lesson.teacher_id].subject_name, lesson.subject_name]
+                            });
+                        } else {
+                            teacherBookings[key][lesson.teacher_id] = lesson;
+                        }
+                    }
+                });
+                
+                return conflicts;
             }
 
             function validateMultiClassConstraints(schedule, classes) {
@@ -6330,29 +6525,63 @@
             // Update the saveMultiClassSchedule function to validate before saving
             // 5. Lägg till validering före sparande
             // 5. LÄGG TILL: Validering före sparande (ersätt din befintliga saveMultiClassSchedule)
+            // 4. FIX: Uppdatera saveMultiClassSchedule med strikt validering
             async function saveMultiClassSchedule() {
                 if (!currentSchedule || !currentSchedule.lessons) {
                     alert('Inget schema att spara');
                     return;
                 }
-
-                // KRITISK: Validera rumkonflikter före sparande
-                const roomConflicts = validateFinalRoomBookings(currentSchedule.lessons);
-                if (roomConflicts.length > 0) {
-                    debugLog('Save blocked due to room conflicts:', roomConflicts);
-                    alert(`❌ Schema kan inte sparas!\n\nRumkonflikter upptäckta:\n${roomConflicts.map(c => `• ${c.room} är dubbelbokat ${c.timeSlot}\n  ${c.classes.join(' & ')}: ${c.subjects.join(' vs ')}`).join('\n\n')}\n\nGenerera ett nytt schema för att lösa konflikterna.`);
+                
+                // CRITICAL: Comprehensive validation before save
+                const conflicts = validateScheduleBeforeSave(currentSchedule.lessons);
+                
+                // Check for any conflicts
+                const hasConflicts = conflicts.timeOverlaps.length > 0 || 
+                                    conflicts.roomConflicts.length > 0 || 
+                                    conflicts.teacherConflicts.length > 0;
+                
+                if (hasConflicts) {
+                    let errorMessage = '❌ Schema kan inte sparas på grund av konflikter:\n\n';
+                    
+                    if (conflicts.timeOverlaps.length > 0) {
+                        errorMessage += '🕐 TIDSÖVERLAPPNINGAR:\n';
+                        conflicts.timeOverlaps.forEach(conflict => {
+                            errorMessage += `• ${conflict.class_name} (${conflict.day}): ${conflict.lesson1} ↔ ${conflict.lesson2}\n`;
+                        });
+                        errorMessage += '\n';
+                    }
+                    
+                    if (conflicts.roomConflicts.length > 0) {
+                        errorMessage += '🏫 RUMKONFLIKTER:\n';
+                        conflicts.roomConflicts.forEach(conflict => {
+                            errorMessage += `• ${conflict.room} (${conflict.time}): ${conflict.classes.join(' & ')}\n`;
+                        });
+                        errorMessage += '\n';
+                    }
+                    
+                    if (conflicts.teacherConflicts.length > 0) {
+                        errorMessage += '👨‍🏫 LÄRARKONFLIKTER:\n';
+                        conflicts.teacherConflicts.forEach(conflict => {
+                            errorMessage += `• ${conflict.teacher} (${conflict.time}): ${conflict.classes.join(' & ')}\n`;
+                        });
+                        errorMessage += '\n';
+                    }
+                    
+                    errorMessage += 'Generera ett nytt schema för att lösa konflikterna.';
+                    
+                    debugLog('Save blocked due to schedule conflicts:', conflicts);
+                    alert(errorMessage);
                     return;
                 }
-
+                
                 try {
                     const classIds = selectedClasses.map(c => parseInt(c.id));
-                    
-                    debugLog('Saving validated multi-class schedule:', { 
+                    debugLog('Saving validated conflict-free schedule:', { 
                         classes: classIds.length, 
-                        lessons: currentSchedule.lessons.length, 
-                        roomConflicts: 0 
+                        lessons: currentSchedule.lessons.length,
+                        validation: 'PASSED'
                     });
-
+                    
                     const response = await fetch('/api/multi_class_schedule/save', {
                         method: 'POST',
                         headers: {
@@ -6363,21 +6592,20 @@
                             lessons: currentSchedule.lessons
                         })
                     });
-
+                    
                     const result = await response.json();
-
+                    
                     if (response.ok && result.success) {
-                        alert(`✅ Schema sparat!\n\n${result.details.map(d => `${d.class_name}: ${d.lessons_saved} lektioner`).join('\n')}`);
+                        alert(`✅ Schema sparat utan konflikter!\n\n${result.details.map(d => `${d.class_name}: ${d.lessons_saved} lektioner`).join('\n')}`);
                         
                         scheduleSaveState.hasUnsavedChanges = false;
                         scheduleSaveState.lastSavedSchedule = JSON.parse(JSON.stringify(currentSchedule));
                         updateScheduleUI();
                         updateClassScheduleStatus();
-                        
                     } else {
                         throw new Error(result.error || 'Okänt fel');
                     }
-
+                    
                 } catch (error) {
                     console.error('Error saving multi-class schedule:', error);
                     alert(`❌ Fel vid sparande: ${error.message}`);
