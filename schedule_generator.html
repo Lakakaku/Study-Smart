@@ -1691,6 +1691,7 @@
             // 2. FIX: Uppdatera optimizeDailySchedule för att hantera rumsbrist
             // 3. FIX: Update optimizeDailySchedule to handle room shortage better
             // 1. FIX: Ersätt optimizeDailySchedule - förhindra överlappningar
+            // Ersätt optimizeDailySchedule funktionen med denna förbättrade version
             function optimizeDailySchedule(daySubjects, startMinutes, endMinutes, classInfo, day, rooms, teacherAvailability) {
                 const dayLessons = [];
                 if (daySubjects.length === 0) return dayLessons;
@@ -1717,17 +1718,22 @@
                 // CRITICAL FIX: Track ALL occupied times for this class to prevent overlaps
                 const occupiedTimes = [];
                 
+                // Create subject queue for systematic placement
+                const subjectQueue = [...daySubjects];
+                const failedPlacements = [];
+                
                 // Create compact schedule with NO OVERLAPS
                 let currentTime = startMinutes;
                 let lunchPlaced = false;
-                let skippedLessons = 0;
                 
-                for (let i = 0; i < daySubjects.length; i++) {
-                    const subject = daySubjects[i];
+                while (subjectQueue.length > 0) {
+                    const subject = subjectQueue.shift();
+                    let lessonPlaced = false;
+                    let attempts = 0;
+                    const maxAttemptsPerSubject = 50;
                     
                     // Check if we should place lunch break
-                    if (!lunchPlaced && shouldPlaceLunchNow(currentTime, lunchStartEarliest, lunchStartLatest, daySubjects.length - i, lessonDuration)) {
-                        // Add lunch to occupied times to prevent lesson placement
+                    if (!lunchPlaced && shouldPlaceLunchNow(currentTime, lunchStartEarliest, lunchStartLatest, subjectQueue.length + 1, lessonDuration)) {
                         occupiedTimes.push({
                             start: currentTime,
                             end: currentTime + lunchDuration,
@@ -1737,12 +1743,19 @@
                         lunchPlaced = true;
                     }
                     
-                    // CRITICAL: Find next available time slot with NO overlaps
-                    let lessonStart = currentTime;
-                    let attempts = 0;
-                    const maxAttempts = 20;
-                    
-                    while (attempts < maxAttempts) {
+                    // Try multiple time slots for this subject
+                    while (!lessonPlaced && attempts < maxAttemptsPerSubject) {
+                        let lessonStart = currentTime + (attempts * 5); // Try every 5 minutes
+                        
+                        // Ensure we don't go beyond end time
+                        if (lessonStart + lessonDuration > endMinutes) {
+                            lessonStart = startMinutes + (attempts * 10); // Start from beginning with bigger steps
+                        }
+                        
+                        if (lessonStart + lessonDuration > endMinutes) {
+                            break; // No more time available
+                        }
+                        
                         const lessonEnd = lessonStart + lessonDuration;
                         
                         // Check if this time slot overlaps with ANY existing lesson or lunch
@@ -1754,19 +1767,19 @@
                             }
                         }
                         
-                        // If no overlap and within day bounds, place lesson
+                        // If no overlap and within day bounds, try to place lesson
                         if (!hasOverlap && lessonEnd <= endMinutes) {
                             const timeSlot = `${minutesToTime(lessonStart)}-${minutesToTime(lessonEnd)}`;
                             
                             // Check room availability
                             const availableRoom = findAvailableRoom(rooms, day, timeSlot, teacherAvailability);
                             
-                            // Ersätt denna del av optimizeDailySchedule:
                             if (availableRoom) {
-                                // Assign teacher
+                                // Try to assign teacher
                                 const teacherAssignment = assignOptimalTeacher(subject, day, timeSlot, teacherAvailability);
                                 
                                 if (teacherAssignment) {
+                                    // Successfully placed lesson
                                     const lessonData = {
                                         day: day,
                                         time: timeSlot,
@@ -1775,7 +1788,7 @@
                                         subject_id: subject.subject_id,
                                         school_subject_id: subject.school_subject_id || subject.subject_id,
                                         subject_name: subject.subject_name || 'Okänt ämne',
-                                        room: availableRoom || 'Inget rum',
+                                        room: availableRoom,
                                         teacher_id: teacherAssignment?.teacher_id || null,
                                         teacher_name: teacherAssignment?.teacher_name || 'Ingen lärare',
                                         color: subject.color || '#9f7aea',
@@ -1785,7 +1798,7 @@
                                     
                                     dayLessons.push(lessonData);
                                     
-                                    // LÄGG TILL occupied times och teacher reservation
+                                    // Mark time as occupied
                                     occupiedTimes.push({
                                         start: lessonStart,
                                         end: lessonEnd,
@@ -1793,6 +1806,7 @@
                                         lesson: lessonData
                                     });
                                     
+                                    // Mark teacher as busy
                                     if (teacherAvailability[teacherAssignment.teacher_id]) {
                                         teacherAvailability[teacherAssignment.teacher_id][day].push({
                                             start: lessonStart,
@@ -1801,43 +1815,110 @@
                                         });
                                     }
                                     
+                                    lessonPlaced = true;
+                                    currentTime = Math.max(currentTime, lessonEnd + 5); // Move forward
+                                    
                                     debugLog(`✓ Lesson placed: ${subject.class_name}-${subject.subject_name} ${timeSlot} in ${availableRoom}`);
-                                    break; // Successfully placed
+                                    break;
                                     
                                 } else {
-                                    // ÄNDRING: Om ingen behörig lärare finns, frigör rummet och försök nästa tidslucka
+                                    // No qualified teacher, release room and continue searching
                                     globalRoomOccupancy[day][timeSlot].delete(availableRoom);
                                     debugLog(`✗ No qualified teacher for ${subject.class_name}-${subject.subject_name} ${timeSlot}, trying next slot`);
-                                    lessonStart += 5; // Försök 5 minuter senare
-                                    attempts++;
-                                    continue; // Fortsätt loopen för att hitta bättre tid
                                 }
-                                
                             } else {
                                 debugLog(`✗ No room available for ${subject.class_name}-${subject.subject_name} ${timeSlot}`);
-                                skippedLessons++;
-                                break; // Can't place due to room shortage
                             }
-                            
-                        } else {
-                            // Try next time slot (5 minutes later)
-                            lessonStart += 5;
-                            attempts++;
                         }
+                        
+                        attempts++;
                     }
                     
-                    if (attempts >= maxAttempts) {
-                        debugLog(`⚠️ Could not place lesson ${subject.class_name}-${subject.subject_name} after ${maxAttempts} attempts`);
-                        skippedLessons++;
+                    // If lesson couldn't be placed, add to failed queue for retry
+                    if (!lessonPlaced) {
+                        failedPlacements.push(subject);
+                        debugLog(`⚠️ Could not place ${subject.class_name}-${subject.subject_name} on ${day}, will retry`);
                     }
-                    
-                    // Move current time forward for next lesson (ensuring gap)
-                    currentTime = Math.max(currentTime, lessonStart + lessonDuration + 5);
                 }
                 
-                // Warn if lessons were skipped
-                if (skippedLessons > 0) {
-                    debugLog(`⚠️ WARNING: ${skippedLessons} lessons skipped for ${classInfo.name} on ${day} due to conflicts or room shortage`);
+                // CRITICAL: Retry failed placements with more flexible scheduling
+                if (failedPlacements.length > 0) {
+                    debugLog(`🔄 Retrying ${failedPlacements.length} failed placements with flexible scheduling...`);
+                    
+                    for (const subject of failedPlacements) {
+                        let lessonPlaced = false;
+                        
+                        // Try all possible time slots across the entire day
+                        for (let startTime = startMinutes; startTime + 50 <= endMinutes; startTime += 15) {
+                            const flexibleDuration = Math.min(90, Math.max(50, endMinutes - startTime - 60)); // Flexible duration
+                            const lessonEnd = startTime + flexibleDuration;
+                            
+                            // Check availability
+                            let hasOverlap = false;
+                            for (const occupied of occupiedTimes) {
+                                if (!(lessonEnd + 10 <= occupied.start || startTime >= occupied.end + 10)) { // Allow smaller gaps
+                                    hasOverlap = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (!hasOverlap) {
+                                const timeSlot = `${minutesToTime(startTime)}-${minutesToTime(lessonEnd)}`;
+                                const availableRoom = findAvailableRoom(rooms, day, timeSlot, teacherAvailability);
+                                
+                                if (availableRoom) {
+                                    const teacherAssignment = assignOptimalTeacher(subject, day, timeSlot, teacherAvailability);
+                                    
+                                    if (teacherAssignment) {
+                                        const lessonData = {
+                                            day: day,
+                                            time: timeSlot,
+                                            class_id: subject.class_id,
+                                            class_name: subject.class_name || `Klass ${subject.class_id}`,
+                                            subject_id: subject.subject_id,
+                                            school_subject_id: subject.school_subject_id || subject.subject_id,
+                                            subject_name: subject.subject_name || 'Okänt ämne',
+                                            room: availableRoom,
+                                            teacher_id: teacherAssignment?.teacher_id || null,
+                                            teacher_name: teacherAssignment?.teacher_name || 'Ingen lärare',
+                                            color: subject.color || '#9f7aea',
+                                            duration: flexibleDuration,
+                                            optimized: true,
+                                            rescheduled: true
+                                        };
+                                        
+                                        dayLessons.push(lessonData);
+                                        
+                                        occupiedTimes.push({
+                                            start: startTime,
+                                            end: lessonEnd,
+                                            type: 'lesson',
+                                            lesson: lessonData
+                                        });
+                                        
+                                        if (teacherAvailability[teacherAssignment.teacher_id]) {
+                                            teacherAvailability[teacherAssignment.teacher_id][day].push({
+                                                start: startTime,
+                                                end: lessonEnd,
+                                                lessonId: `${subject.class_name}-${subject.subject_name}-${timeSlot}-retry`
+                                            });
+                                        }
+                                        
+                                        lessonPlaced = true;
+                                        debugLog(`✅ RETRY SUCCESS: ${subject.class_name}-${subject.subject_name} rescheduled to ${timeSlot}`);
+                                        break;
+                                        
+                                    } else {
+                                        globalRoomOccupancy[day][timeSlot].delete(availableRoom);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (!lessonPlaced) {
+                            debugLog(`❌ CRITICAL: Could not place ${subject.class_name}-${subject.subject_name} on ${day} even with flexible scheduling`);
+                        }
+                    }
                 }
                 
                 return dayLessons;
@@ -2556,8 +2637,9 @@
             // Uppdatera generateMultiClassScheduleWithConstraints funktionen - ersätt roomOccupancy-initieringen och användningen
             // 3. Uppdaterad generateMultiClassScheduleWithConstraints - med bättre rumskontroll
             // Replace the entire generateMultiClassScheduleWithConstraints function
+            // Uppdatera generateMultiClassScheduleWithConstraints för att hantera omfördelning mellan dagar
             function generateMultiClassScheduleWithConstraints(classes, classSubjectMap, rooms, startTime, endTime, lessonDuration) {
-                debugLog('Generating multi-class schedule with STRICT room conflict prevention:', {
+                debugLog('Generating multi-class schedule with GUARANTEED lesson placement:', {
                     classes: classes.length, 
                     rooms: rooms.length, 
                     startTime, 
@@ -2574,7 +2656,7 @@
                 const timeSlots = generateTimeSlots(startTime || '08:00', endTime || '15:00', lessonDuration);
                 const allLessons = [];
 
-                // NOLLSTÄLL globala rumsbokningar
+                // Reset global room occupancy
                 globalRoomOccupancy = {};
                 weekdays.forEach(day => {
                     globalRoomOccupancy[day] = {};
@@ -2583,7 +2665,7 @@
                     });
                 });
 
-                // Initialisera läraravailability
+                // Initialize teacher availability
                 teacherAvailability = {};
                 if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
                     availableTeachers.forEach(teacher => {
@@ -2594,12 +2676,14 @@
                     });
                 }
 
-                // Skapa ämneplaner per klass
+                // Create subject plans per class with EXACT hour tracking
                 const classSubjectPlans = {};
+                const classSubjectCounts = {}; // Track required vs placed lessons
                 
                 classes.forEach(classInfo => {
                     const cid = classInfo.id;
                     classSubjectPlans[cid] = [];
+                    classSubjectCounts[cid] = {};
 
                     const items = classSubjectMap[cid] || [];
                     items.forEach(item => {
@@ -2611,19 +2695,26 @@
                             throw new Error(`Ämnet "${subjectName}" för klass ${classInfo.name} har ${hoursPerWeek} lektioner, men max 5 är tillåtet`);
                         }
 
+                        // Track required lessons
+                        classSubjectCounts[cid][subjectName] = {
+                            required: hoursPerWeek,
+                            placed: 0
+                        };
+
                         for (let h = 0; h < hoursPerWeek; h++) {
                             classSubjectPlans[cid].push({
                                 class_id: classInfo.id,
                                 class_name: classInfo.name,
                                 subject_id: subjectId,
                                 subject_name: subjectName,
-                                color: classInfo.color || classColors[Math.floor(Math.random() * classColors.length)]
+                                color: classInfo.color || classColors[Math.floor(Math.random() * classColors.length)],
+                                lessonNumber: h + 1
                             });
                         }
                     });
                 });
 
-                // Globala schemastrukturer
+                // Global schedule structures
                 const globalSchedule = {};
                 const classSubjectsByDay = {};
                 
@@ -2636,126 +2727,186 @@
                     });
                 });
 
-                // Förbered alla lektioner för placering
+                // Prepare all lessons for placement with priority queue
                 const allLessonsToPlace = [];
                 Object.keys(classSubjectPlans).forEach(classId => {
                     classSubjectPlans[classId].forEach(lesson => {
-                        allLessonsToPlace.push(lesson);
+                        allLessonsToPlace.push({
+                            ...lesson,
+                            priority: Math.random(), // Randomize initial placement
+                            attempts: 0
+                        });
                     });
                 });
 
-                // Randomisera för bättre fördelning
-                allLessonsToPlace.sort(() => Math.random() - 0.5);
+                // Sort by priority for fair distribution
+                allLessonsToPlace.sort((a, b) => a.priority - b.priority);
 
-                debugLog('Starting lesson placement with STRICT room validation...', {totalLessons: allLessonsToPlace.length, availableRooms: actualRooms.length});
+                debugLog('Starting lesson placement with GUARANTEED placement strategy...', {
+                    totalLessons: allLessonsToPlace.length, 
+                    availableRooms: actualRooms.length
+                });
 
                 let placedLessons = 0;
-                let roomConflictAttempts = 0;
-                let teacherConflictAttempts = 0;
-
-                for (const lesson of allLessonsToPlace) {
-                    let placed = false;
-                    let attempts = 0;
-                    const maxAttempts = 500;
-
-                    while (!placed && attempts < maxAttempts) {
-                        const availableDays = weekdays.filter(day => 
-                            !classSubjectsByDay[day][lesson.class_id].has(lesson.subject_name)
-                        );
+                let totalAttempts = 0;
+                const maxRounds = 10; // Multiple placement rounds
+                
+                for (let round = 0; round < maxRounds && allLessonsToPlace.length > 0; round++) {
+                    debugLog(`📍 Placement Round ${round + 1}: ${allLessonsToPlace.length} lessons remaining`);
+                    
+                    const lessonsThisRound = [...allLessonsToPlace];
+                    allLessonsToPlace.length = 0; // Clear for failed lessons
+                    
+                    for (const lesson of lessonsThisRound) {
+                        let placed = false;
+                        lesson.attempts++;
+                        totalAttempts++;
+                        
+                        // Get available days (avoid same subject on same day initially, but be flexible in later rounds)
+                        let availableDays;
+                        if (round < 3) {
+                            // Strict: no same subject on same day
+                            availableDays = weekdays.filter(day => 
+                                !classSubjectsByDay[day][lesson.class_id].has(lesson.subject_name)
+                            );
+                        } else {
+                            // Flexible: allow same subject on same day if needed
+                            availableDays = weekdays.slice();
+                        }
                         
                         if (availableDays.length === 0) {
-                            throw new Error(`Kan inte placera fler lektioner i ${lesson.subject_name} för klass ${lesson.class_name} - alla dagar upptagna`);
+                            availableDays = weekdays.slice(); // Force placement
                         }
 
+                        // Sort days by current load for better distribution
                         availableDays.sort((a, b) => {
                             const aCount = globalSchedule[a].filter(l => l.class_id === lesson.class_id).length;
                             const bCount = globalSchedule[b].filter(l => l.class_id === lesson.class_id).length;
                             return aCount - bCount;
                         });
                         
-                        const day = availableDays[0];
-                        const availableSlots = findAvailableTimeSlotsForClass(
-                            globalSchedule[day], lesson.class_id, timeSlots, 10
-                        );
-                        
-                        if (availableSlots.length > 0) {
-                            const shuffledSlots = [...availableSlots].sort(() => Math.random() - 0.5);
+                        // Try each day
+                        for (const day of availableDays) {
+                            const availableSlots = findAvailableTimeSlotsForClass(
+                                globalSchedule[day], 
+                                lesson.class_id, 
+                                timeSlots, 
+                                Math.max(5, 15 - round * 2) // Reduce gap requirement in later rounds
+                            );
                             
-                            // I denna sektion av generateMultiClassScheduleWithConstraints:
-                            for (const timeSlot of shuffledSlots) {
-                                // FÖRSTA: Kontrollera att rummet verkligen är ledigt
-                                const availableRoom = findAvailableRoom(actualRooms, day, timeSlot, teacherAvailability);
+                            if (availableSlots.length > 0) {
+                                // Shuffle slots for fair distribution
+                                const shuffledSlots = [...availableSlots].sort(() => Math.random() - 0.5);
                                 
-                                if (availableRoom) {
-                                    // ANDRA: Försök tilldela behörig lärare
-                                    const teacherAssignment = assignTeacherToLesson(lesson, day, timeSlot);
+                                for (const timeSlot of shuffledSlots) {
+                                    const availableRoom = findAvailableRoom(actualRooms, day, timeSlot, teacherAvailability);
                                     
-                                    if (teacherAssignment) {
-                                        // Skapa lektionen
-                                        const lessonData = {
-                                            day: day,
-                                            time: timeSlot,
-                                            class_id: lesson.class_id,
-                                            class_name: lesson.class_name,
-                                            subject_id: lesson.subject_id,
-                                            school_subject_id: lesson.school_subject_id || lesson.subject_id,
-                                            subject_name: lesson.subject_name,
-                                            room: availableRoom,
-                                            teacher_id: teacherAssignment.teacher_id,
-                                            teacher_name: teacherAssignment.teacher_name,
-                                            color: lesson.color,
-                                            start_minutes: timeToMinutes(timeSlot.split('-')[0])
-                                        };
-
-
-
-                                        // Placera lektionen
-                                        globalSchedule[day].push(lessonData);
-                                        classSubjectsByDay[day][lesson.class_id].add(lesson.subject_name);
-                                        allLessons.push(lessonData);
+                                    if (availableRoom) {
+                                        const teacherAssignment = assignTeacherToLesson(lesson, day, timeSlot);
                                         
-                                        placed = true;
-                                        placedLessons++;
-                                        break;
-                                    } else {
-                                        // ÄNDRING: Frigör rummet och fortsätt söka efter bättre tid
-                                        globalRoomOccupancy[day][timeSlot].delete(availableRoom);
-                                        teacherConflictAttempts++;
-                                        debugLog(`✗ No qualified teacher for ${lesson.class_name}-${lesson.subject_name}, released room ${availableRoom}, trying next slot`);
-                                        // Fortsätt till nästa tidslucka istället för att använda backup-lärare
+                                        if (teacherAssignment) {
+                                            // Success! Create lesson
+                                            const lessonData = {
+                                                day: day,
+                                                time: timeSlot,
+                                                class_id: lesson.class_id,
+                                                class_name: lesson.class_name,
+                                                subject_id: lesson.subject_id,
+                                                school_subject_id: lesson.school_subject_id || lesson.subject_id,
+                                                subject_name: lesson.subject_name,
+                                                room: availableRoom,
+                                                teacher_id: teacherAssignment.teacher_id,
+                                                teacher_name: teacherAssignment.teacher_name,
+                                                color: lesson.color,
+                                                start_minutes: timeToMinutes(timeSlot.split('-')[0]),
+                                                placementRound: round + 1
+                                            };
+
+                                            // Place lesson
+                                            globalSchedule[day].push(lessonData);
+                                            classSubjectsByDay[day][lesson.class_id].add(lesson.subject_name);
+                                            allLessons.push(lessonData);
+                                            
+                                            // Update counters
+                                            classSubjectCounts[lesson.class_id][lesson.subject_name].placed++;
+                                            placedLessons++;
+                                            placed = true;
+                                            
+                                            debugLog(`✅ Round ${round + 1}: ${lesson.class_name}-${lesson.subject_name} placed on ${day} ${timeSlot}`);
+                                            break;
+                                            
+                                        } else {
+                                            // Release room and continue
+                                            globalRoomOccupancy[day][timeSlot].delete(availableRoom);
+                                        }
                                     }
-
-                                } else {
-                                    roomConflictAttempts++;
-                                    debugLog(`✗ No rooms available for ${lesson.class_name}-${lesson.subject_name} on ${day} ${timeSlot}`);
                                 }
+                                
+                                if (placed) break;
                             }
-                        
                         }
-                        attempts++;
-                    }
 
-                    if (!placed) {
-                        throw new Error(`Kunde inte placera ${lesson.subject_name} för ${lesson.class_name} efter ${maxAttempts} försök. Rumkonflikter: ${roomConflictAttempts}, Lärarkonflikter: ${teacherConflictAttempts}`);
+                        // If not placed, add back to queue for next round (with higher priority)
+                        if (!placed) {
+                            lesson.priority -= 0.1; // Higher priority for next round
+                            allLessonsToPlace.push(lesson);
+                            debugLog(`⏳ Round ${round + 1}: ${lesson.class_name}-${lesson.subject_name} queued for retry (attempt ${lesson.attempts})`);
+                        }
+                    }
+                    
+                    debugLog(`📊 Round ${round + 1} complete: ${placedLessons} lessons placed, ${allLessonsToPlace.length} remaining`);
+                    
+                    // If no progress in this round, break
+                    if (lessonsThisRound.length === allLessonsToPlace.length) {
+                        debugLog('⚠️ No progress in this round - breaking placement loop');
+                        break;
                     }
                 }
 
-                // KRITISK: Validera att inga rumkonflikter finns före retur
-                const finalRoomConflicts = validateFinalRoomBookings(allLessons);
-                if (finalRoomConflicts.length > 0) {
-                    debugLog('CRITICAL: Room conflicts detected in final schedule!', finalRoomConflicts);
-                    throw new Error(`Kritiska rumkonflikter upptäcktes: ${finalRoomConflicts.length} dubbelbokning(ar). Schema kan inte sparas.`);
-                }
-
-                // Rensa hjälpdata
-                allLessons.forEach(lesson => {
-                    delete lesson.start_minutes;
+                // Final validation - check if all required lessons are placed
+                const missingLessons = [];
+                Object.keys(classSubjectCounts).forEach(classId => {
+                    const className = classes.find(c => c.id == classId)?.name || classId;
+                    Object.keys(classSubjectCounts[classId]).forEach(subjectName => {
+                        const count = classSubjectCounts[classId][subjectName];
+                        if (count.placed < count.required) {
+                            missingLessons.push({
+                                class: className,
+                                subject: subjectName,
+                                missing: count.required - count.placed,
+                                placed: count.placed,
+                                required: count.required
+                            });
+                        }
+                    });
                 });
 
-                debugLog('Schedule generation completed with ZERO room conflicts:', {
+                if (missingLessons.length > 0) {
+                    const errorMsg = `⚠️ Kunde inte schemalägga alla lektioner:\n\n${missingLessons.map(m => 
+                        `• ${m.class} - ${m.subject}: ${m.placed}/${m.required} lektioner (saknas: ${m.missing})`
+                    ).join('\n')}\n\nLösningar:\n• Lägg till fler klassrum\n• Minska lektioner per ämne\n• Kontrollera lärarbehörigheter`;
+                    
+                    debugLog('❌ Missing lessons detected:', missingLessons);
+                    throw new Error(errorMsg);
+                }
+
+                // Final room conflict validation
+                const finalRoomConflicts = validateFinalRoomBookings(allLessons);
+                if (finalRoomConflicts.length > 0) {
+                    debugLog('CRITICAL: Room conflicts detected!', finalRoomConflicts);
+                    throw new Error(`Rumkonflikter upptäcktes: ${finalRoomConflicts.length} konflikter`);
+                }
+
+                // Clean up helper data
+                allLessons.forEach(lesson => {
+                    delete lesson.start_minutes;
+                    delete lesson.placementRound;
+                });
+
+                debugLog('✅ ALL LESSONS SUCCESSFULLY PLACED:', {
                     totalPlaced: placedLessons,
-                    roomConflictAttempts: roomConflictAttempts,
-                    teacherConflictAttempts: teacherConflictAttempts,
+                    totalAttempts: totalAttempts,
+                    averageAttemptsPerLesson: (totalAttempts / placedLessons).toFixed(1),
                     finalValidation: 'PASSED'
                 });
 
@@ -2769,12 +2920,13 @@
                             acc[cls.name] = allLessons.filter(l => l.class_id === cls.id).length;
                             return acc;
                         }, {}),
+                        subject_distribution: classSubjectCounts,
                         rooms_used: [...new Set(allLessons.map(l => l.room))],
                         teachers_used: [...new Set(allLessons.map(l => l.teacher_name))],
                         room_conflicts: 0,
                         teacher_conflicts: checkTeacherConflicts(allLessons),
-                        room_conflict_attempts: roomConflictAttempts,
-                        teacher_conflict_attempts: teacherConflictAttempts
+                        placement_success_rate: '100%',
+                        total_placement_attempts: totalAttempts
                     }
                 };
             }
