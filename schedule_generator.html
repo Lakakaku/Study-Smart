@@ -1334,6 +1334,7 @@
 
 
             // Uppdatera renderSubjects funktionen för att inkludera lärarhantering
+            // 3. Uppdatera renderSubjects funktionen (JavaScript - ersätt befintlig):
             function renderSubjects() {
                 const container = document.getElementById('existingSubjects');
                 const noMessage = document.getElementById('noSubjectsMessage');
@@ -1365,6 +1366,10 @@
                                 <button type="button" class="btn" onclick="manageTeachers(${subject.id}, '${subject.name}')" 
                                         style="background: #4299e1; color: white; padding: 0.375rem 0.75rem; font-size: 0.8rem;">
                                     👨‍🏫 Lärare
+                                </button>
+                                <button type="button" class="btn" onclick="manageTeacherRooms(${subject.id}, '${subject.name}')" 
+                                        style="background: #9f7aea; color: white; padding: 0.375rem 0.75rem; font-size: 0.8rem;">
+                                    🏫 Rum
                                 </button>
                                 <button type="button" class="remove-subject-btn" onclick="removeSubject(${subject.id})" 
                                         style="background: #f56565; color: white; padding: 0.25rem 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
@@ -1581,6 +1586,275 @@
                 const modal = document.getElementById('teacherModal');
                 if (event.target === modal) {
                     closeTeacherModal();
+                }
+            }
+
+
+
+            async function manageTeacherRooms(subjectId, subjectName) {
+                try {
+                    // Hämta behöriga lärare för ämnet
+                    const qualResponse = await fetch(`/api/teacher_qualifications/${subjectId}`);
+                    const qualData = await qualResponse.json();
+                    
+                    if (!qualData.success) {
+                        alert('Fel vid laddning av lärardata');
+                        return;
+                    }
+                    
+                    if (qualData.qualified_teachers.length === 0) {
+                        alert('Inga behöriga lärare finns för detta ämne. Lägg till behöriga lärare först.');
+                        return;
+                    }
+                    
+                    const modalTitle = document.getElementById('modalTitle');
+                    const modalContent = document.getElementById('modalContent');
+                    
+                    modalTitle.textContent = `Rumstillgång för lärare i ${subjectName}`;
+                    
+                    let html = `
+                        <div style="margin-bottom: 1.5rem;">
+                            <p style="color: #666; margin-bottom: 1rem;">
+                                Hantera vilka klassrum som lärare får hålla lektioner i. 
+                                <strong>Tom lista = tillgång till alla rum</strong>
+                            </p>
+                    `;
+                    
+                    // Lista behöriga lärare och deras rumstillgång
+                    for (const teacher of qualData.qualified_teachers) {
+                        html += `
+                            <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+                                <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.75rem;">
+                                    <h4 style="margin: 0; color: #2d3748;">${teacher.name}</h4>
+                                    <button onclick="showTeacherRoomModal(${teacher.id}, '${teacher.name}')" 
+                                            style="background: #4299e1; color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                        Hantera rum
+                                    </button>
+                                </div>
+                                <div id="teacherRooms_${teacher.id}" style="font-size: 0.9rem; color: #4a5568;">
+                                    <span style="color: #9ca3af;">Laddar...</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    html += '</div>';
+                    
+                    modalContent.innerHTML = html;
+                    
+                    // Ladda rumstillgång för varje lärare
+                    for (const teacher of qualData.qualified_teachers) {
+                        loadTeacherRoomAccess(teacher.id);
+                    }
+                    
+                    document.getElementById('teacherModal').style.display = 'block';
+                    
+                } catch (error) {
+                    console.error('Error loading teacher room management:', error);
+                    alert('Fel vid laddning av rumhantering');
+                }
+            }
+
+
+            async function loadTeacherRoomRestrictions() {
+                try {
+                    if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
+                        window.teacherRoomRestrictions = {};
+                        
+                        for (const teacher of availableTeachers) {
+                            const response = await fetch(`/api/teacher_room_access/${teacher.id}`);
+                            const data = await response.json();
+                            
+                            if (data.success && data.has_restrictions) {
+                                window.teacherRoomRestrictions[teacher.id] = data.accessible_rooms;
+                            } else {
+                                window.teacherRoomRestrictions[teacher.id] = []; // Tom = alla rum
+                            }
+                        }
+                        
+                        debugLog('Teacher room restrictions loaded:', window.teacherRoomRestrictions);
+                    }
+                } catch (error) {
+                    console.error('Error loading teacher room restrictions:', error);
+                    window.teacherRoomRestrictions = {};
+                }
+            }
+
+            async function loadTeacherRoomAccess(teacherId) {
+                try {
+                    const response = await fetch(`/api/teacher_room_access/${teacherId}`);
+                    const data = await response.json();
+                    
+                    const container = document.getElementById(`teacherRooms_${teacherId}`);
+                    if (!container) return;
+                    
+                    if (data.success) {
+                        if (data.has_restrictions && data.accessible_rooms.length > 0) {
+                            container.innerHTML = `
+                                <strong>Begränsade rum:</strong> ${data.accessible_rooms.join(', ')}
+                                <div style="margin-top: 0.25rem; font-size: 0.8rem; color: #e53e3e;">
+                                    ⚠️ Endast dessa rum tillåtna
+                                </div>
+                            `;
+                        } else {
+                            container.innerHTML = `
+                                <span style="color: #38a169;">✓ Tillgång till alla rum</span>
+                            `;
+                        }
+                    } else {
+                        container.innerHTML = '<span style="color: #e53e3e;">Fel vid laddning</span>';
+                    }
+                } catch (error) {
+                    console.error('Error loading teacher room access:', error);
+                    const container = document.getElementById(`teacherRooms_${teacherId}`);
+                    if (container) {
+                        container.innerHTML = '<span style="color: #e53e3e;">Fel vid laddning</span>';
+                    }
+                }
+            }
+
+            async function showTeacherRoomModal(teacherId, teacherName) {
+                try {
+                    const response = await fetch(`/api/teacher_room_access/${teacherId}`);
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        alert('Fel vid laddning av rumstillgång');
+                        return;
+                    }
+                    
+                    // Skapa ny modal för rumhantering
+                    const existingModal = document.getElementById('roomAccessModal');
+                    if (existingModal) {
+                        existingModal.remove();
+                    }
+                    
+                    const modalHtml = `
+                        <div id="roomAccessModal" style="display: block; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4);">
+                            <div style="background-color: #fefefe; margin: 5% auto; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%; max-height: 80%; overflow-y: auto;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                                    <h3 style="margin: 0; color: #2d3748;">Rumstillgång för ${teacherName}</h3>
+                                    <span onclick="closeRoomAccessModal()" style="cursor: pointer; font-size: 1.5rem; color: #9ca3af;">&times;</span>
+                                </div>
+                                
+                                <div style="margin-bottom: 1.5rem; padding: 1rem; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px;">
+                                    <p style="margin: 0; font-size: 0.9rem; color: #0c4a6e;">
+                                        <strong>Tips:</strong> Lämna listan tom för att ge läraren tillgång till alla rum. 
+                                        Lägg till specifika rum för att begränsa tillgången.
+                                    </p>
+                                </div>
+                                
+                                <div style="margin-bottom: 1.5rem;">
+                                    <h4 style="color: #2d3748; margin-bottom: 0.75rem;">Tillgängliga rum (${data.accessible_rooms.length})</h4>
+                                    <div id="accessibleRoomsList" style="background: #f0fff4; border: 1px solid #38a169; border-radius: 6px; padding: 1rem; min-height: 60px;">
+                                        ${data.accessible_rooms.length > 0 ? 
+                                            data.accessible_rooms.map(room => `
+                                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: white; border-radius: 4px; margin-bottom: 0.5rem; border: 1px solid #c6f6d5;">
+                                                    <span><strong>${room}</strong></span>
+                                                    <button onclick="removeTeacherRoomAccess(${teacherId}, '${room}')" 
+                                                            style="background: #f56565; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">
+                                                        Ta bort
+                                                    </button>
+                                                </div>
+                                            `).join('') 
+                                            : '<p style="color: #666; text-align: center; margin: 0;">Inga rumsbegränsningar - tillgång till alla rum</p>'
+                                        }
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <h4 style="color: #2d3748; margin-bottom: 0.75rem;">Lägg till rumstillgång</h4>
+                                    <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem;">
+                                        <select id="roomSelect_${teacherId}" style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 1rem;">
+                                            <option value="">Välj rum...</option>
+                                            ${data.available_rooms.filter(room => !data.accessible_rooms.includes(room)).map(room => 
+                                                `<option value="${room}">${room}</option>`
+                                            ).join('')}
+                                        </select>
+                                        <button onclick="addTeacherRoomAccess(${teacherId})" 
+                                                style="background: #48bb78; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; cursor: pointer;">
+                                            + Lägg till rum
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    
+                } catch (error) {
+                    console.error('Error showing room access modal:', error);
+                    alert('Fel vid visning av rumstillgång');
+                }
+            }
+
+            async function addTeacherRoomAccess(teacherId) {
+                const select = document.getElementById(`roomSelect_${teacherId}`);
+                const roomName = select.value;
+                
+                if (!roomName) {
+                    alert('Välj ett rum först');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/teacher_room_access/${teacherId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ classroom_name: roomName })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        closeRoomAccessModal();
+                        loadTeacherRoomAccess(teacherId);
+                        alert(data.message);
+                    } else {
+                        alert(data.error || 'Fel vid tillägg av rumstillgång');
+                    }
+                } catch (error) {
+                    console.error('Error adding room access:', error);
+                    alert('Fel vid kommunikation med servern');
+                }
+            }
+
+            async function removeTeacherRoomAccess(teacherId, roomName) {
+                if (!confirm(`Är du säker på att du vill ta bort tillgången till ${roomName}?`)) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/teacher_room_access/${teacherId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ classroom_name: roomName })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        closeRoomAccessModal();
+                        loadTeacherRoomAccess(teacherId);
+                        alert(data.message);
+                    } else {
+                        alert(data.error || 'Fel vid borttagning av rumstillgång');
+                    }
+                } catch (error) {
+                    console.error('Error removing room access:', error);
+                    alert('Fel vid kommunikation med servern');
+                }
+            }
+
+            function closeRoomAccessModal() {
+                const modal = document.getElementById('roomAccessModal');
+                if (modal) {
+                    modal.remove();
                 }
             }
 
@@ -2063,7 +2337,7 @@
             // ERSÄTT findAvailableRoom funktionen med denna version som förhindrar dubbelbokning
             // Replace the existing findAvailableRoom function with this improved version
             // ERSÄTT findAvailableRoom funktionen med denna:
-            function findAvailableRoom(rooms, day, timeSlot, teacherAvailability) {
+            function findAvailableRoom(rooms, day, timeSlot, teacherAvailability, preferredTeacherId = null) {
                 const roomList = (rooms && rooms.length) ? rooms : getAvailableRooms();
                 
                 // Ensure global room occupancy structure exists
@@ -2077,20 +2351,16 @@
                     globalRoomOccupancy[day][timeSlot] = new Set();
                 }
                 
-                const occupiedRooms = globalRoomOccupancy[day][timeSlot];
-                
-                // KRITISK FIX: Kontrollera även överlappande tider
                 const [startTime, endTime] = timeSlot.split('-');
                 const startMinutes = timeToMinutes(startTime);
                 const endMinutes = timeToMinutes(endTime);
                 
-                // Kontrollera alla tidsslots denna dag för överlappningar
+                // Kontrollera överlappande tider
                 const overlappingSlots = Object.keys(globalRoomOccupancy[day] || {}).filter(slot => {
                     const [slotStart, slotEnd] = slot.split('-');
                     const slotStartMin = timeToMinutes(slotStart);
                     const slotEndMin = timeToMinutes(slotEnd);
                     
-                    // Kontrollera överlappning (inte bara exakt matchning)
                     return !(endMinutes <= slotStartMin || startMinutes >= slotEndMin);
                 });
                 
@@ -2102,18 +2372,26 @@
                     }
                 });
                 
-                // Find first available room
-                for (const room of roomList) {
+                // Om vi har en föredragen lärare, filtrera rum baserat på deras tillgång
+                let availableRoomsForTeacher = roomList;
+                if (preferredTeacherId && window.teacherRoomRestrictions && window.teacherRoomRestrictions[preferredTeacherId]) {
+                    const teacherRooms = window.teacherRoomRestrictions[preferredTeacherId];
+                    if (teacherRooms.length > 0) {
+                        availableRoomsForTeacher = roomList.filter(room => teacherRooms.includes(room));
+                        debugLog(`Teacher ${preferredTeacherId} restricted to rooms:`, teacherRooms);
+                    }
+                }
+                
+                // Find first available room that teacher has access to
+                for (const room of availableRoomsForTeacher) {
                     if (!allOccupiedRooms.has(room)) {
-                        // CRITICAL: Mark room as occupied IMMEDIATELY
                         globalRoomOccupancy[day][timeSlot].add(room);
-                        
-                        debugLog(`✓ Room reserved: ${room} for ${day} ${timeSlot}. Total occupied rooms: ${allOccupiedRooms.size + 1}/${roomList.length}`);
+                        debugLog(`Room reserved: ${room} for ${day} ${timeSlot} (teacher ${preferredTeacherId || 'any'})`);
                         return room;
                     }
                 }
                 
-                debugLog(`✗ NO ROOMS AVAILABLE for ${day} ${timeSlot}. All ${roomList.length} rooms occupied in overlapping times`);
+                debugLog(`No rooms available for teacher ${preferredTeacherId || 'any'} on ${day} ${timeSlot}`);
                 return null;
             }
 
@@ -2240,17 +2518,29 @@
                         return isTimeAvailable && isQualified;
                     });
 
-                    if (qualifiedAndAvailableTeachers.length > 0) {
-                        const selectedTeacher = qualifiedAndAvailableTeachers[Math.floor(Math.random() * qualifiedAndAvailableTeachers.length)];
-                        return {
-                            teacher_id: selectedTeacher.id,
-                            teacher_name: selectedTeacher.name || selectedTeacher.username || 'Lärare'
-                        };
+                    // För varje kvalificerad lärare, kontrollera om det finns tillgängliga rum
+                    for (const teacher of qualifiedAndAvailableTeachers) {
+                        const availableRoom = findAvailableRoom(
+                            getAvailableRooms(), 
+                            day, 
+                            timeSlot, 
+                            teacherAvailability, 
+                            teacher.id  // Skicka med lärar-ID för rumskontroll
+                        );
+                        
+                        if (availableRoom) {
+                            return {
+                                teacher_id: teacher.id,
+                                teacher_name: teacher.name || teacher.username || 'Lärare',
+                                assigned_room: availableRoom
+                            };
+                        } else {
+                            debugLog(`Teacher ${teacher.name} has no available rooms for ${day} ${timeSlot}`);
+                        }
                     }
                 }
 
-                // ÄndRING: Returnera null istället för fallback-lärare
-                return null; // INGEN backup-lärare
+                return null;
             }
 
 
@@ -3779,6 +4069,7 @@
                 populateClassFilter();
                 populateTeacherFilter();
                 renderSubjects();
+                loadTeacherRoomRestrictions(); 
             });
 
 
