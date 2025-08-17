@@ -1171,6 +1171,25 @@ class School(db.Model):
             'user_count': len(self.users) if self.users else 0
         }
 
+class TeacherRoomAccess(db.Model):
+    """Hantera vilka klassrum en lärare har tillgång till"""
+    __tablename__ = 'teacher_room_access'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    classroom_name = db.Column(db.String(50), nullable=False)
+    # FIX: Ändra från 'school.id' till 'schools.id' för att matcha tabellnamnet
+    school_id = db.Column(db.Integer, db.ForeignKey('schools.id', ondelete='CASCADE'), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationer
+    teacher = db.relationship('User', backref='room_access')
+    school = db.relationship('School', backref='teacher_room_access')
+    
+    __table_args__ = (
+        db.UniqueConstraint('teacher_id', 'classroom_name', name='unique_teacher_room'),
+    )
 
 class ClassSchedule(db.Model):
     """Enhanced ClassSchedule model with teacher support and SchoolSubject"""
@@ -2965,6 +2984,123 @@ def get_schedule_for_date(date):
         }), 500
 
 
+@app.route('/api/teacher_room_access/<int:teacher_id>', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def manage_teacher_room_access(teacher_id):
+    """Hantera lärarens rumstillgång"""
+    if not current_user.is_school_admin() or not current_user.school_id:
+        return jsonify({'success': False, 'error': 'Otillåten åtkomst'}), 403
+    
+    # Kontrollera att läraren tillhör rätt skola
+    teacher = User.query.filter_by(
+        id=teacher_id,
+        school_id=current_user.school_id,
+        user_type='teacher',
+        is_active=True
+    ).first()
+    
+    if not teacher:
+        return jsonify({'success': False, 'error': 'Lärare hittades inte'}), 404
+    
+    # Hämta skolan för att få tillgängliga klassrum
+    school = School.query.get(current_user.school_id)
+    if not school:
+        return jsonify({'success': False, 'error': 'Skola hittades inte'}), 404
+    
+    # Hämta klassrum från school.classrooms JSON-fält
+    import json
+    try:
+        available_rooms = json.loads(school.classrooms) if school.classrooms else []
+    except (json.JSONDecodeError, TypeError):
+        available_rooms = []
+    
+    if request.method == 'GET':
+        # Hämta lärarens rumstillgång
+        room_access = TeacherRoomAccess.query.filter_by(
+            teacher_id=teacher_id,
+            school_id=current_user.school_id,
+            is_active=True
+        ).all()
+        
+        accessible_rooms = [access.classroom_name for access in room_access]
+        
+        return jsonify({
+            'success': True,
+            'teacher_name': teacher.get_full_name(),
+            'accessible_rooms': accessible_rooms,
+            'available_rooms': available_rooms,
+            'has_restrictions': len(accessible_rooms) > 0
+        })
+    
+    elif request.method == 'POST':
+        # Lägg till rumstillgång
+        data = request.get_json()
+        classroom_name = data.get('classroom_name')
+        
+        if not classroom_name:
+            return jsonify({'success': False, 'error': 'Klassrumsnamn saknas'}), 400
+        
+        # Kontrollera om rummet finns i skolans klassrum
+        if classroom_name not in available_rooms:
+            return jsonify({'success': False, 'error': 'Klassrummet finns inte på skolan'}), 400
+        
+        # Kontrollera om rumstillgången redan finns
+        existing = TeacherRoomAccess.query.filter_by(
+            teacher_id=teacher_id,
+            classroom_name=classroom_name,
+            school_id=current_user.school_id
+        ).first()
+        
+        if existing:
+            if existing.is_active:
+                return jsonify({'success': False, 'error': 'Läraren har redan tillgång till detta rum'}), 400
+            else:
+                existing.is_active = True
+        else:
+            room_access = TeacherRoomAccess(
+                teacher_id=teacher_id,
+                classroom_name=classroom_name,
+                school_id=current_user.school_id
+            )
+            db.session.add(room_access)
+        
+        try:
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': f'{teacher.get_full_name()} har nu tillgång till {classroom_name}'
+            })
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': 'Fel vid sparande'}), 500
+    
+    elif request.method == 'DELETE':
+        # Ta bort rumstillgång
+        data = request.get_json()
+        classroom_name = data.get('classroom_name')
+        
+        if not classroom_name:
+            return jsonify({'success': False, 'error': 'Klassrumsnamn saknas'}), 400
+        
+        room_access = TeacherRoomAccess.query.filter_by(
+            teacher_id=teacher_id,
+            classroom_name=classroom_name,
+            school_id=current_user.school_id
+        ).first()
+        
+        if not room_access:
+            return jsonify({'success': False, 'error': 'Rumstillgång hittades inte'}), 404
+        
+        try:
+            room_access.is_active = False
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': f'{teacher.get_full_name()} har inte längre tillgång till {classroom_name}'
+            })
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': 'Fel vid borttagning'}), 500
 
 # Also add this helper route to test teacher schedule setup
 @app.route('/api/teacher/setup_schedule')
