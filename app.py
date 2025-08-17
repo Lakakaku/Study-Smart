@@ -4285,7 +4285,247 @@ def get_multi_class_schedule_status():
             'error': f'Fel vid hämtning av multi-klass schemastatus: {str(e)}'
         }), 500
 
+# Lägg till denna route i din Flask-app (förmodligen i samma fil som andra schedule-endpoints)
 
+@app.route('/api/schedule/change_room/<int:lesson_id>', methods=['PUT'])
+@login_required
+def change_room_for_lesson(lesson_id):
+    """
+    Ändra klassrum för en specifik lektion
+    """
+    try:
+        data = request.get_json()
+        new_room = data.get('room')
+        
+        if not new_room:
+            return jsonify({
+                'success': False,
+                'error': 'Inget rum specificerat'
+            }), 400
+        
+        # Hämta lektionen
+        lesson = ClassSchedule.query.get(lesson_id)
+        if not lesson:
+            return jsonify({
+                'success': False,
+                'error': 'Lektion hittades inte'
+            }), 404
+        
+        # Kontrollera behörighet (lärare kan bara ändra sina egna lektioner, administratörer kan ändra alla)
+        if current_user.user_type == 'teacher' and lesson.teacher_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Du har inte behörighet att ändra denna lektion'
+            }), 403
+        
+        # Kontrollera om det nya rummet är tillgängligt
+        conflict_check = check_room_availability(
+            new_room, 
+            lesson.weekday, 
+            lesson.start_time, 
+            lesson.end_time, 
+            exclude_lesson_id=lesson_id
+        )
+        
+        if not conflict_check['available']:
+            return jsonify({
+                'success': False,
+                'error': f'Rummet {new_room} är upptaget under denna tid: {conflict_check["conflict_reason"]}'
+            }), 409
+        
+        # Kontrollera lärarens rumsbehörighet (om sådana regler finns)
+        if lesson.teacher_id:
+            teacher_room_access = check_teacher_room_access(lesson.teacher_id, new_room)
+            if not teacher_room_access:
+                return jsonify({
+                    'success': False,
+                    'error': f'Läraren har inte behörighet att använda rummet {new_room}'
+                }), 403
+        
+        # Spara det gamla rummet för logg
+        old_room = lesson.room
+        
+        # Uppdatera rummet
+        lesson.room = new_room
+        lesson.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Logga ändringen
+        app.logger.info(f"Room changed for lesson {lesson_id} from '{old_room}' to '{new_room}' by user {current_user.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Klassrum ändrat från {old_room} till {new_room}',
+            'lesson': lesson.to_dict(),
+            'old_room': old_room,
+            'new_room': new_room
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error changing room for lesson {lesson_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Fel vid rumsbyte: {str(e)}'
+        }), 500
+
+def check_room_availability(room, weekday, start_time, end_time, exclude_lesson_id=None):
+    """
+    Kontrollera om ett rum är tillgängligt under en viss tid
+    """
+    try:
+        # Bygg query för att hitta konflikterande lektioner
+        query = ClassSchedule.query.filter(
+            ClassSchedule.room == room,
+            ClassSchedule.weekday == weekday,
+            ClassSchedule.is_active == True
+        )
+        
+        # Exkludera den nuvarande lektionen om vi uppdaterar
+        if exclude_lesson_id:
+            query = query.filter(ClassSchedule.id != exclude_lesson_id)
+        
+        conflicting_lessons = query.all()
+        
+        # Konvertera tider till minuter för enklare jämförelse
+        start_minutes = time_to_minutes(start_time)
+        end_minutes = time_to_minutes(end_time)
+        
+        for lesson in conflicting_lessons:
+            lesson_start = time_to_minutes(lesson.start_time)
+            lesson_end = time_to_minutes(lesson.end_time)
+            
+            # Kontrollera överlappning (med 5 minuters buffer)
+            buffer_minutes = 5
+            if not (end_minutes <= lesson_start - buffer_minutes or 
+                   start_minutes >= lesson_end + buffer_minutes):
+                # Det finns en konflikt
+                return {
+                    'available': False,
+                    'conflict_reason': f"Konflikt med {lesson.get_subject_name()} ({lesson.start_time}-{lesson.end_time})"
+                }
+        
+        return {'available': True}
+        
+    except Exception as e:
+        app.logger.error(f"Error checking room availability: {str(e)}")
+        return {
+            'available': False,
+            'conflict_reason': f"Fel vid kontroll av rumstillgänglighet: {str(e)}"
+        }
+
+def check_teacher_room_access(teacher_id, room):
+    """
+    Kontrollera om en lärare har behörighet att använda ett specifikt rum
+    """
+    try:
+        # Om det inte finns några rumsbegränsningar alls, tillåt alla rum
+        access_records = TeacherRoomAccess.query.filter_by(
+            teacher_id=teacher_id,
+            is_active=True
+        ).all()
+        
+        if not access_records:
+            # Inga begränsningar = tillgång till alla rum
+            return True
+        
+        # Kontrollera om läraren har explicit tillgång till detta rum
+        has_access = any(access.classroom_name == room for access in access_records)
+        
+        return has_access
+        
+    except Exception as e:
+        app.logger.error(f"Error checking teacher room access: {str(e)}")
+        # Vid fel, tillåt åtkomst för att inte blockera funktionalitet
+        return True
+
+def time_to_minutes(time_str):
+    """
+    Konvertera tidsträng (HH:MM) till minuter från midnatt
+    """
+    try:
+        hours, minutes = map(int, time_str.split(':'))
+        return hours * 60 + minutes
+    except:
+        return 0
+
+# Hjälpfunktion för att hämta alla tillgängliga klassrum för en skola
+@app.route('/api/schools/<int:school_id>/classrooms', methods=['GET'])
+@login_required
+def get_school_classrooms(school_id):
+    """
+    Hämta alla klassrum för en skola
+    """
+    try:
+        school = School.query.get(school_id)
+        if not school:
+            return jsonify({
+                'success': False,
+                'error': 'Skola hittades inte'
+            }), 404
+        
+        # Hämta klassrum från skolans classrooms-fält (JSON)
+        import json
+        try:
+            classrooms = json.loads(school.classrooms) if school.classrooms else []
+        except:
+            classrooms = []
+        
+        return jsonify({
+            'success': True,
+            'classrooms': classrooms
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching classrooms for school {school_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Fel vid hämtning av klassrum: {str(e)}'
+        }), 500
+
+# Endpoint för att hämta lärarens rumsbehörigheter
+@app.route('/api/teacher/<int:teacher_id>/room_access', methods=['GET'])
+@login_required
+def get_teacher_room_access(teacher_id):
+    """
+    Hämta vilka rum en lärare har tillgång till
+    """
+    try:
+        # Kontrollera behörighet
+        if current_user.user_type != 'admin' and current_user.id != teacher_id:
+            return jsonify({
+                'success': False,
+                'error': 'Ingen behörighet'
+            }), 403
+        
+        access_records = TeacherRoomAccess.query.filter_by(
+            teacher_id=teacher_id,
+            is_active=True
+        ).all()
+        
+        if not access_records:
+            # Inga begränsningar = tillgång till alla rum
+            return jsonify({
+                'success': True,
+                'unrestricted_access': True,
+                'allowed_rooms': None
+            })
+        
+        allowed_rooms = [access.classroom_name for access in access_records]
+        
+        return jsonify({
+            'success': True,
+            'unrestricted_access': False,
+            'allowed_rooms': allowed_rooms
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching teacher room access for teacher {teacher_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Fel vid hämtning av rumsbehörigheter: {str(e)}'
+        }), 500
 
 @app.route('/school_admin/schedule_generator')
 @login_required
