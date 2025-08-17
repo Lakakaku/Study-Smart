@@ -1656,26 +1656,48 @@
             }
 
 
+            // 3. FÖRBÄTTRA loadTeacherRoomRestrictions för att säkerställa korrekt inläsning:
             async function loadTeacherRoomRestrictions() {
                 try {
                     if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers) && availableTeachers.length > 0) {
                         window.teacherRoomRestrictions = {};
                         
+                        debugLog('Loading room restrictions for teachers:', availableTeachers.map(t => ({id: t.id, name: t.name})));
+                        
                         for (const teacher of availableTeachers) {
-                            const response = await fetch(`/api/teacher_room_access/${teacher.id}`);
-                            const data = await response.json();
-                            
-                            if (data.success && data.has_restrictions) {
-                                window.teacherRoomRestrictions[teacher.id] = data.accessible_rooms;
-                            } else {
-                                window.teacherRoomRestrictions[teacher.id] = []; // Tom = alla rum
+                            try {
+                                const response = await fetch(`/api/teacher_room_access/${teacher.id}`);
+                                const data = await response.json();
+                                
+                                if (data.success) {
+                                    // KRITISK FIX: Korrekt hantering av has_restrictions
+                                    if (data.has_restrictions && data.accessible_rooms && data.accessible_rooms.length > 0) {
+                                        // Läraren har specifika rumsbegränsningar - endast dessa rum
+                                        window.teacherRoomRestrictions[teacher.id] = data.accessible_rooms;
+                                        debugLog(`✅ Teacher ${teacher.name} (${teacher.id}) restricted to rooms:`, data.accessible_rooms);
+                                    } else {
+                                        // INGA begränsningar = tillgång till alla rum (null istället för tom array)
+                                        window.teacherRoomRestrictions[teacher.id] = null;
+                                        debugLog(`✅ Teacher ${teacher.name} (${teacher.id}) has access to ALL rooms (no restrictions)`);
+                                    }
+                                } else {
+                                    // Fel vid hämtning - anta inga begränsningar
+                                    window.teacherRoomRestrictions[teacher.id] = null;
+                                    debugLog(`⚠️ Could not load restrictions for teacher ${teacher.name} (${teacher.id}), assuming no restrictions`);
+                                }
+                            } catch (error) {
+                                console.error(`Error loading restrictions for teacher ${teacher.id}:`, error);
+                                window.teacherRoomRestrictions[teacher.id] = null;
                             }
                         }
                         
-                        debugLog('Teacher room restrictions loaded:', window.teacherRoomRestrictions);
+                        debugLog('✅ Teacher room restrictions loaded completely:', window.teacherRoomRestrictions);
+                    } else {
+                        debugLog('⚠️ No availableTeachers found, cannot load room restrictions');
+                        window.teacherRoomRestrictions = {};
                     }
                 } catch (error) {
-                    console.error('Error loading teacher room restrictions:', error);
+                    console.error('Critical error loading teacher room restrictions:', error);
                     window.teacherRoomRestrictions = {};
                 }
             }
@@ -2332,11 +2354,48 @@
                 return conflicts;
             }
 
+
+
+            // Hämta tillgängliga rum för en specifik lärare
+            function getAvailableRoomsForTeacher(teacherId) {
+                const allRooms = getAvailableRooms();
+                
+                if (!window.teacherRoomRestrictions || !window.teacherRoomRestrictions[teacherId]) {
+                    // Inga begränsningar = tillgång till alla rum
+                    return allRooms;
+                }
+                
+                const teacherRestrictions = window.teacherRoomRestrictions[teacherId];
+                if (teacherRestrictions === null) {
+                    // Explicit null = inga begränsningar
+                    return allRooms;
+                }
+                
+                // Array med specifika rum = endast dessa rum
+                return allRooms.filter(room => teacherRestrictions.includes(room));
+            }
+
+            // Hitta tillgängligt rum för lärare utan att påverka global occupancy än
+            function findAvailableRoomForTeacher(teacherRooms, day, timeSlot) {
+                if (!globalRoomOccupancy[day] || !globalRoomOccupancy[day][timeSlot]) {
+                    // Inget rum är upptaget än
+                    return teacherRooms.length > 0 ? teacherRooms[0] : null;
+                }
+                
+                const occupiedRooms = globalRoomOccupancy[day][timeSlot];
+                
+                // Hitta första lediga rum som läraren har tillgång till
+                for (const room of teacherRooms) {
+                    if (!occupiedRooms.has(room)) {
+                        return room;
+                    }
+                }
+                
+                return null; // Inga rum tillgängliga för denna lärare
+            }
+
             // Ersätt findAvailableRoom funktionen med denna rättade version:
             // Replace the existing findAvailableRoom function with this improved version
-            // ERSÄTT findAvailableRoom funktionen med denna version som förhindrar dubbelbokning
-            // Replace the existing findAvailableRoom function with this improved version
-            // ERSÄTT findAvailableRoom funktionen med denna:
             function findAvailableRoom(rooms, day, timeSlot, teacherAvailability, preferredTeacherId = null) {
                 const roomList = (rooms && rooms.length) ? rooms : getAvailableRooms();
                 
@@ -2372,13 +2431,19 @@
                     }
                 });
                 
-                // Om vi har en föredragen lärare, filtrera rum baserat på deras tillgång
+                // KRITISK FIX: Filtrera rum baserat på lärarens begränsningar
                 let availableRoomsForTeacher = roomList;
-                if (preferredTeacherId && window.teacherRoomRestrictions && window.teacherRoomRestrictions[preferredTeacherId]) {
-                    const teacherRooms = window.teacherRoomRestrictions[preferredTeacherId];
-                    if (teacherRooms.length > 0) {
-                        availableRoomsForTeacher = roomList.filter(room => teacherRooms.includes(room));
-                        debugLog(`Teacher ${preferredTeacherId} restricted to rooms:`, teacherRooms);
+                if (preferredTeacherId && window.teacherRoomRestrictions) {
+                    const teacherRestrictions = window.teacherRoomRestrictions[preferredTeacherId];
+                    
+                    if (teacherRestrictions !== null && teacherRestrictions !== undefined) {
+                        // Läraren har specifika rumsbegränsningar - endast dessa rum är tillåtna
+                        availableRoomsForTeacher = roomList.filter(room => teacherRestrictions.includes(room));
+                        debugLog(`Teacher ${preferredTeacherId} restricted to rooms:`, teacherRestrictions, 'Available after filtering:', availableRoomsForTeacher);
+                    } else {
+                        // teacherRestrictions är null = inga begränsningar, tillgång till alla rum
+                        availableRoomsForTeacher = roomList;
+                        debugLog(`Teacher ${preferredTeacherId} has access to ALL rooms (no restrictions)`);
                     }
                 }
                 
@@ -2386,12 +2451,15 @@
                 for (const room of availableRoomsForTeacher) {
                     if (!allOccupiedRooms.has(room)) {
                         globalRoomOccupancy[day][timeSlot].add(room);
-                        debugLog(`Room reserved: ${room} for ${day} ${timeSlot} (teacher ${preferredTeacherId || 'any'})`);
+                        debugLog(`✅ Room reserved: ${room} for ${day} ${timeSlot} (teacher ${preferredTeacherId || 'any'})`);
                         return room;
                     }
                 }
                 
-                debugLog(`No rooms available for teacher ${preferredTeacherId || 'any'} on ${day} ${timeSlot}`);
+                debugLog(`❌ No available rooms for teacher ${preferredTeacherId || 'any'} on ${day} ${timeSlot}. Teacher restrictions:`, 
+                    window.teacherRoomRestrictions?.[preferredTeacherId] || 'none', 
+                    'Available rooms after filtering:', availableRoomsForTeacher,
+                    'All occupied rooms:', Array.from(allOccupiedRooms));
                 return null;
             }
 
@@ -2499,6 +2567,7 @@
             }
 
             // Assign optimal teacher considering qualifications and availability
+            // 2. ERSÄTT assignOptimalTeacher funktionen för att skicka teacher_id till findAvailableRoom:
             function assignOptimalTeacher(subject, day, timeSlot, teacherAvailability) {
                 const [startTime, endTime] = timeSlot.split('-');
                 const startMinutes = timeToMinutes(startTime);
@@ -2518,28 +2587,33 @@
                         return isTimeAvailable && isQualified;
                     });
 
-                    // För varje kvalificerad lärare, kontrollera om det finns tillgängliga rum
+                    // KRITISK FIX: Kontrollera rumstillgång för varje kvalificerad lärare
                     for (const teacher of qualifiedAndAvailableTeachers) {
-                        const availableRoom = findAvailableRoom(
-                            getAvailableRooms(), 
-                            day, 
-                            timeSlot, 
-                            teacherAvailability, 
-                            teacher.id  // Skicka med lärar-ID för rumskontroll
-                        );
+                        // Kontrollera om läraren kan få ett rum baserat på sina begränsningar
+                        const teacherRooms = getAvailableRoomsForTeacher(teacher.id);
+                        const availableRoom = findAvailableRoomForTeacher(teacherRooms, day, timeSlot);
                         
                         if (availableRoom) {
+                            // Reservera rummet globalt
+                            if (!globalRoomOccupancy[day][timeSlot]) {
+                                globalRoomOccupancy[day][timeSlot] = new Set();
+                            }
+                            globalRoomOccupancy[day][timeSlot].add(availableRoom);
+                            
+                            debugLog(`✅ Teacher ${teacher.name} assigned room ${availableRoom} for ${subject.subject_name} on ${day} ${timeSlot}`);
                             return {
                                 teacher_id: teacher.id,
                                 teacher_name: teacher.name || teacher.username || 'Lärare',
                                 assigned_room: availableRoom
                             };
                         } else {
-                            debugLog(`Teacher ${teacher.name} has no available rooms for ${day} ${timeSlot}`);
+                            debugLog(`❌ Teacher ${teacher.name} has no available rooms for ${day} ${timeSlot} - restrictions:`, 
+                                window.teacherRoomRestrictions?.[teacher.id] || 'no restrictions');
                         }
                     }
                 }
 
+                debugLog(`❌ No teachers with room access available for ${subject.subject_name} on ${day} ${timeSlot}`);
                 return null;
             }
 
@@ -2793,7 +2867,9 @@
                                 const teacherAssignment = assignOptimalTeacher(subjectPlan, day, timeSlot, teacherAvailability);
                                 
                                 if (teacherAssignment) {
-                                    // SUCCESS! Place lesson
+                                    // KRITISK FIX: Använd rummet som redan tilldelats av assignOptimalTeacher
+                                    const finalRoom = teacherAssignment.assigned_room || availableRoom;
+                                    
                                     const lessonData = {
                                         day: day,
                                         time: timeSlot,
@@ -2802,7 +2878,7 @@
                                         subject_id: subjectPlan.subject_id,
                                         school_subject_id: subjectPlan.school_subject_id,
                                         subject_name: subjectPlan.subject_name,
-                                        room: availableRoom,
+                                        room: finalRoom, // Använd det rum som läraren faktiskt kan använda
                                         teacher_id: teacherAssignment.teacher_id,
                                         teacher_name: teacherAssignment.teacher_name,
                                         color: subjectPlan.color,
@@ -3384,6 +3460,7 @@
 
 
             // Fix 1: Remove duplicate function declaration
+            // 4. UPPDATERA generateMultiClassSchedule för att ladda rumsbegränsningar först:
             async function generateMultiClassSchedule() {
                 const preview = document.getElementById('schedulePreview');
                 const controls = document.getElementById('generationControls');
@@ -3407,7 +3484,7 @@
                     return;
                 }
 
-                // Bygg per-klass ämneskartor
+                // Validering av ämneskonfiguration (behåll befintlig kod)...
                 const classSubjectMap = {};
                 for (const cls of selectedClasses) {
                     const classId = cls.id;
@@ -3451,30 +3528,26 @@
                             return;
                         }
 
-                        // Försök tolka valt värde som ett SchoolSubject-id
                         const schoolSubjectId = parseInt(subjVal, 10);
-
-                        // Hämta namn från schoolSubjects (fallback: availableSubjects)
                         const subjectNameFromSchool = getSubjectNameById(schoolSubjectId);
                         const subjectNameFromAvailable = (availableSubjects||[]).find(s => String(s.id) === String(schoolSubjectId))?.name;
                         const resolvedSubjectName = subjectNameFromSchool || subjectNameFromAvailable || `Ämne ${schoolSubjectId}`;
 
-                        // Push med både school_subject_id och subject_id (bakåtkompatibilitet)
                         items.push({
-                            subject_id: schoolSubjectId,          // backend-fallback (tidigare fält)
-                            school_subject_id: schoolSubjectId,   // uttryckligt school_subject id
+                            subject_id: schoolSubjectId,
+                            school_subject_id: schoolSubjectId,
                             subject_name: resolvedSubjectName,
                             hours: hrsVal
                         });
 
-                        // Debug-logg (ta bort när det funkar)
                         debugLog('Added subject item', { classId, schoolSubjectId, resolvedSubjectName, hours: hrsVal });
-
-
                     }
 
                     classSubjectMap[classId] = items;
                 }
+
+
+                
 
                 const rooms = getAvailableRooms();
                 const maxSimultaneousClasses = selectedClasses.length;
@@ -3499,15 +3572,39 @@
                 preview.innerHTML = `
                     <div style="text-align: center;">
                         <div class="loading-spinner"></div>
-                        <p style="margin-top: 1rem;">Laddar befintliga scheman...</p>
+                        <p style="margin-top: 1rem;">Laddar lärarnas rumsbegränsningar...</p>
                         <p style="font-size: 0.9rem; color: #666;">
-                            Kontrollerar lärartillgänglighet från andra klassers scheman
+                            Kontrollerar vilka klassrum varje lärare får undervisa i
                         </p>
                     </div>
                 `;
 
                 try {
-                    // Ladda befintliga scheman först
+                    // KRITISK FIX: Ladda rumsbegränsningar FÖRST
+                    await loadTeacherRoomRestrictions();
+
+                    debugLog('Teacher room restrictions loaded:', window.teacherRoomRestrictions);
+                    
+
+                    if (window.teacherRoomRestrictions && availableTeachers) {
+                        availableTeachers.forEach(teacher => {
+                            const restrictions = window.teacherRoomRestrictions[teacher.id];
+                            debugLog(`Teacher ${teacher.name} (${teacher.id}):`, 
+                                restrictions === null ? 'ALL ROOMS' : restrictions || 'NO DATA');
+                        });
+                    }
+                    // Uppdatera loading-meddelande
+                    preview.innerHTML = `
+                        <div style="text-align: center;">
+                            <div class="loading-spinner"></div>
+                            <p style="margin-top: 1rem;">Laddar befintliga scheman...</p>
+                            <p style="font-size: 0.9rem; color: #666;">
+                                Kontrollerar lärartillgänglighet från andra klassers scheman
+                            </p>
+                        </div>
+                    `;
+                    
+                    // Ladda befintliga scheman
                     const existingTeacherAvailability = await loadExistingSchedules();
                     
                     // Uppdatera loading-meddelande
@@ -3516,10 +3613,10 @@
                             <div class="loading-spinner"></div>
                             <p style="margin-top: 1rem;">Genererar optimerat multi-klass schema...</p>
                             <p style="font-size: 0.9rem; color: #666;">
-                                Optimerar för ${selectedClasses.length} klasser med hänsyn till befintliga scheman
+                                Optimerar för ${selectedClasses.length} klasser med hänsyn till befintliga scheman och rumsbegränsningar
                             </p>
                             <p style="font-size: 0.85rem; color: #888;">
-                                Följer: Inga lärarkonflikter, automatisk lunch, kompakt schema
+                                Följer: Inga lärarkonflikter, automatisk lunch, kompakt schema, lärarens rumstillgång
                             </p>
                         </div>
                     `;
@@ -3535,7 +3632,7 @@
                     );
 
                     setTimeout(() => {
-                        debugLog('Multi-class schedule generated successfully', multiClassSchedule);
+                        debugLog('Multi-class schedule generated successfully with room restrictions:', multiClassSchedule);
                         currentSchedule = multiClassSchedule;
                         
                         // Fill teacher filter from schedule if not already available
@@ -3561,13 +3658,12 @@
                             <p>❌ Fel vid multi-klass schemagenerering</p>
                             <p style="font-size: 0.9rem;">${error.message}</p>
                             <p style="font-size: 0.85rem; color: #666;">
-                                Tips: Minska antalet lektioner, öka antalet klassrum, eller minska antalet klasser
+                                Tips: Kontrollera lärarnas rumstillgång, öka antalet klassrum, eller minska antalet klasser
                             </p>
                         </div>
                     `;
                     controls.style.display = 'none';
                 }
-
             }
 
             // Fix 2: Ensure availableTeachers is properly initialized
