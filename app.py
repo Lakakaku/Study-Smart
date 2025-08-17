@@ -3662,6 +3662,177 @@ def manage_teacher_qualifications(subject_id):
 
 
 
+@app.route('/api/multi_class_schedule/save_individual', methods=['POST'])
+@login_required  
+def save_multi_class_schedule_individual():
+    """Alternative endpoint for saving multi-class schedules individually"""
+    try:
+        if not current_user.is_school_admin() or not current_user.school_id:
+            return jsonify({'success': False, 'error': 'Du har inte behörighet'}), 403
+
+        data = request.get_json()
+        class_ids = data.get('class_ids', [])
+        lessons = data.get('lessons', [])
+
+        if not class_ids or not lessons:
+            return jsonify({'success': False, 'error': 'Saknade data'}), 400
+
+        # Group lessons by class
+        lessons_by_class = {}
+        for lesson in lessons:
+            class_id = lesson.get('class_id')
+            if class_id:
+                if class_id not in lessons_by_class:
+                    lessons_by_class[class_id] = []
+                lessons_by_class[class_id].append(lesson)
+
+        saved_details = []
+        total_saved = 0
+
+        for class_id in class_ids:
+            class_lessons = lessons_by_class.get(int(class_id), [])
+            if not class_lessons:
+                continue
+
+            # Validate class belongs to school
+            school_class = SchoolClass.query.filter_by(
+                id=class_id, 
+                school_id=current_user.school_id
+            ).first()
+            if not school_class:
+                continue
+
+            # Delete existing schedule
+            ClassSchedule.query.filter_by(class_id=class_id).delete()
+
+            # Save new lessons
+            class_saved = 0
+            for lesson in class_lessons:
+                try:
+                    time_range = lesson.get('time')
+                    if not time_range or '-' not in time_range:
+                        continue
+                    
+                    start_time, end_time = [t.strip() for t in time_range.split('-')]
+                    
+                    school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
+                    if school_subject_id:
+                        school_subject_id = int(school_subject_id)
+
+                    schedule_item = ClassSchedule(
+                        class_id=int(class_id),
+                        weekday=lesson.get('day'),
+                        start_time=start_time,
+                        end_time=end_time,
+                        school_subject_id=school_subject_id,
+                        teacher_id=lesson.get('teacher_id') if lesson.get('teacher_id') != 'fallback' else None,
+                        room=lesson.get('room'),
+                        notes=f"Multi-klass schema. Lärare: {lesson.get('teacher_name', 'Ej tilldelad')}",
+                        is_active=True
+                    )
+                    
+                    db.session.add(schedule_item)
+                    class_saved += 1
+                    
+                except Exception as e:
+                    app.logger.error(f"Error saving lesson: {str(e)}")
+                    continue
+
+            saved_details.append({
+                'class_name': school_class.name,
+                'lessons_saved': class_saved
+            })
+            total_saved += class_saved
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'lessons_saved': total_saved,
+            'details': saved_details,
+            'message': f'Schema sparat! {total_saved} lektioner totalt.'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error in save_individual: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/schedule/save/<int:class_id>', methods=['POST'])
+@app.route('/api/class/<int:class_id>/schedule/save', methods=['POST'])  
+@app.route('/api/schedules/class/<int:class_id>/save', methods=['POST'])
+@login_required
+def save_class_schedule(class_id):
+    """Save schedule for individual class - multiple endpoints for compatibility"""
+    try:
+        if not current_user.is_school_admin() or not current_user.school_id:
+            return jsonify({'success': False, 'error': 'Du har inte behörighet'}), 403
+
+        data = request.get_json()
+        lessons = data.get('lessons', [])
+
+        if not lessons:
+            return jsonify({'success': False, 'error': 'Inga lektioner att spara'}), 400
+
+        # Validate class
+        school_class = SchoolClass.query.filter_by(
+            id=class_id,
+            school_id=current_user.school_id
+        ).first()
+        
+        if not school_class:
+            return jsonify({'success': False, 'error': 'Klassen hittades inte'}), 404
+
+        # Delete existing schedule
+        ClassSchedule.query.filter_by(class_id=class_id).delete()
+
+        # Save new lessons
+        lessons_saved = 0
+        for lesson in lessons:
+            try:
+                time_range = lesson.get('time')
+                if not time_range or '-' not in time_range:
+                    continue
+                    
+                start_time, end_time = [t.strip() for t in time_range.split('-')]
+                
+                school_subject_id = lesson.get('school_subject_id') or lesson.get('subject_id')
+                if school_subject_id:
+                    school_subject_id = int(school_subject_id)
+
+                schedule_item = ClassSchedule(
+                    class_id=class_id,
+                    weekday=lesson.get('day'),
+                    start_time=start_time,
+                    end_time=end_time,
+                    school_subject_id=school_subject_id,
+                    teacher_id=lesson.get('teacher_id') if lesson.get('teacher_id') != 'fallback' else None,
+                    room=lesson.get('room'),
+                    notes=f"Schema sparat. Lärare: {lesson.get('teacher_name', 'Ej tilldelad')}",
+                    is_active=True
+                )
+                
+                db.session.add(schedule_item)
+                lessons_saved += 1
+                
+            except Exception as e:
+                app.logger.error(f"Error saving lesson: {str(e)}")
+                continue
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'lessons_saved': lessons_saved,
+            'message': f'Schema sparat för {school_class.name}! {lessons_saved} lektioner.'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error saving class schedule: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # Add these routes to your Flask app
 @app.route('/api/multi_class_schedule/save', methods=['POST'])
 @login_required
