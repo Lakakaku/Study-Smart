@@ -6522,10 +6522,11 @@
             `;
             document.head.appendChild(style);
 
-            // Update the saveMultiClassSchedule function to validate before saving
-            // 5. Lägg till validering före sparande
-            // 5. LÄGG TILL: Validering före sparande (ersätt din befintliga saveMultiClassSchedule)
-            // 4. FIX: Uppdatera saveMultiClassSchedule med strikt validering
+            // Ersätt saveMultiClassSchedule funktionen med denna fixade version
+            // Ersätt saveMultiClassSchedule funktionen med denna fixade version
+            // Ersätt saveMultiClassSchedule funktionen med denna fixade version
+            // Ersätt hela saveMultiClassSchedule funktionen med denna fixade version
+            // Ersätt hela saveMultiClassSchedule funktionen med denna fixade version
             async function saveMultiClassSchedule() {
                 if (!currentSchedule || !currentSchedule.lessons) {
                     alert('Inget schema att spara');
@@ -6576,10 +6577,37 @@
                 
                 try {
                     const classIds = selectedClasses.map(c => parseInt(c.id));
+                    
+                    // FIX: Säkerställ att alla lessons har rätt fält för backend
+                    const processedLessons = currentSchedule.lessons.map(lesson => {
+                        return {
+                            day: lesson.day,
+                            time: lesson.time,
+                            class_id: parseInt(lesson.class_id),
+                            class_name: lesson.class_name,
+                            // FIX: Skicka både subject_id och school_subject_id för bakåtkompatibilitet
+                            subject_id: lesson.school_subject_id || lesson.subject_id,
+                            school_subject_id: lesson.school_subject_id || lesson.subject_id,
+                            subject_name: lesson.subject_name,
+                            room: lesson.room || 'Inget rum',
+                            teacher_id: lesson.teacher_id,
+                            teacher_name: lesson.teacher_name || 'Okänd lärare'
+                        };
+                    });
+                    
+                    const payloadData = {
+                        class_ids: classIds,
+                        schedule: {
+                            lessons: processedLessons
+                        }
+                    };
+                    
                     debugLog('Saving validated conflict-free schedule:', { 
                         classes: classIds.length, 
-                        lessons: currentSchedule.lessons.length,
-                        validation: 'PASSED'
+                        lessons: processedLessons.length,
+                        validation: 'PASSED',
+                        sampleLesson: processedLessons[0],
+                        payload: payloadData
                     });
                     
                     const response = await fetch('/api/multi_class_schedule/save', {
@@ -6587,13 +6615,25 @@
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({
-                            class_ids: classIds,
-                            lessons: currentSchedule.lessons
-                        })
+                        body: JSON.stringify(payloadData)
                     });
                     
-                    const result = await response.json();
+                    let result;
+                    try {
+                        result = await response.json();
+                    } catch (jsonError) {
+                        debugLog('Failed to parse JSON response:', {
+                            status: response.status,
+                            statusText: response.statusText
+                        });
+                        throw new Error(`Server returned invalid JSON (${response.status}): ${response.statusText}`);
+                    }
+                    
+                    debugLog('Server response:', {
+                        status: response.status,
+                        ok: response.ok,
+                        result: result
+                    });
                     
                     if (response.ok && result.success) {
                         alert(`✅ Schema sparat utan konflikter!\n\n${result.details.map(d => `${d.class_name}: ${d.lessons_saved} lektioner`).join('\n')}`);
@@ -6603,12 +6643,159 @@
                         updateScheduleUI();
                         updateClassScheduleStatus();
                     } else {
-                        throw new Error(result.error || 'Okänt fel');
+                        // Hantera olika typer av fel från servern
+                        const errorMsg = result.error || result.message || 'Multi-class save failed';
+                        debugLog('Multi-class save failed:', result);
+                        throw new Error(errorMsg);
                     }
                     
                 } catch (error) {
-                    console.error('Error saving multi-class schedule:', error);
-                    alert(`❌ Fel vid sparande: ${error.message}`);
+                    debugLog('Primary save method failed:', error.message);
+                    
+                    // FALLBACK: Försök direkt med multi_class_schedule/save_individual endpoint först
+                    debugLog('Trying alternative multi-class endpoint...');
+                    
+                    const processedLessons = currentSchedule.lessons.map(lesson => {
+                        return {
+                            day: lesson.day,
+                            time: lesson.time,
+                            class_id: parseInt(lesson.class_id),
+                            class_name: lesson.class_name,
+                            subject_id: lesson.school_subject_id || lesson.subject_id,
+                            school_subject_id: lesson.school_subject_id || lesson.subject_id,
+                            subject_name: lesson.subject_name,
+                            room: lesson.room || 'Inget rum',
+                            teacher_id: lesson.teacher_id,
+                            teacher_name: lesson.teacher_name || 'Okänd lärare'
+                        };
+                    });
+                    
+                    try {
+                        // Försök med alternativ endpoint för multi-class individuell sparning
+                        const alternativeResponse = await fetch('/api/multi_class_schedule/save_individual', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                class_ids: selectedClasses.map(c => parseInt(c.id)),
+                                lessons: processedLessons
+                            })
+                        });
+                        
+                        if (alternativeResponse.ok) {
+                            const altResult = await alternativeResponse.json();
+                            if (altResult.success) {
+                                alert(`✅ Schema sparat!\n\n${altResult.details ? altResult.details.map(d => `${d.class_name}: ${d.lessons_saved} lektioner`).join('\n') : `${processedLessons.length} lektioner sparade`}`);
+                                
+                                scheduleSaveState.hasUnsavedChanges = false;
+                                scheduleSaveState.lastSavedSchedule = JSON.parse(JSON.stringify(currentSchedule));
+                                updateScheduleUI();
+                                updateClassScheduleStatus();
+                                return;
+                            }
+                        }
+                    } catch (altError) {
+                        debugLog('Alternative endpoint also failed:', altError.message);
+                    }
+                    
+                    // SISTA UTVÄG: Försök med den ursprungliga klass-för-klass metoden
+                    debugLog('Trying final fallback: individual class saves...');
+                    
+                    try {
+                        const saveResults = [];
+                        let totalSaved = 0;
+                        
+                        for (const cls of selectedClasses) {
+                            const classLessons = processedLessons.filter(lesson => 
+                                parseInt(lesson.class_id) === parseInt(cls.id)
+                            );
+                            
+                            if (classLessons.length === 0) continue;
+                            
+                            debugLog(`Attempting individual save for class ${cls.name}:`, {
+                                classId: cls.id,
+                                lessons: classLessons.length
+                            });
+                            
+                            // Prova olika endpoints för klassparning
+                            const endpoints = [
+                                `/api/schedule/save/${cls.id}`,
+                                `/api/class/${cls.id}/schedule/save`,
+                                `/api/schedules/class/${cls.id}/save`
+                            ];
+                            
+                            let classSaved = false;
+                            
+                            for (const endpoint of endpoints) {
+                                try {
+                                    const classResponse = await fetch(endpoint, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({
+                                            class_id: parseInt(cls.id),
+                                            lessons: classLessons
+                                        })
+                                    });
+                                    
+                                    if (classResponse.ok) {
+                                        const classResult = await classResponse.json();
+                                        
+                                        if (classResult.success) {
+                                            saveResults.push(`${cls.name}: ${classResult.lessons_saved || classLessons.length} lektioner`);
+                                            totalSaved += classResult.lessons_saved || classLessons.length;
+                                            debugLog(`✓ Successfully saved class ${cls.name} via ${endpoint}`);
+                                            classSaved = true;
+                                            break;
+                                        }
+                                    }
+                                } catch (endpointError) {
+                                    debugLog(`Failed ${endpoint}:`, endpointError.message);
+                                    continue;
+                                }
+                            }
+                            
+                            if (!classSaved) {
+                                debugLog(`✗ Failed to save class ${cls.name} via all endpoints`);
+                                throw new Error(`Kunde inte spara schema för ${cls.name} - inga fungerande API-endpoints`);
+                            }
+                        }
+                        
+                        if (totalSaved > 0) {
+                            alert(`✅ Schema sparat med individuell metod!\n\n${saveResults.join('\n')}\n\nTotalt: ${totalSaved} lektioner`);
+                            
+                            scheduleSaveState.hasUnsavedChanges = false;
+                            scheduleSaveState.lastSavedSchedule = JSON.parse(JSON.stringify(currentSchedule));
+                            updateScheduleUI();
+                            updateClassScheduleStatus();
+                        } else {
+                            throw new Error('Inga lektioner kunde sparas via någon metod');
+                        }
+                        
+                    } catch (fallbackError) {
+                        console.error('All save methods failed:', {
+                            primaryError: error.message,
+                            fallbackError: fallbackError.message
+                        });
+                        debugLog('All save methods failed:', {
+                            primaryError: error.message,
+                            fallbackError: fallbackError.message,
+                            currentSchedule: currentSchedule,
+                            selectedClasses: selectedClasses,
+                            processedLessons: processedLessons.slice(0, 2) // Sample for debug
+                        });
+                        
+                        alert(`❌ Alla sparmetoder misslyckades:\n\n` +
+                            `Primär metod: ${error.message}\n` +
+                            `Fallback metod: ${fallbackError.message}\n\n` +
+                            `Möjliga lösningar:\n` +
+                            `• Kontrollera att backend-servern körs\n` +
+                            `• Verifiera att API-endpoints finns\n` +
+                            `• Kontrollera schemastrukturen\n` +
+                            `• Försök generera schemat igen`);
+                    }
                 }
             }
 
