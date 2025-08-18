@@ -4293,8 +4293,7 @@
 
                 if (scheduleData.has_schedule) {
                     scheduleHtml += `<div style="overflow-x: auto;"><table class="schedule-table" style="width: 100%; border-collapse: collapse;">`;
-                    scheduleHtml += `<thead><tr style="background: #f7fafc;"><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Dag</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Tid</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Ämne</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Rum</th></tr></thead><tbody>`;
-
+                    scheduleHtml += `<thead><tr style="background: #f7fafc;"><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Dag</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Tid</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Ämne</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Rum</th><th style="padding: 0.75rem; border: 1px solid #e2e8f0;">Lärare</th></tr></thead><tbody>`;
                     weekdays.forEach(day => {
                         const dayLessons = scheduleData.lessons_by_day[day] || [];
                         
@@ -4302,7 +4301,7 @@
                             scheduleHtml += `
                                 <tr>
                                     <td style="padding: 0.75rem; border: 1px solid #e2e8f0; font-weight: 600; text-transform: capitalize;">${day}</td>
-                                    <td colspan="3" style="padding: 0.75rem; border: 1px solid #e2e8f0; color: #999; font-style: italic;">Inga lektioner</td>
+                                    <td colspan="4" style="padding: 0.75rem; border: 1px solid #e2e8f0; color: #999; font-style: italic;">Inga lektioner</td>
                                 </tr>
                             `;
                         } else {
@@ -4313,6 +4312,7 @@
                                         <td style="padding: 0.75rem; border: 1px solid #e2e8f0; font-family: monospace;">${lesson.time}</td>
                                         <td style="padding: 0.75rem; border: 1px solid #e2e8f0;">${lesson.subject}</td>
                                         <td style="padding: 0.75rem; border: 1px solid #e2e8f0;">${lesson.room}</td>
+                                        <td style="padding: 0.75rem; border: 1px solid #e2e8f0;">${lesson.teacher || 'Ej tilldelad'}</td>
                                     </tr>
                                 `;
                             });
