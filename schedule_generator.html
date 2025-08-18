@@ -737,19 +737,45 @@
             <div class="card">
                 <h3>📋 Multi-klass Schemaförhandsvisning</h3>
 
-                <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:0.75rem;">
+                <!-- 1. ERSÄTT filtreringssektionen i HTML (runt rad 150) -->
+                <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:0.75rem; flex-wrap: wrap;">
                     <label for="classFilter" style="margin:0; font-weight:600; color:#4a5568;">Visa:</label>
-                    <select id="classFilter" onchange="onClassFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0;">
+                    <select id="classFilter" onchange="onFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0; min-width: 120px;">
                         <option value="all">Alla klasser</option>
                         <!-- JS fyller resterande -->
                     </select>
 
                     <label for="teacherFilter" style="margin:0; font-weight:600; color:#4a5568;">Lärare:</label>
-                    <select id="teacherFilter" onchange="onTeacherFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0;">
+                    <select id="teacherFilter" onchange="onFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0; min-width: 120px;">
                         <option value="all">Alla lärare</option>
                         <!-- JS fyller resterande -->
                     </select>
+
+                    <label for="roomFilter" style="margin:0; font-weight:600; color:#4a5568;">Rum:</label>
+                    <select id="roomFilter" onchange="onFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0; min-width: 100px;">
+                        <option value="all">Alla rum</option>
+                        <!-- JS fyller resterande -->
+                    </select>
+
+                    <label for="subjectFilter" style="margin:0; font-weight:600; color:#4a5568;">Ämne:</label>
+                    <select id="subjectFilter" onchange="onFilterChange()" style="padding:0.5rem; border-radius:6px; border:1px solid #e2e8f0; min-width: 120px;">
+                        <option value="all">Alla ämnen</option>
+                        <!-- JS fyller resterande -->
+                    </select>
+
+                    <button type="button" onclick="resetFilters()" style="padding:0.5rem 0.75rem; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer; font-size:0.85rem;">
+                        🔄 Återställ filter
+                    </button>
                 </div>
+
+                <!-- Filterstatistik -->
+                <div id="filterStats" style="margin-bottom: 1rem; padding: 0.75rem; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; display: none;">
+                    <div style="font-size: 0.85rem; color: #4a5568;">
+                        <span id="filteredLessonsCount">0</span> lektioner visas av totalt <span id="totalLessonsCount">0</span>
+                        <span id="activeFilters" style="margin-left: 1rem; font-weight: 600;"></span>
+                    </div>
+                </div>
+
 
 
 
@@ -922,6 +948,55 @@
                     opt.setAttribute('data-generated', '1');
                     sel.appendChild(opt);
                 });
+            }
+
+            // Populera ämnesfilter
+            function populateSubjectFilter(schedule) {
+                const sel = document.getElementById('subjectFilter');
+                if (!sel) return;
+                
+                // Rensa tidigare genererade options
+                sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
+                
+                if (schedule && schedule.lessons) {
+                    const subjects = [...new Set(schedule.lessons.map(l => l.subject_name).filter(s => s))].sort();
+                    subjects.forEach(subject => {
+                        const opt = document.createElement('option');
+                        opt.value = subject;
+                        opt.textContent = subject;
+                        opt.setAttribute('data-generated', '1');
+                        sel.appendChild(opt);
+                    });
+                }
+            }
+
+
+            function populateAllFilters(schedule) {
+                if (!schedule || !schedule.lessons) return;
+                
+                populateClassFilter();
+                populateTeacherFilterFromSchedule(schedule);
+                populateRoomFilter(schedule);
+                populateSubjectFilter(schedule);
+            }
+
+            function populateRoomFilter(schedule) {
+                const sel = document.getElementById('roomFilter');
+                if (!sel) return;
+                
+                // Rensa tidigare genererade options
+                sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
+                
+                if (schedule && schedule.lessons) {
+                    const rooms = [...new Set(schedule.lessons.map(l => l.room).filter(r => r))].sort();
+                    rooms.forEach(room => {
+                        const opt = document.createElement('option');
+                        opt.value = room;
+                        opt.textContent = room;
+                        opt.setAttribute('data-generated', '1');
+                        sel.appendChild(opt);
+                    });
+                }
             }
 
 
@@ -1243,19 +1318,19 @@
                 // Om inga lärardata finns ännu - lämna standard 'Alla lärare' (vi kommer att fylla från schedule senare)
             }
 
-            // Fyll teacher-filter från ett genererat schema (används efter generering om backend ej skickade teachers)
+            // Uppdaterad populateTeacherFilterFromSchedule
             function populateTeacherFilterFromSchedule(schedule) {
                 const sel = document.getElementById('teacherFilter');
                 if (!sel || !schedule || !Array.isArray(schedule.lessons)) return;
+                
                 // Ta bort gamla genererade options
                 sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
 
                 const teacherSet = new Map();
                 schedule.lessons.forEach(lesson => {
-                    // Förväntar att lesson har property lesson.teacher_name eller lesson.teacher_id
                     const teacherName = lesson.teacher_name || lesson.teacher || null;
                     const teacherId = lesson.teacher_id || lesson.teacher || teacherName;
-                    if (teacherName) {
+                    if (teacherName && teacherName !== 'Ingen lärare') {
                         if (!teacherSet.has(teacherId)) teacherSet.set(teacherId, teacherName);
                     }
                 });
@@ -1267,6 +1342,79 @@
                     opt.setAttribute('data-generated', '1');
                     sel.appendChild(opt);
                 });
+            }
+
+            function resetFilters() {
+                const filters = ['classFilter', 'teacherFilter', 'roomFilter', 'subjectFilter'];
+                filters.forEach(filterId => {
+                    const filter = document.getElementById(filterId);
+                    if (filter) filter.value = 'all';
+                });
+                
+                if (currentSchedule) {
+                    displayMultiClassSchedule(currentSchedule, {});
+                    updateFilterStats(currentSchedule, {});
+                }
+            }
+
+
+            // Uppdatera filterstatistik
+            function updateFilterStats(schedule, filters) {
+                const statsDiv = document.getElementById('filterStats');
+                const filteredCount = document.getElementById('filteredLessonsCount');
+                const totalCount = document.getElementById('totalLessonsCount');
+                const activeFiltersSpan = document.getElementById('activeFilters');
+                
+                if (!statsDiv || !schedule || !schedule.lessons) return;
+                
+                const filteredLessons = applyFiltersToLessons(schedule.lessons, filters);
+                const totalLessons = schedule.lessons.length;
+                
+                filteredCount.textContent = filteredLessons.length;
+                totalCount.textContent = totalLessons;
+                
+                // Visa aktiva filter
+                const activeFilters = [];
+                if (filters.class) {
+                    const classObj = selectedClasses.find(c => c.id == filters.class);
+                    if (classObj) activeFilters.push(`Klass: ${classObj.name}`);
+                }
+                if (filters.teacher) {
+                    const teacherName = getTeacherNameById(filters.teacher);
+                    activeFilters.push(`Lärare: ${teacherName}`);
+                }
+                if (filters.room) activeFilters.push(`Rum: ${filters.room}`);
+                if (filters.subject) activeFilters.push(`Ämne: ${filters.subject}`);
+                
+                if (activeFilters.length > 0) {
+                    activeFiltersSpan.textContent = `Aktiva filter: ${activeFilters.join(', ')}`;
+                    statsDiv.style.display = 'block';
+                } else {
+                    activeFiltersSpan.textContent = '';
+                    statsDiv.style.display = filteredLessons.length !== totalLessons ? 'block' : 'none';
+                }
+            }
+
+
+
+            // Huvudfilteringsfunktion - ersätter onClassFilterChange och onTeacherFilterChange
+            function onFilterChange() {
+                if (!currentSchedule) return;
+                
+                const classFilter = document.getElementById('classFilter');
+                const teacherFilter = document.getElementById('teacherFilter');
+                const roomFilter = document.getElementById('roomFilter');
+                const subjectFilter = document.getElementById('subjectFilter');
+                
+                const filters = {
+                    class: classFilter && classFilter.value !== 'all' ? classFilter.value : null,
+                    teacher: teacherFilter && teacherFilter.value !== 'all' ? teacherFilter.value : null,
+                    room: roomFilter && roomFilter.value !== 'all' ? roomFilter.value : null,
+                    subject: subjectFilter && subjectFilter.value !== 'all' ? subjectFilter.value : null
+                };
+                
+                displayMultiClassSchedule(currentSchedule, filters);
+                updateFilterStats(currentSchedule, filters);
             }
 
             // Händelsehanterare för filter
@@ -1347,20 +1495,7 @@
 
 
 
-            function populateClassFilter() {
-                const sel = document.getElementById('classFilter');
-                if (!sel) return;
-                // Rensa utom 'Alla'
-                sel.querySelectorAll('option[data-generated]').forEach(o => o.remove());
-                // Lägg till klasser från availableClasses
-                availableClasses.forEach(cls => {
-                    const opt = document.createElement('option');
-                    opt.value = cls.id;
-                    opt.textContent = cls.name;
-                    opt.setAttribute('data-generated', '1');
-                    sel.appendChild(opt);
-                });
-            }
+          
 
 
             // Uppdatera renderSubjects funktionen för att inkludera lärarhantering
@@ -1719,6 +1854,548 @@
             }
 
 
+
+            function createEnhancedLessonBlock(lesson, isFiltered = false) {
+                const bgColor = lesson.color || '#9f7aea';
+                const teacherInfo = lesson.teacher_name && lesson.teacher_name !== 'Ingen lärare' ? 
+                    `👨‍🏫 ${lesson.teacher_name}` : '⚠️ Ingen lärare';
+                
+                return `
+                    <div class="lesson-block ${isFiltered ? 'filter-highlighted' : ''}" 
+                        data-class-id="${lesson.class_id}"
+                        data-teacher-id="${lesson.teacher_id || ''}"
+                        data-room="${lesson.room || ''}"
+                        data-subject="${lesson.subject_name || ''}"
+                        style="
+                            background: ${bgColor}; 
+                            color: white; 
+                            padding: 0.375rem; 
+                            border-radius: 4px; 
+                            margin-bottom: 0.25rem; 
+                            font-size: 0.75rem;
+                            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                            border: 1px solid rgba(255,255,255,0.2);
+                            position: relative;
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                        "
+                        onclick="showLessonDetails('${lesson.day}', '${lesson.time}', '${lesson.class_id}', '${lesson.subject_name}')"
+                        title="Klicka för detaljer">
+                        
+                        <div style="font-weight: 600; margin-bottom: 0.125rem;">${lesson.class_name}</div>
+                        <div style="opacity: 0.9; line-height: 1.2;">
+                            📚 ${lesson.subject_name}<br>
+                            🏫 ${lesson.room || 'Inget rum'}<br>
+                            ${teacherInfo}
+                        </div>
+                        
+                        ${isFiltered ? 
+                            `<div style="position: absolute; top: 2px; right: 2px; background: rgba(255,255,255,0.3); border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; font-size: 0.6rem;">
+                                ✓
+                            </div>` : ''
+                        }
+                    </div>
+                `;
+            }
+
+
+            // Hjälpfunktion för att hitta klassnamn
+            function getClassNameById(classId) {
+                const cls = selectedClasses.find(c => String(c.id) === String(classId)) || 
+                            availableClasses.find(c => String(c.id) === String(classId));
+                return cls ? cls.name : classId;
+            }
+
+            function quickFilterByRoom(roomName) {
+                const roomFilter = document.getElementById('roomFilter');
+                if (roomFilter) {
+                    roomFilter.value = roomName;
+                    onFilterChange();
+                }
+            }
+
+            // Exportera filtrerat schema
+            function exportFilteredSchedule() {
+                if (!currentSchedule) {
+                    alert('Inget schema att exportera');
+                    return;
+                }
+                
+                const classFilter = document.getElementById('classFilter');
+                const teacherFilter = document.getElementById('teacherFilter');
+                const roomFilter = document.getElementById('roomFilter');
+                const subjectFilter = document.getElementById('subjectFilter');
+                
+                const filters = {
+                    class: classFilter && classFilter.value !== 'all' ? classFilter.value : null,
+                    teacher: teacherFilter && teacherFilter.value !== 'all' ? teacherFilter.value : null,
+                    room: roomFilter && roomFilter.value !== 'all' ? roomFilter.value : null,
+                    subject: subjectFilter && subjectFilter.value !== 'all' ? subjectFilter.value : null
+                };
+                
+                const filteredLessons = applyFiltersToLessons(currentSchedule.lessons, filters);
+                
+                if (filteredLessons.length === 0) {
+                    alert('Inga lektioner att exportera med nuvarande filter');
+                    return;
+                }
+                
+                // Skapa CSV-data
+                const csvHeaders = ['Dag', 'Tid', 'Klass', 'Ämne', 'Rum', 'Lärare'];
+                const csvRows = [csvHeaders.join(',')];
+                
+                filteredLessons.forEach(lesson => {
+                    const row = [
+                        lesson.day || '',
+                        lesson.time || '',
+                        lesson.class_name || '',
+                        lesson.subject_name || '',
+                        lesson.room || '',
+                        lesson.teacher_name || 'Ingen lärare'
+                    ];
+                    csvRows.push(row.map(cell => `"${cell}"`).join(','));
+                });
+                
+                // Ladda ner CSV
+                const csvContent = csvRows.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    
+                    // Skapa filnamn baserat på filter
+                    const filterParts = [];
+                    if (filters.class) filterParts.push(`klass-${getClassNameById(filters.class)}`);
+                    if (filters.teacher) filterParts.push(`larare-${getTeacherNameById(filters.teacher)}`);
+                    if (filters.room) filterParts.push(`rum-${filters.room}`);
+                    if (filters.subject) filterParts.push(`amne-${filters.subject}`);
+                    
+                    const filterSuffix = filterParts.length > 0 ? `_${filterParts.join('_')}` : '';
+                    link.setAttribute('download', `schema_filtrerat${filterSuffix}_${new Date().toISOString().split('T')[0]}.csv`);
+                    
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    debugLog('Exported filtered schedule:', {
+                        totalLessons: filteredLessons.length,
+                        appliedFilters: filters,
+                        filename: link.getAttribute('download')
+                    });
+                }
+            }
+
+
+            // Visa lektionsdetaljer
+            function showLessonDetails(day, time, classId, subjectName) {
+                if (!currentSchedule) return;
+                
+                const lesson = currentSchedule.lessons.find(l => 
+                    l.day === day && l.time === time && String(l.class_id) === String(classId) && l.subject_name === subjectName
+                );
+                
+                if (!lesson) return;
+                
+                const modalHtml = `
+                    <div id="lessonDetailsModal" style="display: block; position: fixed; z-index: 1002; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+                        <div style="background-color: #fefefe; margin: 10% auto; padding: 20px; border-radius: 8px; width: 500px; max-width: 90%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                                <h3 style="margin: 0; color: #2d3748;">📚 Lektionsdetaljer</h3>
+                                <span onclick="closeLessonDetailsModal()" style="cursor: pointer; font-size: 1.5rem; color: #9ca3af;">&times;</span>
+                            </div>
+                            
+                            <div style="display: grid; gap: 0.75rem;">
+                                <div style="display: grid; grid-template-columns: 100px 1fr; gap: 0.5rem; align-items: center;">
+                                    <strong>Tid:</strong> <span>${lesson.day} ${lesson.time}</span>
+                                    <strong>Klass:</strong> <span style="color: ${lesson.color};">● ${lesson.class_name}</span>
+                                    <strong>Ämne:</strong> <span>${lesson.subject_name}</span>
+                                    <strong>Rum:</strong> <span>${lesson.room || 'Inget rum'}</span>
+                                    <strong>Lärare:</strong> <span>${lesson.teacher_name || 'Ingen lärare'}</span>
+                                    ${lesson.duration_hours ? `<strong>Längd:</strong> <span>${lesson.duration_hours}h (${lesson.duration_minutes || '60'} min)</span>` : ''}
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                <button onclick="filterByLesson('${lesson.teacher_id || lesson.teacher_name}', 'teacher')" 
+                                        style="padding: 0.5rem 0.75rem; background: #4299e1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                    Visa lärarens schema
+                                </button>
+                                <button onclick="filterByLesson('${lesson.room}', 'room')" 
+                                        style="padding: 0.5rem 0.75rem; background: #9f7aea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                    Visa rummets schema
+                                </button>
+                                <button onclick="closeLessonDetailsModal()" 
+                                        style="padding: 0.5rem 0.75rem; background: #718096; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                    Stäng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+
+            function closeLessonDetailsModal() {
+                const modal = document.getElementById('lessonDetailsModal');
+                if (modal) modal.remove();
+            }
+
+            function filterByLesson(value, type) {
+                const filter = document.getElementById(type + 'Filter');
+                if (filter) {
+                    filter.value = value;
+                    onFilterChange();
+                }
+                closeLessonDetailsModal();
+            }
+
+
+
+
+            // Visa rumsutnyttjande
+            function showRoomUtilization() {
+                if (!currentSchedule || !currentSchedule.lessons) {
+                    alert('Inget schema laddat');
+                    return;
+                }
+                
+                const roomUtilization = {};
+                const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+                const timeSlots = [...new Set(currentSchedule.lessons.map(l => l.time))].sort();
+                
+                // Initiera rumstatistik
+                const allRooms = [...new Set(currentSchedule.lessons.map(l => l.room))];
+                allRooms.forEach(room => {
+                    roomUtilization[room] = {
+                        totalSlots: weekdays.length * timeSlots.length,
+                        occupiedSlots: 0,
+                        lessons: [],
+                        utilizationPercentage: 0
+                    };
+                });
+                
+                // Räkna upptagna slots
+                currentSchedule.lessons.forEach(lesson => {
+                    if (roomUtilization[lesson.room]) {
+                        roomUtilization[lesson.room].occupiedSlots++;
+                        roomUtilization[lesson.room].lessons.push(lesson);
+                    }
+                });
+                
+                // Beräkna utnyttjandegrad
+                Object.keys(roomUtilization).forEach(room => {
+                    const data = roomUtilization[room];
+                    data.utilizationPercentage = Math.round((data.occupiedSlots / data.totalSlots) * 100);
+                });
+                
+                // Skapa modal för rumsutnyttjande
+                const modalHtml = `
+                    <div id="roomUtilizationModal" style="display: block; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4);">
+                        <div style="background-color: #fefefe; margin: 2% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 800px; max-height: 85%; overflow-y: auto;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                                <h3 style="margin: 0; color: #2d3748;">🏫 Rumsutnyttjande</h3>
+                                <span onclick="closeRoomUtilizationModal()" style="cursor: pointer; font-size: 1.5rem; color: #9ca3af;">&times;</span>
+                            </div>
+                            
+                            <div style="display: grid; gap: 1rem;">
+                                ${Object.entries(roomUtilization).map(([room, data]) => `
+                                    <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; background: #f9fafb;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                            <h4 style="margin: 0; color: #1a202c;">${room}</h4>
+                                            <div style="text-align: right;">
+                                                <div style="font-size: 1.2rem; font-weight: 600; color: ${data.utilizationPercentage > 80 ? '#e53e3e' : data.utilizationPercentage > 60 ? '#d69e2e' : '#38a169'};">
+                                                    ${data.utilizationPercentage}%
+                                                </div>
+                                                <div style="font-size: 0.8rem; color: #666;">
+                                                    ${data.occupiedSlots}/${data.totalSlots} slots
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="background: #e2e8f0; height: 8px; border-radius: 4px; margin-bottom: 0.75rem;">
+                                            <div style="background: ${data.utilizationPercentage > 80 ? '#e53e3e' : data.utilizationPercentage > 60 ? '#d69e2e' : '#38a169'}; height: 100%; width: ${data.utilizationPercentage}%; border-radius: 4px;"></div>
+                                        </div>
+                                        
+                                        <div style="font-size: 0.8rem; max-height: 150px; overflow-y: auto;">
+                                            <strong>Lektioner (${data.lessons.length}):</strong><br>
+                                            ${data.lessons.map(lesson => `
+                                                <div style="margin: 0.125rem 0; padding: 0.25rem; background: white; border-radius: 3px;">
+                                                    ${lesson.day} ${lesson.time}: ${lesson.class_name} - ${lesson.subject_name}
+                                                    ${lesson.teacher_name ? ` (${lesson.teacher_name})` : ''}
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+
+
+
+
+            // 8. LÄGG TILL avancerad sökfunktion:
+            function addAdvancedSearch() {
+                const container = document.getElementById('schedulePreview').parentNode;
+                
+                let searchContainer = document.getElementById('advancedSearchContainer');
+                if (!searchContainer) {
+                    searchContainer = document.createElement('div');
+                    searchContainer.id = 'advancedSearchContainer';
+                    searchContainer.style.cssText = 'margin-bottom: 1rem; padding: 1rem; background: #f0f9ff; border-radius: 6px; border: 1px solid #0ea5e9;';
+                    
+                    searchContainer.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
+                            <label style="font-weight: 600; color: #0c4a6e;">🔍 Sök i schema:</label>
+                            <input type="text" id="scheduleSearch" placeholder="Sök efter klass, lärare, ämne eller rum..." 
+                                style="flex: 1; padding: 0.5rem; border: 1px solid #0ea5e9; border-radius: 4px;"
+                                oninput="performScheduleSearch()">
+                            <button onclick="clearSearch()" style="padding: 0.5rem; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">
+                                ✕
+                            </button>
+                        </div>
+                        <div id="searchResults" style="font-size: 0.85rem; color: #1e40af;"></div>
+                    `;
+                    
+                    container.insertBefore(searchContainer, container.firstChild);
+                }
+            }
+
+            function performScheduleSearch() {
+                const searchInput = document.getElementById('scheduleSearch');
+                const resultsDiv = document.getElementById('searchResults');
+                
+                if (!searchInput || !resultsDiv || !currentSchedule) return;
+                
+                const query = searchInput.value.toLowerCase().trim();
+                
+                if (query.length < 2) {
+                    resultsDiv.innerHTML = '';
+                    // Återställ normal visning
+                    displayMultiClassSchedule(currentSchedule, getCurrentFilters());
+                    return;
+                }
+                
+                const matchingLessons = currentSchedule.lessons.filter(lesson => {
+                    return (
+                        (lesson.class_name && lesson.class_name.toLowerCase().includes(query)) ||
+                        (lesson.teacher_name && lesson.teacher_name.toLowerCase().includes(query)) ||
+                        (lesson.subject_name && lesson.subject_name.toLowerCase().includes(query)) ||
+                        (lesson.room && lesson.room.toLowerCase().includes(query)) ||
+                        (lesson.day && lesson.day.toLowerCase().includes(query)) ||
+                        (lesson.time && lesson.time.includes(query))
+                    );
+                });
+                
+                resultsDiv.innerHTML = `Hittade ${matchingLessons.length} lektioner som matchar "${query}"`;
+                
+                // Visa endast matchande lektioner
+                const currentFilters = getCurrentFilters();
+                const fakeSchedule = { ...currentSchedule, lessons: matchingLessons };
+                displayMultiClassSchedule(fakeSchedule, currentFilters);
+                
+                // Markera sökresultat visuellt
+                setTimeout(() => {
+                    document.querySelectorAll('.lesson-block').forEach(block => {
+                        block.classList.add('lesson-block-filtered');
+                    });
+                }, 100);
+            }
+
+            function clearSearch() {
+                const searchInput = document.getElementById('scheduleSearch');
+                const resultsDiv = document.getElementById('searchResults');
+                
+                if (searchInput) searchInput.value = '';
+                if (resultsDiv) resultsDiv.innerHTML = '';
+                
+                // Återställ normal visning
+                if (currentSchedule) {
+                    displayMultiClassSchedule(currentSchedule, getCurrentFilters());
+                }
+            }
+
+            function getCurrentFilters() {
+                return {
+                    class: document.getElementById('classFilter')?.value !== 'all' ? document.getElementById('classFilter')?.value : null,
+                    teacher: document.getElementById('teacherFilter')?.value !== 'all' ? document.getElementById('teacherFilter')?.value : null,
+                    room: document.getElementById('roomFilter')?.value !== 'all' ? document.getElementById('roomFilter')?.value : null,
+                    subject: document.getElementById('subjectFilter')?.value !== 'all' ? document.getElementById('subjectFilter')?.value : null
+                };
+            }
+
+            function closeRoomUtilizationModal() {
+                const modal = document.getElementById('roomUtilizationModal');
+                if (modal) modal.remove();
+            }
+
+            // Lägg till snabbfilter-knappar
+            function addQuickFilterButtons() {
+                const preview = document.getElementById('schedulePreview');
+                if (!currentSchedule || !currentSchedule.lessons) return;
+                
+                // Hitta eller skapa container för snabbknappar
+                let quickFilters = document.getElementById('quickFilterButtons');
+                if (!quickFilters) {
+                    quickFilters = document.createElement('div');
+                    quickFilters.id = 'quickFilterButtons';
+                    quickFilters.style.cssText = 'margin-bottom: 1rem; padding: 0.75rem; background: #f7fafc; border-radius: 6px; border: 1px solid #e2e8f0;';
+                    preview.parentNode.insertBefore(quickFilters, preview);
+                }
+                
+                const teachers = [...new Set(currentSchedule.lessons.map(l => l.teacher_name).filter(t => t && t !== 'Ingen lärare'))];
+                const rooms = [...new Set(currentSchedule.lessons.map(l => l.room).filter(r => r))];
+                
+                quickFilters.innerHTML = `
+                    <div style="margin-bottom: 0.5rem; font-weight: 600; color: #4a5568;">🔍 Snabbfilter:</div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                        <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.8rem; color: #666; align-self: center;">Lärare:</span>
+                            ${teachers.slice(0, 5).map(teacher => `
+                                <button onclick="quickFilterByTeacher('${teacher}')" 
+                                        style="padding: 0.25rem 0.5rem; background: #e2e8f0; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.75rem; cursor: pointer; color: #4a5568;">
+                                    ${teacher}
+                                </button>
+                            `).join('')}
+                            ${teachers.length > 5 ? `<span style="font-size: 0.75rem; color: #999; align-self: center;">+${teachers.length - 5} till</span>` : ''}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.8rem; color: #666; align-self: center;">Rum:</span>
+                            ${rooms.map(room => `
+                                <button onclick="quickFilterByRoom('${room}')" 
+                                        style="padding: 0.25rem 0.5rem; background: #e6fffa; border: 1px solid #38b2ac; border-radius: 4px; font-size: 0.75rem; cursor: pointer; color: #285e61;">
+                                    ${room}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button onclick="showTeacherScheduleDetails()" 
+                                style="padding: 0.5rem 0.75rem; background: #4299e1; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">
+                            👨‍🏫 Detaljerad läraröversikt
+                        </button>
+                        <button onclick="showRoomUtilization()" 
+                                style="padding: 0.5rem 0.75rem; background: #9f7aea; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">
+                            🏫 Rumsutnyttjande
+                        </button>
+                        <button onclick="exportFilteredSchedule()" 
+                                style="padding: 0.5rem 0.75rem; background: #38b2ac; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">
+                            📊 Exportera filtrerat
+                        </button>
+                    </div>
+                `;
+            }
+
+            // Snabbfilter funktioner
+            function quickFilterByTeacher(teacherName) {
+                const teacherFilter = document.getElementById('teacherFilter');
+                if (teacherFilter) {
+                    // Hitta rätt teacher ID
+                    const option = Array.from(teacherFilter.options).find(opt => 
+                        opt.textContent === teacherName || getTeacherNameById(opt.value) === teacherName
+                    );
+                    if (option) {
+                        teacherFilter.value = option.value;
+                        onFilterChange();
+                    }
+                }
+            }
+
+
+
+
+
+            // Visa detaljerad läraröversikt
+            function showTeacherScheduleDetails() {
+                if (!currentSchedule || !currentSchedule.lessons) {
+                    alert('Inget schema laddat');
+                    return;
+                }
+                
+                const teacherSchedules = {};
+                
+                // Gruppera lektioner per lärare
+                currentSchedule.lessons.forEach(lesson => {
+                    const teacherKey = lesson.teacher_id || lesson.teacher_name || 'Okänd lärare';
+                    const teacherName = lesson.teacher_name || 'Okänd lärare';
+                    
+                    if (!teacherSchedules[teacherKey]) {
+                        teacherSchedules[teacherKey] = {
+                            name: teacherName,
+                            lessons: [],
+                            totalHours: 0,
+                            subjects: new Set(),
+                            classes: new Set(),
+                            rooms: new Set()
+                        };
+                    }
+                    
+                    teacherSchedules[teacherKey].lessons.push(lesson);
+                    teacherSchedules[teacherKey].totalHours += (lesson.duration_hours || 1);
+                    teacherSchedules[teacherKey].subjects.add(lesson.subject_name);
+                    teacherSchedules[teacherKey].classes.add(lesson.class_name);
+                    teacherSchedules[teacherKey].rooms.add(lesson.room);
+                });
+                
+                // Skapa modal för läraröversikt
+                const modalHtml = `
+                    <div id="teacherOverviewModal" style="display: block; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4);">
+                        <div style="background-color: #fefefe; margin: 2% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 1000px; max-height: 85%; overflow-y: auto;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                                <h3 style="margin: 0; color: #2d3748;">👨‍🏫 Läraröversikt - Schemafördelning</h3>
+                                <span onclick="closeTeacherOverviewModal()" style="cursor: pointer; font-size: 1.5rem; color: #9ca3af;">&times;</span>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+                                ${Object.entries(teacherSchedules).map(([teacherId, data]) => `
+                                    <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; background: #f9fafb;">
+                                        <h4 style="margin: 0 0 0.75rem 0; color: #1a202c; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem;">
+                                            ${data.name}
+                                        </h4>
+                                        
+                                        <div style="margin-bottom: 0.75rem; font-size: 0.9rem;">
+                                            <div><strong>Totalt:</strong> ${data.totalHours} timmar, ${data.lessons.length} lektioner</div>
+                                            <div><strong>Ämnen:</strong> ${Array.from(data.subjects).join(', ')}</div>
+                                            <div><strong>Klasser:</strong> ${Array.from(data.classes).join(', ')}</div>
+                                            <div><strong>Rum:</strong> ${Array.from(data.rooms).join(', ')}</div>
+                                        </div>
+                                        
+                                        <div style="font-size: 0.8rem; max-height: 200px; overflow-y: auto;">
+                                            ${data.lessons.map(lesson => `
+                                                <div style="padding: 0.25rem; background: white; border-radius: 4px; margin-bottom: 0.25rem; border-left: 3px solid ${lesson.color};">
+                                                    <strong>${lesson.day} ${lesson.time}</strong><br>
+                                                    ${lesson.class_name} - ${lesson.subject_name} (${lesson.room})
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+
+            function closeTeacherOverviewModal() {
+                const modal = document.getElementById('teacherOverviewModal');
+                if (modal) modal.remove();
+            }
+
+
             // 3. FÖRBÄTTRA loadTeacherRoomRestrictions för att säkerställa korrekt inläsning:
             async function loadTeacherRoomRestrictions() {
                 try {
@@ -1973,6 +2650,25 @@
             }
 
 
+            // Hjälpfunktion för att hitta lärarnamn
+            function getTeacherNameById(teacherId) {
+                if (typeof availableTeachers !== 'undefined' && Array.isArray(availableTeachers)) {
+                    const teacher = availableTeachers.find(t => String(t.id) === String(teacherId));
+                    if (teacher) return teacher.name || teacher.username || teacherId;
+                }
+                
+                // Fallback: kolla i schemat
+                if (currentSchedule && currentSchedule.lessons) {
+                    const lesson = currentSchedule.lessons.find(l => 
+                        String(l.teacher_id) === String(teacherId) || String(l.teacher_name) === String(teacherId)
+                    );
+                    if (lesson && lesson.teacher_name) return lesson.teacher_name;
+                }
+                
+                return teacherId;
+            }
+
+
             function getSubjectNameById(subjectId) {
                 if (subjectId === null || subjectId === undefined) return null;
                 const idStr = String(subjectId);
@@ -1988,6 +2684,37 @@
                 return null;
             }
 
+
+            // Tillämpa filter på lektioner
+            function applyFiltersToLessons(lessons, filters) {
+                return lessons.filter(lesson => {
+                    // Klassfilter
+                    if (filters.class && String(lesson.class_id) !== String(filters.class)) {
+                        return false;
+                    }
+                    
+                    // Lärarfilter
+                    if (filters.teacher) {
+                        const teacherMatch = 
+                            String(lesson.teacher_id) === String(filters.teacher) || 
+                            String(lesson.teacher_name) === String(filters.teacher) ||
+                            lesson.teacher_name === getTeacherNameById(filters.teacher);
+                        if (!teacherMatch) return false;
+                    }
+                    
+                    // Rumfilter
+                    if (filters.room && lesson.room !== filters.room) {
+                        return false;
+                    }
+                    
+                    // Ämnesfilter
+                    if (filters.subject && lesson.subject_name !== filters.subject) {
+                        return false;
+                    }
+                    
+                    return true;
+                });
+            }
 
 
     
@@ -3711,6 +4438,8 @@
                         
                         displayMultiClassSchedule(currentSchedule, selectedClass, selectedTeacher);
                         controls.style.display = 'flex';
+
+                        
                     }, 1000);
 
                 } catch (error) {
@@ -4072,139 +4801,139 @@
 
                 // Robust display-funktion (ersätt befintlig)
             // UPPDATERA displayMultiClassSchedule för att visa timmar korrekt:
-            function displayMultiClassSchedule(schedule, classFilter = null, teacherFilter = null) {
+            // ERSÄTT displayMultiClassSchedule funktionen (behåll signatur men ändra innehåll):
+            function displayMultiClassSchedule(schedule, filters = {}) {
                 const preview = document.getElementById('schedulePreview');
-                if (!preview || !schedule || !Array.isArray(schedule.lessons)) {
-                    if (preview) preview.innerHTML = '<div style="text-align:center;color:#666;">Inget schema att visa</div>';
+                const controls = document.getElementById('generationControls');
+                
+                if (!schedule || !schedule.lessons || schedule.lessons.length === 0) {
+                    preview.innerHTML = '<div style="text-align: center; color: #666;">Inget schema att visa</div>';
+                    controls.style.display = 'none';
                     return;
                 }
 
-                // Filtrera lektioner
-                let filteredLessons = schedule.lessons;
-                if (classFilter) {
-                    filteredLessons = filteredLessons.filter(l => String(l.class_id) === String(classFilter));
-                }
-                if (teacherFilter) {
-                    filteredLessons = filteredLessons.filter(l => 
-                        String(l.teacher_id) === String(teacherFilter) || 
-                        String(l.teacher_name) === String(teacherFilter)
-                    );
+                // Hantera både gamla och nya filter-format för bakåtkompatibilitet
+                let normalizedFilters = {};
+                if (typeof filters === 'string') {
+                    // Gammalt format: displayMultiClassSchedule(schedule, selectedClass, selectedTeacher)
+                    normalizedFilters.class = filters;
+                    normalizedFilters.teacher = arguments[2] || null;
+                } else if (typeof filters === 'object') {
+                    // Nytt format: displayMultiClassSchedule(schedule, {class, teacher, room, subject})
+                    normalizedFilters = filters || {};
                 }
 
-                // Gruppera lektioner per dag
-                const lessonMap = {};
-                filteredLessons.forEach(lesson => {
-                    const day = lesson.day || 'okänd';
-                    if (!lessonMap[day]) lessonMap[day] = [];
-                    lessonMap[day].push(lesson);
-                });
+                // Tillämpa filter
+                const filteredLessons = applyFiltersToLessons(schedule.lessons, normalizedFilters);
+                
+                // Populera alla filter om inte redan gjort
+                populateAllFilters(schedule);
+                
+                // Uppdatera filterstatistik
+                updateFilterStats(schedule, normalizedFilters);
 
-                // Hämta alla unika tider och sortera
-                const allTimes = [...new Set(filteredLessons.map(l => l.time))].sort((a, b) => {
+                const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
+                const timeSlots = schedule.time_slots || [...new Set(filteredLessons.map(l => l.time))].sort((a, b) => {
                     const aStart = timeToMinutes(a.split('-')[0]);
                     const bStart = timeToMinutes(b.split('-')[0]);
                     return aStart - bStart;
                 });
 
-                const weekdays = ['måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag'];
-
-                // Bygg tabell med timvisnig
+                // Skapa schema-grid
                 let html = `
-                    <div style="margin-bottom: 1rem;">
-                        <h3>📅 Schema ${classFilter ? `för ${schedule.classes?.find(c => c.id == classFilter)?.name || 'Klass ' + classFilter}` : '(Multi-klass)'}</h3>
-                        ${schedule.stats ? `
-                            <div style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
-                                ${schedule.stats.total_lessons} lektioner • ${schedule.stats.total_hours || 'N/A'} timmar totalt
-                                ${schedule.stats.hour_accuracy ? ` • ${schedule.stats.hour_accuracy}` : ''}
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div style="overflow-x:auto;">
-                        <table class="schedule-table" style="width:100%; border-collapse:collapse; border: 1px solid #e2e8f0;">
-                            <thead>
-                                <tr style="background: #f7fafc;">
-                                    <th style="min-width:80px; text-align:left; padding:8px; border: 1px solid #e2e8f0; font-weight: 600;">Tid</th>`;
-                
+                    <div class="multi-class-schedule-grid" style="display: grid; grid-template-columns: 120px repeat(${weekdays.length}, 1fr); gap: 1px; background-color: #e2e8f0; border-radius: 8px; overflow: hidden; font-size: 0.85rem;">
+                        <div class="time-header" style="background: #4a5568; color: white; padding: 0.75rem; font-weight: 600; text-align: center;">Tid</div>
+                `;
+
+                // Dagheaders
                 weekdays.forEach(day => {
-                    html += `<th style="text-align:left; padding:8px; border: 1px solid #e2e8f0; font-weight: 600;">${day.charAt(0).toUpperCase() + day.slice(1)}</th>`;
+                    html += `<div class="day-header" style="background: #4a5568; color: white; padding: 0.75rem; font-weight: 600; text-align: center; text-transform: capitalize;">${day}</div>`;
                 });
-                
-                html += '</tr></thead><tbody>';
 
-                // Skapa rader för varje tidslot
-                allTimes.forEach(currentTime => {
-                    html += `<tr><td style="padding:8px; font-weight:600; vertical-align:top; border: 1px solid #e2e8f0; background: #f8f9fa;">${escapeHtml(currentTime)}</td>`;
-
+                // Timeslots och lektioner
+                timeSlots.forEach(timeSlot => {
+                    html += `<div class="time-slot" style="background: white; padding: 0.5rem; font-weight: 600; color: #4a5568; text-align: center; border-right: 1px solid #e2e8f0;">${timeSlot}</div>`;
+                    
                     weekdays.forEach(day => {
-                        const dayLessons = lessonMap[day] || [];
-                        const lessonsAtTime = dayLessons.filter(l => l.time === currentTime);
-
-                        if (lessonsAtTime.length === 0) {
-                            html += '<td style="padding:8px; color:#a0aec0; border: 1px solid #e2e8f0; text-align: center;">-</td>';
-                        } else {
-                            const cellContent = lessonsAtTime.map(lesson => {
-                                const subjectLabel = lesson.subject_name || getSubjectNameById(lesson.school_subject_id) || getSubjectNameById(lesson.subject_id) || 'Okänt ämne';
-                                const classLabel = lesson.class_name || lesson.class_id || '';
-                                const room = lesson.room || '';
-                                const teacher = lesson.teacher_name || lesson.teacher || '';
-                                const color = lesson.color || '#9f7aea';
-                                const duration = lesson.duration_hours ? `(${lesson.duration_hours}h)` : '';
-
-                                return `
-                                    <div style="margin-bottom:4px; padding:6px; border-left:4px solid ${escapeHtml(color)}; background: ${escapeHtml(color)}15; border-radius:4px;">
-                                        <div style="font-weight:700; font-size: 0.9rem;">${escapeHtml(subjectLabel)} ${duration}</div>
-                                        <div style="font-size:0.8rem; color:#4a5568; margin-top: 2px;">
-                                            ${escapeHtml(classLabel)} • <span style="color:#718096">${escapeHtml(room)}</span>
+                        const dayLessons = filteredLessons.filter(l => l.day === day && l.time === timeSlot);
+                        
+                        html += '<div class="day-cell" style="background: white; padding: 0.25rem; min-height: 60px; position: relative;">';
+                        
+                        if (dayLessons.length > 0) {
+                            dayLessons.forEach((lesson, index) => {
+                                const bgColor = lesson.color || '#9f7aea';
+                                const teacherInfo = lesson.teacher_name && lesson.teacher_name !== 'Ingen lärare' ? 
+                                    `👨‍🏫 ${lesson.teacher_name}` : '⚠️ Ingen lärare';
+                                
+                                html += `
+                                    <div class="lesson-block" style="
+                                        background: ${bgColor}; 
+                                        color: white; 
+                                        padding: 0.375rem; 
+                                        border-radius: 4px; 
+                                        margin-bottom: 0.25rem; 
+                                        font-size: 0.75rem;
+                                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                                        border: 1px solid rgba(255,255,255,0.2);
+                                        position: relative;
+                                        ${index > 0 ? 'margin-top: 0.25rem;' : ''}
+                                    ">
+                                        <div style="font-weight: 600; margin-bottom: 0.125rem;">${lesson.class_name}</div>
+                                        <div style="opacity: 0.9; line-height: 1.2;">
+                                            📚 ${lesson.subject_name}<br>
+                                            🏫 ${lesson.room || 'Inget rum'}<br>
+                                            ${teacherInfo}
                                         </div>
-                                        ${teacher ? `<div style="font-size:0.75rem; color:#4a5568; margin-top: 2px;">👨‍🏫 ${escapeHtml(teacher)}</div>` : ''}
+                                        
+                                        ${normalizedFilters.class || normalizedFilters.teacher || normalizedFilters.room || normalizedFilters.subject ? 
+                                            `<div style="position: absolute; top: 2px; right: 2px; background: rgba(255,255,255,0.2); border-radius: 2px; padding: 1px 3px; font-size: 0.65rem;">
+                                                ✓
+                                            </div>` : ''
+                                        }
                                     </div>
                                 `;
-                            }).join('');
-                            
-                            html += `<td style="padding:8px; vertical-align:top; border: 1px solid #e2e8f0;">${cellContent}</td>`;
+                            });
+                        } else {
+                            html += '<div style="color: #a0aec0; text-align: center; padding: 1rem; font-style: italic;">—</div>';
                         }
+                        
+                        html += '</div>';
                     });
-
-                    html += '</tr>';
                 });
 
-                html += '</tbody></table></div>';
+                html += '</div>';
 
-                // Lägg till detaljerad statistik om tillgänglig
-                if (schedule.stats && schedule.stats.hour_distribution) {
+                // Lägg till sammanfattning av filtrerade resultat
+                if (Object.values(normalizedFilters).some(f => f !== null)) {
+                    const uniqueClasses = [...new Set(filteredLessons.map(l => l.class_name))];
+                    const uniqueTeachers = [...new Set(filteredLessons.map(l => l.teacher_name).filter(t => t && t !== 'Ingen lärare'))];
+                    const uniqueRooms = [...new Set(filteredLessons.map(l => l.room).filter(r => r))];
+                    const uniqueSubjects = [...new Set(filteredLessons.map(l => l.subject_name))];
+
                     html += `
-                        <div style="margin-top: 1.5rem; padding: 1rem; background: #f7fafc; border-radius: 0.5rem; border: 1px solid #e2e8f0;">
-                            <h4 style="margin: 0 0 0.75rem 0; color: #2d3748;">📊 Timfördelning per klass</h4>
-                            <div style="display: grid; gap: 0.5rem;">
+                        <div style="margin-top: 1rem; padding: 1rem; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px;">
+                            <h4 style="margin: 0 0 0.5rem 0; color: #0c4a6e;">📋 Filtrerade resultat</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
+                                <div><strong>Klasser (${uniqueClasses.length}):</strong><br>${uniqueClasses.join(', ') || 'Inga'}</div>
+                                <div><strong>Lärare (${uniqueTeachers.length}):</strong><br>${uniqueTeachers.join(', ') || 'Inga'}</div>
+                                <div><strong>Rum (${uniqueRooms.length}):</strong><br>${uniqueRooms.join(', ') || 'Inga'}</div>
+                                <div><strong>Ämnen (${uniqueSubjects.length}):</strong><br>${uniqueSubjects.join(', ') || 'Inga'}</div>
+                            </div>
+                        </div>
                     `;
-                    
-                    Object.entries(schedule.stats.hour_distribution).forEach(([className, subjects]) => {
-                        html += `
-                            <div style="padding: 0.5rem; background: white; border-radius: 0.25rem; border: 1px solid #e2e8f0;">
-                                <strong style="color: #2d3748;">${escapeHtml(className)}</strong>
-                                <div style="margin-top: 0.25rem; font-size: 0.85rem; color: #4a5568;">
-                        `;
-                        
-                        Object.entries(subjects).forEach(([subject, hourInfo]) => {
-                            const isComplete = hourInfo.includes('✓');
-                            html += `
-                                <span style="margin-right: 0.75rem; color: ${isComplete ? '#38a169' : '#e53e3e'};">
-                                    ${escapeHtml(subject)}: ${escapeHtml(hourInfo)}
-                                </span>
-                            `;
-                        });
-                        
-                        html += '</div></div>';
-                    });
-                    
-                    html += '</div></div>';
                 }
 
                 preview.innerHTML = html;
+                controls.style.display = 'flex';
                 
-                // Visa kontroller
-                const controls = document.getElementById('generationControls');
-                if (controls) controls.style.display = 'flex';
+                // Markera valt schema som osparade ändringar
+                markScheduleAsUnsaved();
+                
+                debugLog('Multi-class schedule displayed with filters:', {
+                    totalLessons: schedule.lessons.length,
+                    filteredLessons: filteredLessons.length,
+                    appliedFilters: normalizedFilters
+                });
             }
 
 
@@ -7141,6 +7870,10 @@
                     setTimeout(() => toast.remove(), 300);
                 }, 2000);
             }
+
+
+           
+
 
             /**
              * Update edit controls in generation panel
