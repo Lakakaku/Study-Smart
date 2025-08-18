@@ -5755,6 +5755,17 @@
                         timeDiv.textContent = `🕒 ${originalTime}`;
                         lessonElement.appendChild(timeDiv);
                     }
+
+                    if (spanRows >= 7 && !lessonElement.querySelector('.teacher-info')) {
+                        const teacherDiv = document.createElement('div');
+                        teacherDiv.className = 'teacher-info';
+                        teacherDiv.style.cssText = 'font-size: 10px; opacity: 0.8; margin-top: 2px;';
+                        
+                        const teacherName = lesson.teacher_name || lesson.teacher || 'Okänd lärare';
+                        teacherDiv.textContent = `👨‍🏫 ${teacherName}`;
+                        
+                        lessonElement.appendChild(teacherDiv);
+                    }
                 });
             }
 
@@ -5901,6 +5912,12 @@
                         ${spanRows >= 5 ? `
                             <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;">
                                 🕒 ${lesson.time}
+                            </div>
+                        ` : ''}
+
+                        ${spanRows >= 7 ? `
+                            <div class="teacher-info" style="font-size: 10px; opacity: 0.8; margin-top: 2px;">
+                                👨‍🏫 ${escapeHtml(teacherName || lesson.teacher || 'Okänd lärare')}
                             </div>
                         ` : ''}
                         
@@ -7928,10 +7945,6 @@
                 const time = lessonElement.dataset.originalTime;
                 const subject = lessonElement.dataset.subject;
                 
-                debugLog('Opening room change dropdown for lesson:', {
-                    lessonId, currentRoom, teacherId, day, time, subject
-                });
-                
                 try {
                     // Hämta alla tillgängliga rum
                     const allRooms = getAvailableRooms();
@@ -7968,7 +7981,7 @@
                         </div>
                     `;
                     
-                    // Positionera dropdown nära knappen
+                    // Positionera dropdown
                     dropdown.style.cssText = `
                         position: fixed;
                         left: ${buttonRect.left}px;
@@ -7985,29 +7998,23 @@
                         padding: 8px;
                     `;
                     
-                    // Justera position om dropdown går utanför skärmen
-                    const viewportHeight = window.innerHeight;
-                    const viewportWidth = window.innerWidth;
-                    
-                    if (buttonRect.bottom + 200 > viewportHeight) {
-                        // Visa ovanför knappen istället
-                        dropdown.style.top = `${buttonRect.top - 200}px`;
-                    }
-                    
-                    if (buttonRect.left + 280 > viewportWidth) {
-                        // Flytta åt vänster
-                        dropdown.style.left = `${buttonRect.right - 280}px`;
-                    }
-                    
                     document.body.appendChild(dropdown);
                     
-                    // Lägg till klick-lyssnare för rum-val
-                    dropdown.addEventListener('click', (e) => {
-                        if (e.target.classList.contains('room-dropdown-option') && !e.target.classList.contains('occupied') && !e.target.classList.contains('restricted')) {
-                            const newRoom = e.target.dataset.room;
-                            changeRoomForLesson(lessonId, newRoom);
-                            dropdown.remove();
-                        }
+                    // FIX: Lägg till klick-lyssnare DIREKT på room options med bättre selektor
+                    dropdown.querySelectorAll('.room-dropdown-option').forEach(option => {
+                        option.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            
+                            if (option.classList.contains('occupied') || option.classList.contains('restricted')) {
+                                return; // Ignorera klick på otillgängliga rum
+                            }
+                            
+                            const newRoom = option.dataset.room;
+                            if (newRoom && newRoom !== currentRoom) {
+                                dropdown.remove();
+                                await changeRoomForLesson(lessonId, newRoom);
+                            }
+                        });
                     });
                     
                     // Stäng dropdown vid klick utanför
@@ -8018,16 +8025,17 @@
                         }
                     };
                     
-                    // Lägg till lyssnaren efter en kort delay för att undvika omedelbar stängning
+                    // Lägg till lyssnaren efter en kort delay
                     setTimeout(() => {
                         document.addEventListener('click', outsideClickHandler);
                     }, 100);
                     
-                    // Stäng dropdown med ESC-tangent
+                    // ESC-tangent för att stänga
                     const escapeHandler = (e) => {
                         if (e.key === 'Escape') {
                             dropdown.remove();
                             document.removeEventListener('keydown', escapeHandler);
+                            document.removeEventListener('click', outsideClickHandler);
                         }
                     };
                     document.addEventListener('keydown', escapeHandler);
@@ -8073,7 +8081,7 @@
                     return `
                         <div class="${className}" 
                             data-room="${escapeHtml(room)}" 
-                            ${clickable ? 'style="cursor: pointer;"' : 'style="cursor: not-allowed;"'}
+                            style="cursor: ${clickable ? 'pointer' : 'not-allowed'};"
                             title="${escapeHtml(room)}${statusText}">
                             <span style="display: flex; align-items: center; justify-content: space-between;">
                                 <span>${statusIcon} ${escapeHtml(room)}</span>
@@ -8732,6 +8740,53 @@
                 const styleElement = document.createElement('style');
                 styleElement.id = 'room-change-styles';
                 styleElement.textContent = roomChangeStyles;
+                document.head.appendChild(styleElement);
+            }
+
+
+
+            const roomDropdownStyles = `
+            .room-dropdown-option {
+                padding: 8px 12px;
+                margin: 2px 0;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                border: 1px solid transparent;
+                user-select: none;
+            }
+
+            .room-dropdown-option:hover:not(.occupied):not(.restricted) {
+                background: #f0f8ff;
+                border-color: #4299e1;
+            }
+
+            .room-dropdown-option.occupied {
+                background: #fed7d7;
+                color: #744210;
+                cursor: not-allowed;
+                opacity: 0.6;
+            }
+
+            .room-dropdown-option.restricted {
+                background: #f7fafc;
+                color: #a0aec0;
+                cursor: not-allowed;
+                opacity: 0.6;
+            }
+
+            .room-dropdown-option.current {
+                background: #c6f6d5;
+                border-color: #48bb78;
+                font-weight: 600;
+            }
+            `;
+
+            // Lägg till styles
+            if (!document.getElementById('room-dropdown-styles')) {
+                const styleElement = document.createElement('style');
+                styleElement.id = 'room-dropdown-styles';
+                styleElement.textContent = roomDropdownStyles;
                 document.head.appendChild(styleElement);
             }
 
