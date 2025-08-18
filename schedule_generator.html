@@ -1050,6 +1050,35 @@
                 }
             }
 
+
+            // LÄGG TILL denna nya funktion för att hantera borttagning från ämneslistan:
+            async function removeSubjectFromList(subjectId) {
+                if (!confirm('Är du säker på att du vill ta bort detta ämne?')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/school_subjects/${subjectId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        schoolSubjects = schoolSubjects.filter(s => s.id !== subjectId);
+                        availableSubjects = availableSubjects.filter(s => s.id !== subjectId);
+                        renderSubjects();
+                        debugLog('Subject removed successfully:', subjectId);
+                    } else {
+                        alert(data.error || 'Fel vid borttagning av ämne');
+                    }
+                } catch (error) {
+                    console.error('Error removing subject:', error);
+                    alert('Fel vid kommunikation med servern');
+                }
+            }
+
+
             async function removeSubject(subjectId) {
                 if (!confirm('Är du säker på att du vill ta bort detta ämne?')) {
                     return;
@@ -1336,52 +1365,85 @@
 
             // Uppdatera renderSubjects funktionen för att inkludera lärarhantering
             // 3. Uppdatera renderSubjects funktionen (JavaScript - ersätt befintlig):
+            // ERSÄTT renderSubjects funktionen med denna fixade version:
             function renderSubjects() {
                 const container = document.getElementById('existingSubjects');
-                const noMessage = document.getElementById('noSubjectsMessage');
+                let noMessage = document.getElementById('noSubjectsMessage');
+                
+                // Skapa noSubjectsMessage om det inte finns
+                if (!noMessage) {
+                    noMessage = document.createElement('div');
+                    noMessage.id = 'noSubjectsMessage';
+                    noMessage.style.cssText = 'color: #666; text-align: center; padding: 1rem;';
+                    noMessage.textContent = 'Inga ämnen ännu. Lägg till ämnen ovan.';
+                    container.appendChild(noMessage);
+                }
                 
                 if (schoolSubjects.length === 0) {
                     noMessage.style.display = 'block';
-                    container.innerHTML = '<div style="color: #666; text-align: center;" id="noSubjectsMessage">Inga ämnen ännu. Lägg till ämnen ovan.</div>';
+                    // Rensa andra element men behåll noMessage
+                    Array.from(container.children).forEach(child => {
+                        if (child.id !== 'noSubjectsMessage') {
+                            child.remove();
+                        }
+                    });
                     return;
                 }
                 
                 noMessage.style.display = 'none';
                 
-                let html = '';
-                schoolSubjects.forEach(subject => {
-                    html += `
-                        <div class="subject-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid #e2e8f0;">
-                            <div style="flex: 1;">
-                                <div>
-                                    <strong style="color: #2d3748;">${subject.name}</strong>
-                                    <span id="teacherCount_${subject.id}" style="color: #718096; font-size: 0.85rem; margin-left: 0.5rem;">
-                                        (Laddar lärare...)
-                                    </span>
-                                </div>
-                                <div id="qualifiedTeachers_${subject.id}" style="margin-top: 0.25rem; font-size: 0.8rem; color: #4a5568;">
-                                    <!-- Behöriga lärare visas här -->
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <button type="button" class="btn" onclick="manageTeachers(${subject.id}, '${subject.name}')" 
-                                        style="background: #4299e1; color: white; padding: 0.375rem 0.75rem; font-size: 0.8rem;">
-                                    👨‍🏫 Lärare
-                                </button>
-                                <button type="button" class="btn" onclick="manageTeacherRooms(${subject.id}, '${subject.name}')" 
-                                        style="background: #9f7aea; color: white; padding: 0.375rem 0.75rem; font-size: 0.8rem;">
-                                    🏫 Rum
-                                </button>
-                                <button type="button" class="remove-subject-btn" onclick="removeSubject(${subject.id})" 
-                                        style="background: #f56565; color: white; padding: 0.25rem 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
-                                    Ta bort
-                                </button>
-                            </div>
-                        </div>
-                    `;
+                // Rensa gamla ämnesitems men behåll noMessage
+                Array.from(container.children).forEach(child => {
+                    if (child.classList.contains('subject-item')) {
+                        child.remove();
+                    }
                 });
                 
-                container.innerHTML = html;
+                // Lägg till nya ämnesitems
+                schoolSubjects.forEach(subject => {
+                    const subjectDiv = document.createElement('div');
+                    subjectDiv.className = 'subject-item';
+                    subjectDiv.style.cssText = `
+                        display: flex; 
+                        justify-content: space-between; 
+                        align-items: center; 
+                        padding: 0.75rem; 
+                        background: white; 
+                        border-radius: 6px; 
+                        margin-bottom: 0.5rem; 
+                        border: 1px solid #e2e8f0;
+                    `;
+                    
+                    subjectDiv.innerHTML = `
+                        <div style="flex: 1;">
+                            <div>
+                                <strong style="color: #2d3748;">${subject.name}</strong>
+                                <span id="teacherCount_${subject.id}" style="color: #718096; font-size: 0.85rem; margin-left: 0.5rem;">
+                                    (Laddar lärare...)
+                                </span>
+                            </div>
+                            <div id="qualifiedTeachers_${subject.id}" style="margin-top: 0.25rem; font-size: 0.8rem; color: #4a5568;">
+                                <!-- Behöriga lärare visas här -->
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button type="button" class="btn" onclick="manageTeachers(${subject.id}, '${subject.name}')" 
+                                    style="background: #4299e1; color: white; padding: 0.375rem 0.75rem; font-size: 0.8rem;">
+                                👨‍🏫 Lärare
+                            </button>
+                            <button type="button" class="btn" onclick="manageTeacherRooms(${subject.id}, '${subject.name}')" 
+                                    style="background: #9f7aea; color: white; padding: 0.375rem 0.75rem; font-size: 0.8rem;">
+                                🏫 Rum
+                            </button>
+                            <button type="button" class="remove-subject-btn" onclick="removeSubjectFromList(${subject.id})" 
+                                    style="background: #f56565; color: white; padding: 0.25rem 0.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                Ta bort
+                            </button>
+                        </div>
+                    `;
+                    
+                    container.appendChild(subjectDiv);
+                });
                 
                 // Ladda lärarbehörigheter för varje ämne
                 schoolSubjects.forEach(subject => {
@@ -1941,19 +2003,19 @@
                 debugLog(`Added subject row for class ${classId}`);
             }
 
+            // ERSÄTT den gamla removeSubject funktionen (för formulärraderna) med denna:
             function removeSubject(button) {
-                const list = button.parentElement.parentElement; // .class-subject-list or just parent
-                const sectionList = list.classList && list.classList.contains('class-subject-list') ? list : button.parentElement.parentElement;
-                // Try to find the sibling rows to ensure at least one remains per class
-                const container = button.closest('.class-subject-section');
-                if (!container) return;
-                const rows = container.querySelectorAll('.subject-item');
-                if (rows.length > 1) {
-                    button.parentElement.remove();
+                const subjectItem = button.closest('.subject-item');
+                if (!subjectItem) return;
+                
+                const container = subjectItem.parentElement;
+                const allRowsInContainer = container.querySelectorAll('.subject-item');
+                
+                if (allRowsInContainer.length > 1) {
+                    subjectItem.remove();
                     validateSubjectHours();
-                    debugLog('Removed subject row', {classSection: container.id});
+                    debugLog('Removed subject row from form');
                 } else {
-                    // Don't allow removing last row
                     alert('Minst ett ämne måste finnas per klass. Lägg till ett annat ämne först om du vill ta bort detta.');
                     debugLog('Attempted to remove last subject row - blocked');
                 }
